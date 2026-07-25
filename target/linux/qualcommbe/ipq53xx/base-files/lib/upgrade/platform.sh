@@ -34,6 +34,11 @@ platform_do_upgrade() {
 		gl_be6500_remove_oem_rootfs || return 1
 		nand_do_upgrade "$1"
 		;;
+	gl.inet,gl-be9300)
+		CI_KERNPART="0:HLOS"
+		CI_ROOTPART="rootfs"
+		emmc_do_upgrade "$1"
+		;;
 	ubnt,u7-pro-xgs)
 		CI_KERNPART="kernel0"
 		fit_do_upgrade "$1"
@@ -49,7 +54,8 @@ platform_check_image() {
 	[ "$#" -gt 1 ] && return 1
 
 	case "$(board_name)" in
-	gl.inet,gl-be6500)
+	gl.inet,gl-be6500|\
+	gl.inet,gl-be9300)
 		return 0
 		;;
 	ubnt,u7-pro-xgs)
@@ -64,6 +70,7 @@ platform_check_image() {
 
 platform_copy_config() {
 	case "$(board_name)" in
+	gl.inet,gl-be9300|\
 	ubnt,u7-pro-xgs)
 		emmc_copy_config
 		;;
