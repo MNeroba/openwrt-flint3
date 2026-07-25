@@ -241,7 +241,7 @@
 		};
 
 		wake-n-pins {
-			pins = "gpio30";
+			pins = "gpio48";
 			function = "pcie1_wake";
 			drive-strength = <8>;
 			bias-pull-up;
@@ -464,7 +464,7 @@
 	pinctrl-names = "default";
 
 	perst-gpios = <&tlmm 47 GPIO_ACTIVE_LOW>;
-	wake-gpios = <&tlmm 30 GPIO_ACTIVE_LOW>;
+	wake-gpios = <&tlmm 48 GPIO_ACTIVE_LOW>;
 
 	pcie@0 {
 		/*
