@@ -11,10 +11,10 @@ include $(INCLUDE_DIR)/package.mk
 define KernelPackage/$(PKG_NAME)
   SUBMENU:=Other modules
   TITLE:=$(PKG_NAME)
-  KCONFIG:=CONFIG_NET_DSA_TAG_RTL8_4
+  KCONFIG:=CONFIG_NET_DSA_TAG_VSC73XX_8021Q
   FILES:= \
 	$(PKG_BUILD_DIR)/rtl837x_dsa.ko \
-	$(LINUX_DIR)/net/dsa/tag_rtl8_4.ko
+	$(LINUX_DIR)/net/dsa/tag_vsc73xx_8021q.ko
   AUTOLOAD:=$(call AutoLoad,99,rtl837x_dsa)
   DEPENDS:=+kmod-dsa +kmod-regmap-core
 endef

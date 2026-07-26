@@ -102,7 +102,6 @@ struct rtk_gsw {
 	struct net_device *bridge_dev[RTK_MAX_NUM_OF_PORT];
 	bool port_enabled[RTK_MAX_NUM_OF_PORT];
 	struct net_device *ethernet_master;
-	netdev_features_t master_csum_features;
 	struct sfp_bus *sfp_bus;
 
 	struct rtl837x_mib_counter *mib_counters;
@@ -120,6 +119,11 @@ struct rtk_gsw {
 	char buf[4096];
 
 	uint16_t port_pvid[RTK_MAX_NUM_OF_PORT];  // 端口PVID配置
+
+	uint16_t tag8021q_pvid[RTK_MAX_NUM_OF_PORT];
+	bool tag8021q_pvid_valid[RTK_MAX_NUM_OF_PORT];
+	uint16_t bridge_pvid[RTK_MAX_NUM_OF_PORT];
+	bool bridge_pvid_valid[RTK_MAX_NUM_OF_PORT];
 
 	uint16_t flow_control_map; // 流控配置位图
 	bool global_vlan_enable;
