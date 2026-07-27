@@ -68,7 +68,13 @@ define Device/glinet_gl-be9300
 	DEVICE_MODEL := GL-BE9300
 	DEVICE_ALT0_VENDOR := GL.iNet
 	DEVICE_ALT0_MODEL := Flint 3
-	DEVICE_DTS_CONFIG := config@mi01.6
+	# Stock U-Boot has no AP-MI01.6 entry in its board->config table, so
+	# bootipq falls back to asking for "config-1". Any other name - a
+	# board-specific config@mi01.6, or OpenWrt's own default config@1 -
+	# fails with "Config not available" and the unit will not boot from
+	# eMMC. (BE6500 can use config@mi01.2 because that board IS in the
+	# table.)
+	DEVICE_DTS_CONFIG := config-1
 	SOC := ipq5332
 	SUPPORTED_DEVICES += gl.inet,gl-be9300
 	DEVICE_PACKAGES := kmod-ath12k ath12k-firmware-ipq5332 \
