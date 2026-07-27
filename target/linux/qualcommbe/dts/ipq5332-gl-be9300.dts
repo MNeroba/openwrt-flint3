@@ -341,11 +341,13 @@
 			};
 
 			/*
-			 * Front-panel jack mapping per May-2026 physical
-			 * verification on the ap2 unit: LAN1=7, LAN2=5,
-			 * LAN3=6, LAN4=4. Vendor DT labels swap lan2/lan3
-			 * (6=lan2, 5=lan3) — if jack labels come out
-			 * crossed, that's the fix.
+			 * Front-panel jack mapping, verified 2026-07-27 by
+			 * walking one cable through all four jacks and
+			 * watching which netdev gained carrier:
+			 * LAN1=port7, LAN2=port6, LAN3=port5, LAN4=port4.
+			 * This matches the vendor device tree; the May-2026
+			 * note that had lan2/lan3 the other way round was
+			 * wrong.
 			 */
 			port@4 {
 				reg = <4>;
@@ -355,13 +357,13 @@
 
 			port@5 {
 				reg = <5>;
-				label = "lan2";
+				label = "lan3";
 				phy-mode = "internal";
 			};
 
 			port@6 {
 				reg = <6>;
-				label = "lan3";
+				label = "lan2";
 				phy-mode = "internal";
 			};
 
