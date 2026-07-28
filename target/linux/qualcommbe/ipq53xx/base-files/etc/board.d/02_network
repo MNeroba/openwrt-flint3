@@ -15,8 +15,7 @@ ipq53xx_setup_interfaces()
 	ubnt,u7-pro-xgs)
 		ucidef_set_interface_lan "lan"
 		;;
-	gl.inet,gl-be6500|\
-	gl.inet,gl-be9300)
+	gl.inet,gl-be6500)
 		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" "wan"
 		wan_mac=$(mtd_get_mac_binary "0:art" 0xa)
 		if [ -n "$wan_mac" ]; then
@@ -28,33 +27,18 @@ ipq53xx_setup_interfaces()
 			ucidef_set_label_macaddr "$wan_mac"
 		fi
 		;;
+	gl.inet,gl-be9300)
+		ucidef_set_interfaces_lan_wan "lan1 lan2 lan3 lan4" "wan"
+		;;
 	*)
 		echo "Unsupported hardware. Network interfaces not initialized"
 		;;
 	esac
 }
 
-ipq53xx_setup_macs()
-{
-	local board="$1"
-	local lan_mac=""
-	local wan_mac=""
-
-	case "$board" in
-	gl.inet,gl-be9300)
-		wan_mac=$(mmc_get_mac_binary 0:ART 0x4)
-		lan_mac=$(mmc_get_mac_binary 0:ART 0xa)
-		;;
-	esac
-
-	[ -n "$lan_mac" ] && ucidef_set_interface_macaddr "lan" $lan_mac
-	[ -n "$wan_mac" ] && ucidef_set_interface_macaddr "wan" $wan_mac
-}
-
 board_config_update
 board=$(board_name)
 ipq53xx_setup_interfaces $board
-ipq53xx_setup_macs $board
 board_config_flush
 
 exit 0

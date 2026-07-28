@@ -419,6 +419,8 @@
 			label = "lan";
 			pcs-handle = <&pcs0_ch0>;
 			phy-handle = <&rtl837x>;
+			nvmem-cells = <&base_macaddr 2>;
+			nvmem-cell-names = "mac-address";
 			clocks = <&nsscc NSS_CC_PORT1_MAC_CLK>,
 				 <&nsscc NSS_CC_PORT1_RX_CLK>,
 				 <&nsscc NSS_CC_PORT1_TX_CLK>;
@@ -446,6 +448,8 @@
 			label = "wan";
 			pcs-handle = <&pcs1_ch0>;
 			phy-handle = <&phy>;
+			nvmem-cells = <&base_macaddr 0>;
+			nvmem-cell-names = "mac-address";
 
 			clocks = <&nsscc NSS_CC_PORT2_MAC_CLK>,
 				 <&nsscc NSS_CC_PORT2_RX_CLK>,
@@ -481,6 +485,8 @@
 
 /* eMMC 5.1, 8 GB — Flint 3 boots from eMMC (BE6500 is SPI-NAND). */
 &sdhc {
+	#address-cells = <1>;
+	#size-cells = <0>;
 	bus-width = <4>;
 	max-frequency = <192000000>;
 	mmc-ddr-1_8v;
@@ -489,6 +495,31 @@
 	pinctrl-0 = <&sdc_default_state>;
 	pinctrl-names = "default";
 	status = "okay";
+
+	card@0 {
+		compatible = "mmc-card";
+		reg = <0>;
+
+		partitions {
+			compatible = "gpt-partitions";
+
+			block-partition-art {
+				partname = "0:ART";
+
+				nvmem-layout {
+					compatible = "fixed-layout";
+					#address-cells = <1>;
+					#size-cells = <1>;
+
+					base_macaddr: mac-address@a {
+						compatible = "mac-base";
+						reg = <0xa 0x6>;
+						#nvmem-cell-cells = <1>;
+					};
+				};
+			};
+		};
+	};
 };
 
 &pcie1_phy {
