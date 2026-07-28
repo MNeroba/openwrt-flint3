@@ -79,7 +79,7 @@ define Device/glinet_gl-be9300
 	SUPPORTED_DEVICES += gl.inet,gl-be9300
 	DEVICE_PACKAGES := kmod-ath12k ath12k-firmware-ipq5332 \
 		ath12k-firmware-qcn9274 ipq-wifi-glinet_gl-be9300 \
-		kmod-qrtr-smd kmod-rtl837x-dsa kmod-phy-realtek ethtool \
-		e2fsprogs f2fsck mkf2fs
+		kmod-hwmon-pwmfan kmod-qrtr-smd kmod-rtl837x-dsa \
+		kmod-phy-realtek ethtool e2fsprogs f2fsck mkf2fs
 endef
 TARGET_DEVICES += glinet_gl-be9300
