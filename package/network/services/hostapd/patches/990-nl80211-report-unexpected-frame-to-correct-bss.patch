@@ -1,0 +1,23 @@
+nl80211: report unexpected frame events to the correct BSS
+
+Upstream submission candidate; see deploy/ for the mail-ready patch.
+
+--- a/src/drivers/driver_nl80211_event.c
++++ b/src/drivers/driver_nl80211_event.c
+@@ -2791,7 +2791,6 @@
+ static void nl80211_spurious_frame(struct i802_bss *bss, struct nlattr **tb,
+ 				   int wds)
+ {
+-	struct wpa_driver_nl80211_data *drv = bss->drv;
+ 	union wpa_event_data event;
+ 
+ 	if (!tb[NL80211_ATTR_MAC])
+@@ -2804,7 +2803,7 @@
+ 	event.rx_from_unknown.link_id = tb[NL80211_ATTR_MLO_LINK_ID] ?
+ 		nla_get_u8(tb[NL80211_ATTR_MLO_LINK_ID]) : -1;
+ 
+-	wpa_supplicant_event(drv->ctx, EVENT_RX_FROM_UNKNOWN, &event);
++	wpa_supplicant_event(bss->ctx, EVENT_RX_FROM_UNKNOWN, &event);
+ }
+ 
+ 
