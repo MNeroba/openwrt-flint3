@@ -45,6 +45,26 @@
 			no-map;
 		};
 
+		/*
+		 * Persist the kernel log across a reboot. This board has no
+		 * usable serial console, so a boot loop is otherwise silent:
+		 * ramoops keeps dmesg and the console in RAM through a warm
+		 * reset and exposes them under /sys/fs/pstore on the next boot
+		 * (including a TFTP initramfs rescue boot).
+		 *
+		 * 0x4da00000..0x4dafffff is the one hole the board leaves
+		 * unreserved between q6-caldb and mlo-global-mem - verified
+		 * against the live "OF: reserved mem" map, not just the DTS.
+		 * Deliberately mapped (no "no-map"): ramoops must write here.
+		 */
+		ramoops@4da00000 {
+			compatible = "ramoops";
+			reg = <0x0 0x4da00000 0x0 0x100000>;
+			console-size = <0x40000>;
+			record-size = <0x20000>;
+			pmsg-size = <0x20000>;
+		};
+
 		mlo_mem: mlo-global-mem@4db00000 {
 			reg = <0x0 0x4db00000 0x0 0x01200000>;
 			no-map;
