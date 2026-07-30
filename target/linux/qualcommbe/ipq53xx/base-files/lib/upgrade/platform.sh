@@ -1,5 +1,5 @@
 REQUIRE_IMAGE_METADATA=1
-RAMFS_COPY_BIN='fitblk fit_check_sign'
+RAMFS_COPY_BIN='dumpimage fitblk fit_check_sign'
 
 gl_be6500_remove_oem_rootfs() {
 	local mtdnum
@@ -37,7 +37,7 @@ platform_do_upgrade() {
 	gl.inet,gl-be9300)
 		CI_KERNPART="0:HLOS"
 		CI_ROOTPART="rootfs"
-		emmc_do_upgrade "$1"
+		glinet_emmc_do_upgrade "$1" || exit 1
 		;;
 	ubnt,u7-pro-xgs)
 		CI_KERNPART="kernel0"
@@ -54,9 +54,11 @@ platform_check_image() {
 	[ "$#" -gt 1 ] && return 1
 
 	case "$(board_name)" in
-	gl.inet,gl-be6500|\
-	gl.inet,gl-be9300)
+	gl.inet,gl-be6500)
 		return 0
+		;;
+	gl.inet,gl-be9300)
+		glinet_emmc_check_image "$1"
 		;;
 	ubnt,u7-pro-xgs)
 		fit_check_image "$1"

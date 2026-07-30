@@ -91,6 +91,6 @@ define Device/glinet_gl-be9300
 	DEVICE_PACKAGES := kmod-ath12k ath12k-firmware-ipq5332 \
 		ath12k-firmware-qcn9274 ipq-wifi-glinet_gl-be9300 \
 		kmod-hwmon-pwmfan kmod-qrtr-smd kmod-rtl837x-dsa \
-		kmod-phy-realtek ethtool e2fsprogs f2fsck mkf2fs
+		kmod-phy-realtek ethtool e2fsprogs f2fsck mkf2fs dumpimage
 endef
 TARGET_DEVICES += glinet_gl-be9300
