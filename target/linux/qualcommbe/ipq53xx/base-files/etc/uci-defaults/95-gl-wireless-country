@@ -7,9 +7,21 @@
 #
 # Without a country set, hostapd refuses to start on 6 GHz ("Invalid
 # country_code '00'"), so the radios stay down on a fresh install.
+#
+# Every exit path that leaves the country unset is logged: a silent failure
+# here looks like "Wi-Fi is broken" with nothing in the log to explain it.
 
 . /lib/functions.sh
 . /lib/functions/system.sh
+
+LOG_TAG=gl-wireless-country
+
+warn_manual() {
+	logger -t "$LOG_TAG" -p daemon.warn "$1"
+	logger -t "$LOG_TAG" -p daemon.warn \
+		"radios may stay down (6 GHz needs a country). Set one manually, e.g.:" \
+		"uci set wireless.radio0.country=US; uci commit wireless; wifi"
+}
 
 board=$(board_name)
 
@@ -19,12 +31,20 @@ gl.inet,gl-be9300) ;;
 esac
 
 art=$(find_mmc_part "0:ART")
-[ -n "$art" ] || exit 0
+if [ -z "$art" ]; then
+	warn_manual "ART partition (0:ART) not found"
+	exit 0
+fi
 
-# Offset 0x88, 2 bytes. Anything that is not two upper-case letters means
-# the field is unprogrammed - leave the radios at the driver default then.
-country=$(dd if="$art" bs=1 skip=136 count=2 2>/dev/null | tr -dc 'A-Z')
-[ "${#country}" = 2 ] || exit 0
+# Offset 0x88, 2 bytes. Accept lower case too - only a value that is not two
+# letters at all means the field is unprogrammed.
+country=$(dd if="$art" bs=1 skip=136 count=2 2>/dev/null |
+	tr '[:lower:]' '[:upper:]' | tr -dc 'A-Z')
+
+if [ "${#country}" != 2 ]; then
+	warn_manual "ART regulatory field at 0x88 is not a valid ISO-3166 code"
+	exit 0
+fi
 
 [ -f /etc/config/wireless ] || /sbin/wifi config
 
@@ -35,6 +55,11 @@ for dev in $(uci -q show wireless | sed -n "s/^wireless\.\([^.]*\)=wifi-device$/
 	changed=1
 done
 
-[ "$changed" = 1 ] && uci commit wireless
+if [ "$changed" = 1 ]; then
+	uci commit wireless
+	logger -t "$LOG_TAG" "set regulatory country '$country' from ART"
+else
+	logger -t "$LOG_TAG" "regulatory country already set; left unchanged"
+fi
 
 exit 0
