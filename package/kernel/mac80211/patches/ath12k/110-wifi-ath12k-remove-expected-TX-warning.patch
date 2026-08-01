@@ -1,0 +1,26 @@
+From f2910a4bef6fd08248a9d2acd10a9ee54df12fb0 Mon Sep 17 00:00:00 2001
+From: Tamizh Chelvam Raja <tamizhr@qti.qualcomm.com>
+Date: Tue, 19 Aug 2025 15:27:21 +0530
+Subject: [PATCH] wifi: ath12k: remove expected warning in TX path
+
+During interface down sequence arvif can become NULL in
+ath12k_wifi7_mac_op_tx(). Since the condition is expected during
+interface down sequence, printing it with ath12k_warn() is not needed.
+Remove the warning print.
+
+Signed-off-by: Tamizh Chelvam Raja <tamizhr@qti.qualcomm.com>
+---
+ drivers/net/wireless/ath/ath12k/wifi7/hw.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+--- a/drivers/net/wireless/ath/ath12k/wifi7/hw.c
++++ b/drivers/net/wireless/ath/ath12k/wifi7/hw.c
+@@ -937,8 +937,6 @@ static void ath12k_wifi7_mac_op_tx(struc
+ 
+ 	arvif = rcu_dereference(ahvif->link[link_id]);
+ 	if (!arvif || !arvif->ar) {
+-		ath12k_warn(ahvif->ah, "failed to find arvif link id %u for frame transmission",
+-			    link_id);
+ 		ieee80211_free_txskb(hw, skb);
+ 		return;
+ 	}
