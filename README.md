@@ -1,108 +1,100 @@
-![OpenWrt logo](include/logo.png)
+# OpenWrt for the GL.iNet Flint 3 (GL-BE9300)
 
-OpenWrt Project is a Linux operating system targeting embedded devices. Instead
-of trying to create a single, static firmware, OpenWrt provides a fully
-writable filesystem with package management. This frees you from the
-application selection and configuration provided by the vendor and allows you
-to customize the device through the use of packages to suit any application.
-For developers, OpenWrt is the framework to build an application without having
-to build a complete firmware around it; for users this means the ability for
-full customization, to use the device in ways never envisioned.
+Mainline **OpenWrt** support for the **GL.iNet Flint 3 (GL-BE9300)** — Qualcomm
+**IPQ5332** (quad Cortex-A53) with tri-band Wi-Fi 7, a Realtek **RTL8372N** 10G
+switch and a **RTL8221B** 2.5G WAN PHY.
 
-Sunshine!
+> **This branch (`flint3-be9300`) is a complete, buildable OpenWrt tree.**
+> Clone it and build — there is nothing to drop into another checkout.
+> (An earlier `main` branch held a target *overlay*; it is retired and
+> preserved at the tag `archive/main-overlay`.)
 
-## Download
+Target: **`qualcommbe/ipq53xx`**, kernel **6.18**.
 
-Built firmware images are available for many architectures and come with a
-package selection to be used as WiFi home router. To quickly find a factory
-image usable to migrate from a vendor stock firmware to OpenWrt, try the
-*Firmware Selector*.
+## Hardware
 
-* [OpenWrt Firmware Selector](https://firmware-selector.openwrt.org/)
+| Block | Detail |
+|---|---|
+| SoC | Qualcomm IPQ5332, 4× Cortex-A53 |
+| Wi-Fi 2.4 GHz | on-SoC radio, ath12k over AHB |
+| Wi-Fi 5 / 6 GHz | 2× QCN9274, ath12k over PCIe |
+| Switch | RTL8372N, out-of-tree DSA driver (`realtek,rtl837x`); SoC↔switch link is 10GBASE-R |
+| WAN | RTL8221B 2.5G, USXGMII |
+| Storage | eMMC |
 
-If your device is supported, please follow the **Info** link to see install
-instructions or consult the support resources listed below.
+## Status
 
-##
+| Subsystem | State |
+|---|---|
+| Boot / procd / SSH | working |
+| LAN (RTL8372N via DSA + EDMA/PPE) | working |
+| WAN (2.5G, USXGMII) | working, links at 2.5 Gbps |
+| VLANs (bridge-vlan on DSA) | working |
+| Wi-Fi 7, all three bands | working |
+| MLO (AP MLD across 2.4/5/6 GHz) | working |
+| DFS | working (needs the cfg80211 secondary-AP-after-CAC patch, included) |
+| 802.11k / 802.11v | working |
+| eMMC sysupgrade + return to stock | working |
 
-An advanced user may require additional or specific package. (Toolchain, SDK, ...) For everything else than simple firmware download, try the wiki download page:
+Throughput measured between two units over a 2.5G trunk: **~1.8–1.9 Gbit/s**.
 
-* [OpenWrt Wiki Download](https://openwrt.org/downloads)
+## Known issues
 
-## Development
+- **ath12k firmware hang under sustained load.** After hours with many clients
+  the Q6 can take a fatal error; radios stay down until reboot. Reported
+  upstream.
+- **PPE WAN RX FIFO overruns.** Roughly 0.07–0.09 % of packets at ~1.9 Gbit/s.
+  No longer the hard ~600 Mbit/s cap earlier builds had, but not zero.
+- **802.11r is incompatible with MLO.** hostapd's FT code has no MLD
+  awareness — do not enable 11r on an MLD SSID. 11k/11v are fine.
 
-To build your own firmware you need a GNU/Linux, BSD or macOS system (case
-sensitive filesystem required). Cygwin is unsupported because of the lack of a
-case sensitive file system.
+## Building
 
-### Requirements
-
-You need the following tools to compile OpenWrt, the package names vary between
-distributions. A complete list with distribution specific packages is found in
-the [Build System Setup](https://openwrt.org/docs/guide-developer/build-system/install-buildsystem)
-documentation.
-
+```sh
+git clone -b flint3-be9300 https://github.com/perceival/openwrt-flint3.git
+cd openwrt-flint3
+./scripts/feeds update -a
+./scripts/feeds install -a
+make menuconfig     # Target System: Qualcomm Atheros 802.11be
+                    # Subtarget:     ipq53xx
+                    # Target Profile: GL.iNet GL-BE9300
+make -j"$(nproc)"
 ```
-binutils bzip2 diff find flex gawk gcc-6+ getopt grep install libc-dev libz-dev
-make4.1+ perl python3.8+ rsync subversion unzip which
-```
 
-### Quickstart
+Images land in `bin/targets/qualcommbe/ipq53xx/`.
 
-1. Run `./scripts/feeds update -a` to obtain all the latest package definitions
-   defined in feeds.conf / feeds.conf.default
+## Installing
 
-2. Run `./scripts/feeds install -a` to install symlinks for all obtained
-   packages into package/feeds/
+Full, hardware-verified instructions — including the round trip back to stock —
+are on the device page:
 
-3. Run `make menuconfig` to select your preferred configuration for the
-   toolchain, target system & firmware packages.
+**https://openwrt.org/toh/gl.inet/gl-be9300**
 
-4. Run `make` to build your firmware. This will download all sources, build the
-   cross-compile toolchain and then cross-compile the GNU/Linux kernel & all chosen
-   applications for your target system.
+Short version: from stock firmware, use the **factory** image with
+`sysupgrade -F -n`. The stock image check requires a QSDK FIT, so `-F` is
+required and the "missing section" warnings for `u-boot`/`tz`/`sb11` are
+expected. Do **not** force the plain sysupgrade image from stock.
 
-### Related Repositories
+**Back up your eMMC first** — the ART partition holds this unit's radio
+calibration and MAC addresses and cannot be recovered from anywhere else.
 
-The main repository uses multiple sub-repositories to manage packages of
-different categories. All packages are installed via the OpenWrt package
-manager called `opkg`. If you're looking to develop the web interface or port
-packages to OpenWrt, please find the fitting repository below.
+## Upstream
 
-* [LuCI Web Interface](https://github.com/openwrt/luci): Modern and modular
-  interface to control the device via a web browser.
+Patches from this work that have gone upstream or are in review:
 
-* [OpenWrt Packages](https://github.com/openwrt/packages): Community repository
-  of ported packages.
+- `wifi: ath12k: advertise AP_VLAN interface mode for IPQ5332` (linux-wireless)
+- hostapd WDS/AP_VLAN `bss->ctx` fix (applied by Jouni Malinen)
+- ath12k `hw_scan` NULL-deref report (with the Qualcomm dev team)
 
-* [OpenWrt Routing](https://github.com/openwrt/routing): Packages specifically
-  focused on (mesh) routing.
+## Links
 
-* [OpenWrt Video](https://github.com/openwrt/video): Packages specifically
-  focused on display servers and clients (Xorg and Wayland).
+- Forum thread: https://forum.openwrt.org/t/gl-inet-flint-3-exploration-gl-be9300-ipq5332/250267
+- Device page: https://openwrt.org/toh/gl.inet/gl-be9300
+- Q6/PAS research notes: [`2.4GHZ-Q6-PAS-FINDINGS.md`](2.4GHZ-Q6-PAS-FINDINGS.md)
 
-## Support Information
+## Credits
 
-For a list of supported devices see the [OpenWrt Hardware Database](https://openwrt.org/supported_devices)
-
-### Documentation
-
-* [Quick Start Guide](https://openwrt.org/docs/guide-quick-start/start)
-* [User Guide](https://openwrt.org/docs/guide-user/start)
-* [Developer Documentation](https://openwrt.org/docs/guide-developer/start)
-* [Technical Reference](https://openwrt.org/docs/techref/start)
-
-### Support Community
-
-* [Forum](https://forum.openwrt.org): For usage, projects, discussions and hardware advise.
-* [Support Chat](https://webchat.oftc.net/#openwrt): Channel `#openwrt` on **oftc.net**.
-
-### Developer Community
-
-* [Bug Reports](https://bugs.openwrt.org): Report bugs in OpenWrt
-* [Dev Mailing List](https://lists.openwrt.org/mailman/listinfo/openwrt-devel): Send patches
-* [Dev Chat](https://webchat.oftc.net/#openwrt-devel): Channel `#openwrt-devel` on **oftc.net**.
-
-## License
-
-OpenWrt is licensed under GPL-2.0
+Built on [JiaY-shi's](https://github.com/JiaY-shi/openwrt) GL-BE6500 tree, which
+provided the working IPQ5332 Wi-Fi and RTL837x DSA foundation. Thanks to
+everyone contributing hardware findings and testing via the issue tracker and
+the forum thread.
