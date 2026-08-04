@@ -448,7 +448,7 @@
 	status = "okay";
 };
 
-&usb_dwc {
+&usb {
     status = "okay";
 };
 

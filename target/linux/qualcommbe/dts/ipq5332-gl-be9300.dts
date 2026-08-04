@@ -179,6 +179,17 @@
 	};
 };
 
+/ {
+	usb_vbus_5v: regulator-usb-vbus {
+		compatible = "regulator-fixed";
+		regulator-name = "usb_vbus_5v";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+};
+
 &blsp1_uart0 {
 	pinctrl-0 = <&serial_0_pins>;
 	pinctrl-names = "default";
@@ -495,11 +506,34 @@
 	status = "okay";
 };
 
-&usb_dwc {
+&usb {
+	pinctrl-0 = <&usb_pins>;
+	pinctrl-names = "default";
+
 	status = "okay";
 };
 
 &usbphy0 {
+	status = "okay";
+};
+
+/*
+ * phy@4b0000 is the shared PCIe0/USB3 combo uniphy. The BE9300 does not use
+ * PCIe0, so retarget the existing node as the USB SuperSpeed PHY rather than
+ * declaring a second node at the same address (which DTC rejects).
+ */
+&pcie0_phy {
+	compatible = "qcom,ipq5332-uniphy-usb-ss-phy";
+
+	clocks = <&gcc GCC_PCIE3X1_PHY_AHB_CLK>,
+		 <&gcc GCC_USB0_PHY_CFG_AHB_CLK>,
+		 <&gcc GCC_USB0_PIPE_CLK>;
+	clock-names = "ahb", "cfg_ahb", "pipe";
+
+	resets = <&gcc GCC_USB0_PHY_BCR>;
+
+	vdd-supply = <&usb_vbus_5v>;
+
 	status = "okay";
 };
 
