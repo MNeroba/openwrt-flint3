@@ -39,7 +39,7 @@ Signed-off-by: JiaY-shi <shi05275@163.com>
  void ath12k_dp_link_peer_unmap_event(struct ath12k_base *ab, u16 peer_id);
 --- a/drivers/net/wireless/ath/ath12k/mac.c
 +++ b/drivers/net/wireless/ath/ath12k/mac.c
-@@ -3600,6 +3600,9 @@
+@@ -3587,10 +3587,26 @@ static void ath12k_peer_assoc_prepare(st
  				      struct ath12k_wmi_peer_assoc_arg *arg,
  				      bool reassoc)
  {
@@ -49,23 +49,29 @@ Signed-off-by: JiaY-shi <shi05275@163.com>
  	lockdep_assert_wiphy(ath12k_ar_to_hw(ar)->wiphy);
  
  	memset(arg, 0, sizeof(*arg));
-@@ -3622,8 +3625,59 @@
  
- 	arsta->peer_nss = arg->peer_nss;
- 	/* TODO: amsdu_disable req? */
-+
-+	/* The confirmation completion is shared by the radio. Reset the
-+	 * target peer's status as well so an unrelated or stale confirmation
-+	 * cannot look like success.
++	/* Reset the target peer's status before the completion is cleared, so
++	 * that a confirmation still in flight from an earlier, timed-out peer
++	 * assoc on this radio is absorbed by the reinit instead of being read
++	 * back as this command's result. arg is not populated yet, so key the
++	 * lookup off the link vif and link sta it is about to be built from.
 +	 */
 +	spin_lock_bh(&dp->dp_lock);
-+	peer = ath12k_dp_link_peer_find_by_vdev_and_addr(dp, arg->vdev_id,
-+							 arg->peer_mac);
++	peer = ath12k_dp_link_peer_find_by_vdev_and_addr(dp, arvif->vdev_id,
++							 arsta->addr);
 +	if (peer)
 +		peer->assoc_status = U32_MAX;
 +	spin_unlock_bh(&dp->dp_lock);
-+}
 +
+ 	reinit_completion(&ar->peer_assoc_done);
+ 
+ 	arg->peer_new_assoc = !reassoc;
+@@ -3610,8 +3626,47 @@ static void ath12k_peer_assoc_prepare(st
+ 
+ 	arsta->peer_nss = arg->peer_nss;
+ 	/* TODO: amsdu_disable req? */
+ }
+ 
 +static int ath12k_mac_peer_assoc_status(struct ath12k *ar,
 +						u32 vdev_id,
 +						const u8 *addr)
@@ -103,8 +109,7 @@ Signed-off-by: JiaY-shi <shi05275@163.com>
 +	}
 +
 +	return 0;
- }
- 
++}
 +
  static int ath12k_setup_peer_smps(struct ath12k *ar, struct ath12k_link_vif *arvif,
  				  const u8 *addr,
