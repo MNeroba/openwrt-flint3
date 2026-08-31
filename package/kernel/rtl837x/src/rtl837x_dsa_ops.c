@@ -342,12 +342,16 @@ static int rtl837x_setup(struct dsa_switch *ds)
 
 static void rtl837x_teardown(struct dsa_switch *ds)
 {
+	int ret;
+
 	rtnl_lock();
 	dsa_tag_8021q_unregister(ds);
 	rtnl_unlock();
 
 	rtl837x_mdio_teardown(ds);
-	rtk_cpuTag_enable_set(EXTERNAL_CPU, DISABLED);
+	ret = rtk_cpuTag_enable_set(EXTERNAL_CPU, DISABLED);
+	if (ret)
+		dev_err(ds->dev, "failed to disable CPU tag during teardown: %d\n", ret);
 }
 
 static int rtl837x_mdio_read_c45(struct mii_bus *bus, int port, int devad,
