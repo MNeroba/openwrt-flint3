@@ -792,7 +792,7 @@ static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 		dev_err(dev, "regmap init failed: %d\n", ret);
 		if (master)
 			dev_put(master);
-		return -EINVAL;
+		return ret;
 	}
 
 	rc = rtl837x_mdio_nolock_regmap_config;
@@ -802,7 +802,7 @@ static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 		dev_err(dev, "regmap init failed: %d\n", ret);
 		if (master)
 			dev_put(master);
-		return -EINVAL;
+		return ret;
 	}
 
 	gsw->dev = dev;
