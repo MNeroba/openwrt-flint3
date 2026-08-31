@@ -400,6 +400,51 @@ static int rtl837x_lag_set_members(struct rtk_gsw *gsw, int group,
 	return rtl837x_to_errno(rtk_trunk_port_set(group, &portmask));
 }
 
+static int rtl837x_lag_set_active_members(struct rtk_gsw *gsw, int group)
+{
+	u32 active_members = 0;
+	int port;
+
+	for (port = 0; port < RTK_MAX_NUM_OF_PORT; port++) {
+		struct dsa_port *dp;
+
+		if (!(gsw->lag_members[group] & BIT(port)))
+			continue;
+
+		dp = dsa_to_port(&gsw->ds, port);
+		if (dp && dp->lag_tx_enabled)
+			active_members |= BIT(port);
+	}
+
+	/* DSA keeps lag_tx_enabled in sync with link state and the LACP
+	 * driver's transmit permission.  The RTL837x trunk API only accepts
+	 * a member mask, so mirror that state into the hardware candidate set.
+	 */
+	return rtl837x_lag_set_members(gsw, group, active_members);
+}
+
+static int rtl837x_port_lag_change(struct dsa_switch *ds, int port)
+{
+	struct rtk_gsw *gsw = ds->priv;
+	int group, ret = 0;
+
+	if (!rtl837x_user_port(gsw, port))
+		return -EINVAL;
+
+	mutex_lock(&gsw->feature_lock);
+
+	for (group = 0; group < TRUNK_GROUP_END; group++) {
+		if (gsw->lag_members[group] & BIT(port))
+			break;
+	}
+
+	if (group < TRUNK_GROUP_END)
+		ret = rtl837x_lag_set_active_members(gsw, group);
+
+	mutex_unlock(&gsw->feature_lock);
+	return ret;
+}
+
 static int rtl837x_port_lag_join(struct dsa_switch *ds, int port,
 				 struct dsa_lag lag,
 				 struct netdev_lag_upper_info *info,
@@ -478,7 +523,7 @@ static int rtl837x_port_lag_leave(struct dsa_switch *ds, int port,
 				  struct dsa_lag lag)
 {
 	struct rtk_gsw *gsw = ds->priv;
-	u32 members;
+	u32 members, old_members, old_hash_mask;
 	int group, ret;
 
 	if (!rtl837x_user_port(gsw, port))
@@ -495,7 +540,9 @@ static int rtl837x_port_lag_leave(struct dsa_switch *ds, int port,
 		goto out_unlock;
 	}
 
-	members = gsw->lag_members[group] & ~BIT(port);
+	old_members = gsw->lag_members[group];
+	old_hash_mask = gsw->lag_hash_mask[group];
+	members = old_members & ~BIT(port);
 	ret = rtl837x_lag_set_members(gsw, group, members);
 	if (ret)
 		goto out_unlock;
@@ -503,6 +550,18 @@ static int rtl837x_port_lag_leave(struct dsa_switch *ds, int port,
 	gsw->lag_members[group] = members;
 	if (!members)
 		gsw->lag_hash_mask[group] = 0;
+	else {
+		ret = rtl837x_lag_set_active_members(gsw, group);
+		if (ret) {
+			gsw->lag_members[group] = old_members;
+			gsw->lag_hash_mask[group] = old_hash_mask;
+			if (rtl837x_lag_set_members(gsw, group, old_members))
+				dev_err(gsw->dev,
+					"failed to restore LAG %d after active-member update failure\n",
+					group);
+			goto out_unlock;
+		}
+	}
 	ret = 0;
 
 out_unlock:
@@ -2114,6 +2173,7 @@ static const struct dsa_switch_ops rtl837x_dsa_ops = {
 	.port_fdb_del = rtl837x_port_fdb_del,
 	.tag_8021q_vlan_add = rtl837x_tag_8021q_vlan_add,
 	.tag_8021q_vlan_del = rtl837x_tag_8021q_vlan_del,
+	.port_lag_change = rtl837x_port_lag_change,
 	.port_lag_join = rtl837x_port_lag_join,
 	.port_lag_leave = rtl837x_port_lag_leave,
 };
