@@ -463,16 +463,16 @@ int rtl8372n_hw_init(struct rtk_gsw *gsw, rtl837x_pnswap_cfg_t swap_cfg)
 		ret = gsw->pMapper->rtl8373_sds_regbits_write(
 			0, 0, 0, 0x200, 1);
 		if (ret) {
-			dev_err(gsw->dev,
-				"SDS0 RX PN swap configuration failed, error:%d\n", ret);
-			return -EPERM;
+			dev_warn(gsw->dev,
+				 "SDS0 RX PN swap configuration failed, continuing, error:%d\n",
+				 ret);
 		}
 
 		ret = gsw->pMapper->rtl8373_sds_regbits_write(0, 6, 2, 0x2000, 1);
 		if (ret) {
-			dev_err(gsw->dev,
-				"SDS0 RX PN swap configuration failed, error:%d\n", ret);
-			return -EPERM;
+			dev_warn(gsw->dev,
+				 "SDS0 RX PN swap configuration failed, continuing, error:%d\n",
+				 ret);
 		}
 	}
 
@@ -482,16 +482,16 @@ int rtl8372n_hw_init(struct rtk_gsw *gsw, rtl837x_pnswap_cfg_t swap_cfg)
 		ret = gsw->pMapper->rtl8373_sds_regbits_write(
 			0, 0, 0, 1 << 8, 1);
 		if (ret) {
-			dev_err(gsw->dev,
-				"SDS0 TX PN swap configuration failed, error:%d\n", ret);
-			return -EPERM;
+			dev_warn(gsw->dev,
+				 "SDS0 TX PN swap configuration failed, continuing, error:%d\n",
+				 ret);
 		}
 
 		ret = gsw->pMapper->rtl8373_sds_regbits_write(0, 6, 2, 1 << 14, 1);
 		if (ret) {
-			dev_err(gsw->dev,
-				"SDS0 TX PN swap configuration failed, error:%d\n", ret);
-			return -EPERM;
+			dev_warn(gsw->dev,
+				 "SDS0 TX PN swap configuration failed, continuing, error:%d\n",
+				 ret);
 		}
 	}
 
@@ -501,16 +501,16 @@ int rtl8372n_hw_init(struct rtk_gsw *gsw, rtl837x_pnswap_cfg_t swap_cfg)
 		ret = gsw->pMapper->rtl8373_sds_regbits_write(
 			1, 0, 0, 0x200, 1);
 		if (ret) {
-			dev_err(gsw->dev,
-				"SDS1 RX PN swap configuration failed, error:%d\n", ret);
-			return -EPERM;
+			dev_warn(gsw->dev,
+				 "SDS1 RX PN swap configuration failed, continuing, error:%d\n",
+				 ret);
 		}
 
 		ret = gsw->pMapper->rtl8373_sds_regbits_write(1, 6, 2, 0x2000, 1);
 		if (ret) {
-			dev_err(gsw->dev,
-				"SDS1 RX PN swap configuration failed, error:%d\n", ret);
-			return -EPERM;
+			dev_warn(gsw->dev,
+				 "SDS1 RX PN swap configuration failed, continuing, error:%d\n",
+				 ret);
 		}
 	}
 
@@ -520,16 +520,16 @@ int rtl8372n_hw_init(struct rtk_gsw *gsw, rtl837x_pnswap_cfg_t swap_cfg)
 		ret = gsw->pMapper->rtl8373_sds_regbits_write(
 			1, 0, 0, 1 << 8, 1);
 		if (ret) {
-			dev_err(gsw->dev,
-				"SDS1 TX PN swap configuration failed, error:%d\n", ret);
-			return -EPERM;
+			dev_warn(gsw->dev,
+				 "SDS1 TX PN swap configuration failed, continuing, error:%d\n",
+				 ret);
 		}
 
 		ret = gsw->pMapper->rtl8373_sds_regbits_write(1, 6, 2, 1 << 14, 1);
 		if (ret) {
-			dev_err(gsw->dev,
-				"SDS1 TX PN swap configuration failed, error:%d\n", ret);
-			return -EPERM;
+			dev_warn(gsw->dev,
+				 "SDS1 TX PN swap configuration failed, continuing, error:%d\n",
+				 ret);
 		}
 	}
 
@@ -538,9 +538,9 @@ int rtl8372n_hw_init(struct rtk_gsw *gsw, rtl837x_pnswap_cfg_t swap_cfg)
 		ret = gsw->pMapper->rtl8373_setAsicRegBits(
 			RTL8373_CFG_PHY_MDI_REVERSE_ADDR, 0xF, 0xC);
 		if (ret) {
-			dev_err(gsw->dev,
-				"PHY MDI reverse configuration failed, error:%d\n", ret);
-			return -EPERM;
+			dev_warn(gsw->dev,
+				 "PHY MDI reverse configuration failed, continuing, error:%d\n",
+				 ret);
 		}
 	}
 
@@ -549,9 +549,9 @@ int rtl8372n_hw_init(struct rtk_gsw *gsw, rtl837x_pnswap_cfg_t swap_cfg)
 		ret = gsw->pMapper->rtl8373_setAsicRegBits(
 			RTL8373_CFG_PHY_TX_POLARITY_SWAP_ADDR, 0xFFFF, 0x596A);
 		if (ret) {
-			dev_err(gsw->dev,
-				"PHY TX polarity swap configuration failed, error:%d\n", ret);
-			return -EPERM;
+			dev_warn(gsw->dev,
+				 "PHY TX polarity swap configuration failed, continuing, error:%d\n",
+				 ret);
 		}
 	}
 
