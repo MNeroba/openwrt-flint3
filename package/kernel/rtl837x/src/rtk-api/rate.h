@@ -179,6 +179,27 @@ extern rtk_api_ret_t rtk_rate_igrBwCtrlIfg_get(rtk_enable_t *pIfgInclude);
 extern rtk_api_ret_t rtk_rate_igrBwCtrlCongestSts_get(rtk_port_t port, rtk_rate_igrBwCongestSts_t *pCongestSts);
 
 /* Function Name:
+ *      rtk_rate_egrBwCtrlPortEn_set
+ * Description:
+ *      Enable or disable port egress bandwidth control
+ */
+extern rtk_api_ret_t rtk_rate_egrBwCtrlPortEn_set(rtk_port_t port, rtk_enable_t bwEn);
+
+/* Function Name:
+ *      rtk_rate_egrBwCtrlPortEn_get
+ * Description:
+ *      Get port egress bandwidth control state
+ */
+extern rtk_api_ret_t rtk_rate_egrBwCtrlPortEn_get(rtk_port_t port, rtk_enable_t *pBwEn);
+
+/*
+ * Set the per-port egress bandwidth rate without changing the chip-global
+ * IFG accounting setting.
+ */
+extern rtk_api_ret_t rtk_rate_egrBwCtrlRate_set(rtk_port_t port,
+						rtk_rate_t rate);
+
+/* Function Name:
  *      rtk_rate_egrBandwidthCtrlRate_set
  * Description:
  *      Set port egress bandwidth control
@@ -311,5 +332,3 @@ extern rtk_api_ret_t rtk_rate_egrQueueBwCtrlRate_set(rtk_port_t port, rtk_qid_t 
 
 
 #endif /* __RTK_API_RATE_H__ */
-
-
