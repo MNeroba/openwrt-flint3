@@ -537,12 +537,19 @@ static void rtl837x_status_check_work_func(struct work_struct *work)
 {
 	struct rtk_gsw *gsw = container_of(work, struct rtk_gsw, status_check_work.work);
 
-	rtk_port_status_t port_status;
+	rtk_port_status_t port_status = { 0 };
+	int ret;
 
 	if (!gsw->ethernet_master)
 		return;
 
-	rtk_port_macStatus_get(gsw->cpu_port, &port_status);
+	ret = rtk_port_macStatus_get(gsw->cpu_port, &port_status);
+	if (ret) {
+		dev_warn_ratelimited(gsw->dev,
+				     "failed to read CPU port status: %d\n", ret);
+		goto reschedule;
+	}
+
 	if (!port_status.link)
 	{
 		if (gsw->cpu_port != UTP_PORT3 && gsw->cpu_port != UTP_PORT8)
@@ -556,22 +563,30 @@ static void rtl837x_status_check_work_func(struct work_struct *work)
 		rtnl_lock();
 		dev_close(gsw->ethernet_master);
 		rtnl_unlock();
-		rtk_sdsMode_set(0, SERDES_OFF);
+		ret = rtk_sdsMode_set(0, SERDES_OFF);
+		if (ret)
+			dev_warn_ratelimited(gsw->dev,
+					     "failed to disable CPU SerDes: %d\n", ret);
 		mdelay(200);
 
 		rtnl_lock();
-		dev_open(gsw->ethernet_master, NULL);
+		ret = dev_open(gsw->ethernet_master, NULL);
 		rtnl_unlock();
-		rtk_sdsMode_set(0, gsw->sds0mode);
+		if (ret)
+			dev_warn_ratelimited(gsw->dev,
+					     "failed to reopen ethernet master: %d\n", ret);
+
+		ret = rtk_sdsMode_set(0, gsw->sds0mode);
+		if (ret)
+			dev_warn_ratelimited(gsw->dev,
+					     "failed to restore CPU SerDes mode: %d\n", ret);
 
 		mdelay(2000);
 	}
 
-	queue_delayed_work_on(smp_processor_id(), 
-						system_wq, 
-						&gsw->status_check_work, 
-						msecs_to_jiffies(gsw->default_work_delay_ms)
-					);
+reschedule:
+	queue_delayed_work(system_wq, &gsw->status_check_work,
+				   msecs_to_jiffies(gsw->default_work_delay_ms));
 }
 
 /* unused */
@@ -674,11 +689,8 @@ static int rtl837x_status_check_work_init(struct rtk_gsw *gsw)
 {
 	gsw->default_work_delay_ms = 1000;
 	INIT_DELAYED_WORK(&gsw->status_check_work, rtl837x_status_check_work_func);
-	queue_delayed_work_on(smp_processor_id(), 
-						system_wq, 
-						&gsw->status_check_work, 
-						msecs_to_jiffies(gsw->default_work_delay_ms)
-					);
+	queue_delayed_work(system_wq, &gsw->status_check_work,
+				   msecs_to_jiffies(gsw->default_work_delay_ms));
 	return 0;
 }
 
@@ -912,6 +924,7 @@ static void rtl837x_mdio_shutdown(struct mdio_device *mdiodev)
 	if (!gsw)
 		return;
 
+	cancel_delayed_work_sync(&gsw->status_check_work);
 	rtl837x_dsa_shutdown(gsw);
 	if (gsw->ethernet_master) {
 		dev_put(gsw->ethernet_master);
