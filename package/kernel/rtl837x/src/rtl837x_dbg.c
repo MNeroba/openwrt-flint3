@@ -49,23 +49,28 @@ ssize_t _sdsreg_rw_write(struct file *filep, const char __user *ubuf,
 		return PTR_ERR(buf);
 	
 	if(buf[0] == 'w') {
-		if(sscanf(buf, "w %d %x %x %x", &sds_id, &page, &reg, &val) == -1)
+		if (sscanf(buf, "w %u %x %x %x", &sds_id, &page, &reg, &val) != 4) {
+			kfree(buf);
 			return -EFAULT;
-		else{
-			if (sds_id > 1)
+		} else {
+			if (sds_id > 1) {
+				kfree(buf);
 				return -EFAULT;
+			}
 			rtk_rtl8373_sds_reg_write(sds_id, page, reg, val);
 		}
 	} else if(buf[0] == 'r') {
-		if(sscanf(buf, "r %d %x %x", &sds_id, &page, &reg) == -1)
+		if (sscanf(buf, "r %u %x %x", &sds_id, &page, &reg) != 3) {
+			kfree(buf);
 			return -EFAULT;
-		else {
+		} else {
 			rtk_rtl8373_sds_reg_read(sds_id, page, reg, &val);
 			snprintf(_buf_rd_sdsreg, 64, "sds_id: %d, page: 0x%08x, reg: 0x%08x, val: 0x%08x\n", sds_id, page, reg, val);
 		}
 	} else {
 		snprintf(_buf_rd_sdsreg, 64, "echo \"w/r <sds_id> <page> <reg> [<val>]\" > sdsreg\n");
 	}
+	kfree(buf);
 	return count;
 }
 
@@ -80,23 +85,28 @@ ssize_t _phyreg_mmd_rw_write(struct file *filep, const char __user *ubuf,
 		return PTR_ERR(buf);
 	
 	if(buf[0] == 'w') {
-		if(sscanf(buf, "w %d %x %x %x", &port, &devad, &reg, &val) == -1)
+		if (sscanf(buf, "w %u %x %x %x", &port, &devad, &reg, &val) != 4) {
+			kfree(buf);
 			return -EFAULT;
-		else{
-			if (port > 9)
+		} else {
+			if (port > 9) {
+				kfree(buf);
 				return -EFAULT;
+			}
 			rtk_port_phyReg_set(1<<port, devad, reg, val);
 		}
 	} else if(buf[0] == 'r') {
-		if(sscanf(buf, "r %d %x %x", &port, &devad, &reg) == -1)
+		if (sscanf(buf, "r %u %x %x", &port, &devad, &reg) != 3) {
+			kfree(buf);
 			return -EFAULT;
-		else {
+		} else {
 			rtk_port_phyReg_get(port, devad, reg, &val);
 			snprintf(_buf_rd_phyreg_mmd, 64, "port: %d, devad: 0x%08x, reg: 0x%08x, val: 0x%08x\n", port, devad, reg, val);
 		}
 	} else {
 		snprintf(_buf_rd_phyreg_mmd, 64, "echo \"w/r <real_port_index> <devad> <reg> [<val>]\" > phyreg_mmd\n");
 	}
+	kfree(buf);
 	return count;
 }
 
@@ -113,20 +123,23 @@ ssize_t _reg_rw_write(struct file *filep, const char __user *ubuf,
 		return PTR_ERR(buf);
 
 	if(buf[0] == 'w') {
-		if(sscanf(buf, "w %x %x", &reg, &val) == -1)
+		if (sscanf(buf, "w %x %x", &reg, &val) != 2) {
+			kfree(buf);
 			return -EFAULT;
-		else
+		} else
 			rtk_rtl8373_setAsicReg(reg, val);
 	} else if(buf[0] == 'r') {
-		if(sscanf(buf, "r %x", &reg) == -1)
+		if (sscanf(buf, "r %x", &reg) != 1) {
+			kfree(buf);
 			return -EFAULT;
-		else {
+		} else {
 			rtk_rtl8373_getAsicReg(reg, &val);
 			snprintf(_buf_rd_reg, 64, "reg: 0x%08x, val: 0x%08x\n", reg, val);
 		}
 	} else {
 		snprintf(_buf_rd_reg, 64, "echo \"w/r <reg> [<val>]\" > reg\n");
 	}
+	kfree(buf);
 	return count;
 }
 
