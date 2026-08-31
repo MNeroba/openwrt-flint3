@@ -891,15 +891,8 @@ static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 	}
 #endif /* CONFIG_GPIOLIB */
 
-	ret = rtl837x_sfp_probe(gsw);
-	if (ret) {
-		dev_err_probe(dev, ret, "failed to attach SFP bus\n");
-		rtl837x_dsa_unregister(gsw);
-		if (master)
-			dev_put(master);
-		devm_kfree(dev, gsw);
-		return ret;
-	}
+	/* SFP is optional; keep a registration failure from tearing down DSA. */
+	rtl837x_sfp_probe(gsw);
 
 	rtl837x_debug_proc_init(gsw);
 	rtl837x_status_check_work_init(gsw);
