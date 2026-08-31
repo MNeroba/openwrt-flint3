@@ -277,9 +277,17 @@ static int rtl837x_setup(struct dsa_switch *ds)
 	if (ret)
 		return rtl837x_to_errno(ret);
 
-	rtk_l2_table_clear();
-	rtk_l2_aging_set(300);
-	rtk_stat_global_reset();
+	ret = rtk_l2_table_clear();
+	if (ret)
+		return rtl837x_to_errno(ret);
+
+	ret = rtk_l2_aging_set(300);
+	if (ret)
+		return rtl837x_to_errno(ret);
+
+	ret = rtk_stat_global_reset();
+	if (ret)
+		return rtl837x_to_errno(ret);
 
 	ret = rtk_vlan_reset();
 	if (ret)
