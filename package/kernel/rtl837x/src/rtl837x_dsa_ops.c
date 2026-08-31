@@ -418,7 +418,8 @@ rtl837x_rate_policy_validate(const struct flow_action_entry *act)
 	 * cannot be represented by the switch API.
 	 */
 	return act->police.rate_bytes_ps && !act->police.rate_pkt_ps &&
-	       !act->police.peakrate_bytes_ps &&
+	       !act->police.peakrate_bytes_ps && !act->police.avrate &&
+	       !act->police.overhead && !act->police.burst_pkt &&
 	       act->police.exceed.act_id == FLOW_ACTION_DROP &&
 	       act->police.notexceed.act_id == FLOW_ACTION_ACCEPT;
 }
@@ -499,6 +500,16 @@ static int rtl837x_cls_flower_add(struct dsa_switch *ds, int port,
 	if (!rtl837x_user_port(gsw, port))
 		return -EINVAL;
 
+	if (cls->common.chain_index) {
+		NL_SET_ERR_MSG_MOD(cls->common.extack,
+				   "RTL837x port rate limiter supports chain 0 only");
+		return -EOPNOTSUPP;
+	}
+
+	/* The RTK rate meters are attached to a physical port, not to a
+	 * classifier entry. Never turn a selective flower rule into a
+	 * port-wide limiter.
+	 */
 	if (!rtl837x_rate_rule_is_port_wide(cls->rule)) {
 		NL_SET_ERR_MSG_MOD(cls->common.extack,
 				   "RTL837x port rate limiter cannot offload flower matches");
