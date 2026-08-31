@@ -86,6 +86,9 @@ static int rtl837x_mdio_write(void *ctx, u32 reg, u32 val)
 
 	// check busy
 	ret = bus->read(bus, priv->mdio_addr, MDC_MDIO_CTRL_REG);
+	if (ret < 0)
+		goto out_unlock;
+
     if (ret & 0x4) {
 		ret = RT_ERR_BUSYWAIT_TIMEOUT;
 		goto out_unlock;
@@ -109,6 +112,9 @@ static int rtl837x_mdio_write(void *ctx, u32 reg, u32 val)
 
 	// check busy
 	ret = bus->read(bus, priv->mdio_addr, MDC_MDIO_CTRL_REG);
+	if (ret < 0)
+		goto out_unlock;
+
     if (ret & 0x4) {
 		ret = RT_ERR_BUSYWAIT_TIMEOUT;
 		goto out_unlock;
@@ -130,6 +136,9 @@ static int rtl837x_mdio_read(void *ctx, u32 reg, u32 *val)
 
 	// check busy
 	ret = bus->read(bus, priv->mdio_addr, MDC_MDIO_CTRL_REG);
+	if (ret < 0)
+		goto out_unlock;
+
     if (ret & 0x4) {
 		ret = RT_ERR_BUSYWAIT_TIMEOUT;
 		goto out_unlock;
@@ -145,6 +154,9 @@ static int rtl837x_mdio_read(void *ctx, u32 reg, u32 *val)
 
 	// check busy
 	ret = bus->read(bus, priv->mdio_addr, MDC_MDIO_CTRL_REG);
+	if (ret < 0)
+		goto out_unlock;
+
     if (ret & 0x4) {
 		ret = RT_ERR_BUSYWAIT_TIMEOUT;
 		goto out_unlock;
@@ -152,7 +164,16 @@ static int rtl837x_mdio_read(void *ctx, u32 reg, u32 *val)
 
 
 	val_l = bus->read(bus, priv->mdio_addr, MDC_MDIO_DATA_LOW);
+	if (val_l < 0) {
+		ret = val_l;
+		goto out_unlock;
+	}
+
 	val_h = bus->read(bus, priv->mdio_addr, MDC_MDIO_DATA_HIGH);
+	if (val_h < 0) {
+		ret = val_h;
+		goto out_unlock;
+	}
 
     *val = val_l & 0xffff;
     *val |= (val_h & 0xffff) << 16;
