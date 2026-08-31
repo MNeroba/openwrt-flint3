@@ -704,6 +704,9 @@ typedef struct dal_mapper_s {
 	rtk_api_ret_t (*rate_igrBwCtrlIfg_set)(rtk_enable_t);
     rtk_api_ret_t (*rate_igrBwCtrlIfg_get)(rtk_enable_t *);
 	rtk_api_ret_t (*rate_igrBwCtrlCongestSts_get)(rtk_port_t, rtk_rate_igrBwCongestSts_t *);
+	rtk_api_ret_t (*rate_egrBwCtrlPortEn_set)(rtk_port_t port, rtk_enable_t bwEn);
+	rtk_api_ret_t (*rate_egrBwCtrlPortEn_get)(rtk_port_t port, rtk_enable_t *pBwEn);
+	rtk_api_ret_t (*rate_egrBwCtrlRate_set)(rtk_port_t port, rtk_rate_t rate);
     rtk_api_ret_t (*rate_egrBandwidthCtrlRate_set)(rtk_port_t, rtk_rate_t,  rtk_enable_t);
     rtk_api_ret_t (*rate_egrBandwidthCtrlRate_get)(rtk_port_t, rtk_rate_t *, rtk_enable_t *);
     rtk_api_ret_t (*rate_egrQueueBwCtrlEnable_set)(rtk_port_t, rtk_qid_t, rtk_enable_t);
@@ -802,4 +805,3 @@ typedef struct dal_mapper_s {
 
 
 #endif /* __DAL_MAPPER_H __ */
-

@@ -296,6 +296,37 @@ rtk_api_ret_t dal_rtl8373_rate_igrBwCtrlCongestSts_get(rtk_port_t port, rtk_rate
 	return RT_ERR_OK;
 }
 
+/* Function Name:
+ *      dal_rtl8373_rate_egrBwCtrlRateOnly_set
+ * Description:
+ *      Set the per-port egress bandwidth rate without changing the
+ *      chip-global IFG accounting setting.
+ */
+rtk_api_ret_t dal_rtl8373_rate_egrBwCtrlRateOnly_set(rtk_port_t port,
+							    rtk_rate_t rate)
+{
+	rtk_uint32 retVal = 0, regData = 0;
+
+	/* Check initialization state */
+	RTK_CHK_INIT_STATE();
+
+	/* Check Port Valid */
+	RTK_CHK_PORT_VALID(port);
+	if (port > EBW_CTRL_MAX_PORT_ID)
+		return RT_ERR_QOS_EBW_PORT_ID;
+
+	if (rate > EBW_CTRL_RATE_MAX)
+		return RT_ERR_QOS_EBW_RATE;
+
+	regData = (rate >> 4);
+	retVal = rtl8373_setAsicRegBits(RTL8373_EGBW_PORT_CTRL_ADDR(port),
+						RTL8373_EGBW_PORT_CTRL_RATE_MASK, regData);
+	if (retVal != RT_ERR_OK)
+		return retVal;
+
+	return RT_ERR_OK;
+}
+
 
 /* Function Name:
  *      dal_rtl8373_rate_egrBwCtrlPortEn_set
@@ -641,7 +672,6 @@ rtk_api_ret_t dal_rtl8373_rate_egrQueueMaxBwRate_get(rtk_port_t port, rtk_qid_t 
 	
 	return RT_ERR_OK;	
 }
-
 
 
 
