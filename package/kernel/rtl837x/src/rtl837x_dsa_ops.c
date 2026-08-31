@@ -677,6 +677,7 @@ static void rtl837x_port_fast_age(struct dsa_switch *ds, int port)
 {
 	struct rtk_gsw *gsw = ds->priv;
 	rtk_l2_flushCfg_t cfg = { 0 };
+	rtk_api_ret_t ret;
 
 	if (!rtl837x_user_port(gsw, port))
 		return;
@@ -686,7 +687,10 @@ static void rtl837x_port_fast_age(struct dsa_switch *ds, int port)
 	cfg.flushStaticAddr = DISABLED;
 	cfg.flushAddrOnAllPorts = DISABLED;
 
-	rtk_l2_ucastAddr_flush(&cfg);
+	ret = rtk_l2_ucastAddr_flush(&cfg);
+	if (ret)
+		dev_err(gsw->dev, "failed to flush FDB for port %d: %d\n", port,
+			ret);
 }
 
 static int rtl837x_port_vlan_filtering(struct dsa_switch *ds, int port,
