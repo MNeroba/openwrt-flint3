@@ -46,6 +46,68 @@ static u32 rtl837x_user_ports(struct rtk_gsw *gsw)
 	return gsw->valid_port_mask & ~BIT(gsw->cpu_port);
 }
 
+static bool rtl837x_support_eee(struct dsa_switch *ds, int port)
+{
+	struct rtk_gsw *gsw = ds->priv;
+
+	return rtl837x_user_port(gsw, port);
+}
+
+static int rtl837x_eee_set_force_speed(int port, rtk_enable_t enable)
+{
+	rtk_eee_speedInMacForceMode_t speed;
+	int ret;
+
+	for (speed = EEE_MAC_FORCE_SPEED_100M;
+	     speed < EEE_MAC_FORCE_SPEED_END; speed++) {
+		ret = rtk_eee_macForceSpeedEn_set(port, speed, enable);
+		if (ret)
+			return rtl837x_to_errno(ret);
+	}
+
+	return 0;
+}
+
+static int rtl837x_set_mac_eee(struct dsa_switch *ds, int port,
+				       struct ethtool_keee *eee)
+{
+	struct rtk_gsw *gsw = ds->priv;
+	int ret;
+
+	if (!eee || !rtl837x_user_port(gsw, port))
+		return -EINVAL;
+
+	if (!eee->eee_enabled) {
+		/* Disable the capability first, so a partial speed-mask write
+		 * cannot leave an operational EEE path behind.
+		 */
+		ret = rtl837x_to_errno(rtk_eee_portTxRxEn_set(port,
+								 DISABLED, DISABLED));
+		if (ret)
+			return ret;
+
+		return rtl837x_eee_set_force_speed(port, DISABLED);
+	}
+
+	/* The RTL8373 API keeps the per-speed MAC force bits separate from
+	 * the port TX/RX capability bits.  Program both, but keep EEE off if
+	 * either half cannot be written.
+	 */
+	ret = rtl837x_eee_set_force_speed(port, ENABLED);
+	if (ret) {
+		rtl837x_eee_set_force_speed(port, DISABLED);
+		return ret;
+	}
+
+	ret = rtl837x_to_errno(rtk_eee_portTxRxEn_set(port, ENABLED, ENABLED));
+	if (ret) {
+		rtl837x_eee_set_force_speed(port, DISABLED);
+		return ret;
+	}
+
+	return 0;
+}
+
 /* With tag_8021q, forwarding and isolation are governed entirely by VLAN
  * membership (standalone per-port VIDs isolate; shared bridge VIDs bridge).
  * Keep the hardware port-isolation matrix fully permissive so VLAN egress
@@ -862,6 +924,8 @@ static const struct dsa_switch_ops rtl837x_dsa_ops = {
 	.set_ageing_time = rtl837x_set_ageing_time,
 	.port_enable = rtl837x_port_enable,
 	.port_disable = rtl837x_port_disable,
+	.support_eee = rtl837x_support_eee,
+	.set_mac_eee = rtl837x_set_mac_eee,
 	.port_bridge_join = dsa_tag_8021q_bridge_join,
 	.port_bridge_leave = dsa_tag_8021q_bridge_leave,
 	.port_stp_state_set = rtl837x_port_stp_state_set,
