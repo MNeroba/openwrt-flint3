@@ -879,15 +879,10 @@ static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 #ifdef CONFIG_GPIOLIB
 	if (of_property_read_bool(np, "gpio-controller")) {
 		ret = rtl837x_gpiochip_init(gsw);
-		if (ret) {
+		if (ret)
 			dev_err_probe(dev, ret,
-				      "failed to register GPIO controller\n");
-			rtl837x_dsa_unregister(gsw);
-			if (master)
-				dev_put(master);
-			devm_kfree(dev, gsw);
-			return ret;
-		}
+				      "failed to register GPIO controller; "
+				      "continuing without GPIO\n");
 	}
 #endif /* CONFIG_GPIOLIB */
 
