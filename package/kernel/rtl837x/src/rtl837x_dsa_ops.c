@@ -431,14 +431,11 @@ static int rtl837x_rate_to_kbps(const struct flow_action_entry *act,
 	u64 kbps;
 
 	/* RTK's rate argument is expressed in kbit/s and is quantized in
-	 * 16-kbit/s steps by the RTL8373 DAL. Do not silently round a Linux
-	 * rate down to the next representable value.
+	 * 16-kbit/s steps by the RTL8373 DAL.
 	 */
-	if (act->police.rate_bytes_ps % 125)
-		return -ERANGE;
-
 	kbps = div_u64(act->police.rate_bytes_ps, 125);
-	if (!kbps || kbps > EBW_CTRL_RATE_MAX || (kbps & 0xfULL))
+	kbps &= ~0xfULL;
+	if (!kbps || kbps > INBW_CTRL_RATE_MAX)
 		return -ERANGE;
 
 	*rate = (rtk_rate_t)kbps;
