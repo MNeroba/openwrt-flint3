@@ -678,8 +678,10 @@ static int rtl837x_sfp_module_insert(void *upstream, const struct sfp_eeprom_id 
 		USE_SERDESMODE(1, SERDES_2500BASEX);
 		break;
 	case PHY_INTERFACE_MODE_1000BASEX:
-	case PHY_INTERFACE_MODE_SGMII:
 		USE_SERDESMODE(1, SERDES_1000BASEX);
+		break;
+	case PHY_INTERFACE_MODE_SGMII:
+		USE_SERDESMODE(1, SERDES_SG);
 		break;
 	case PHY_INTERFACE_MODE_100BASEX:
 		USE_SERDESMODE(1, SERDES_100FX);
