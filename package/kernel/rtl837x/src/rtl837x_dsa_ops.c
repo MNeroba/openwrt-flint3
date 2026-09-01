@@ -665,20 +665,27 @@ static int rtl837x_port_enable(struct dsa_switch *ds, int port,
 static void rtl837x_port_disable(struct dsa_switch *ds, int port)
 {
 	struct rtk_gsw *gsw = ds->priv;
+	int ret;
 
 	if (!rtl837x_valid_port(gsw, port))
 		return;
 
 	gsw->port_enabled[port] = false;
-	rtl837x_set_stp_state(gsw, port, BR_STATE_DISABLED);
+	ret = rtl837x_set_stp_state(gsw, port, BR_STATE_DISABLED);
+	if (ret)
+		dev_err(gsw->dev, "failed to disable port %d: %d\n", port, ret);
 }
 
 static void rtl837x_port_stp_state_set(struct dsa_switch *ds, int port,
 				       u8 state)
 {
 	struct rtk_gsw *gsw = ds->priv;
+	int ret;
 
-	rtl837x_set_stp_state(gsw, port, state);
+	ret = rtl837x_set_stp_state(gsw, port, state);
+	if (ret)
+		dev_err(gsw->dev, "failed to set STP state %u on port %d: %d\n",
+			state, port, ret);
 }
 
 static void rtl837x_port_fast_age(struct dsa_switch *ds, int port)
