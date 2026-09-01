@@ -760,6 +760,12 @@ static const struct of_device_id rtk_gsw_match[] = {
 
 MODULE_DEVICE_TABLE(of, rtk_gsw_match);
 
+static void rtl837x_clear_global_priv(struct rtk_gsw *gsw)
+{
+	if (rtl_gbl_priv == gsw)
+		rtl_gbl_priv = NULL;
+}
+
 static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 {
 	struct device *dev =&mdiodev->dev;
@@ -887,6 +893,7 @@ static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 	if (ret)
 	{
 		dev_err(gsw->dev, "rtl8372n_hw_init failed, ret=%d\n",ret);
+		rtl837x_clear_global_priv(gsw);
 		if (master)
 			dev_put(master);
 		devm_kfree(dev, gsw);
@@ -899,6 +906,7 @@ static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 	ret = rtl837x_dsa_register(gsw);
 	if (ret){
 		dev_err(gsw->dev, "rtl837x_dsa_register failed, ret=%d\n", ret);
+		rtl837x_clear_global_priv(gsw);
 		if (master)
 			dev_put(master);
 		devm_kfree(dev, gsw);
@@ -934,6 +942,7 @@ static void rtl837x_dsa_remove(struct mdio_device *mdiodev)
 		dev_put(gsw->ethernet_master);
 		gsw->ethernet_master = NULL;
 	}
+	rtl837x_clear_global_priv(gsw);
 }
 
 static void rtl837x_mdio_shutdown(struct mdio_device *mdiodev)
