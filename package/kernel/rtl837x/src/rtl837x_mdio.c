@@ -10,6 +10,7 @@
 #include <linux/bits.h>
 #include <linux/device.h>
 #include <linux/delay.h>
+#include <linux/of.h>
 #include <linux/of_mdio.h>
 #include <linux/of_gpio.h>
 #include <linux/of_net.h>
@@ -401,7 +402,14 @@ static int of_extra_init(struct rtk_gsw *gsw)
 	list = of_get_property(node, "extra-init", &size);
 	if (!list || !size) return 0;
 
-	data_len = size / (3*sizeof(__be32));
+	data_len = of_property_count_elems_of_size(node, "extra-init",
+						  3 * sizeof(*list));
+	if (data_len < 0) {
+		dev_err(gsw->dev,
+			"invalid extra-init property length: %d bytes\n", size);
+		return data_len;
+	}
+
 	for (int i=0; i<data_len; i++)
 	{
 		reg = be32_to_cpu(*list);
