@@ -46,6 +46,43 @@ static u32 rtl837x_user_ports(struct rtk_gsw *gsw)
 	return gsw->valid_port_mask & ~BIT(gsw->cpu_port);
 }
 
+#define RTL837X_SUPPORTED_BRIDGE_FLAGS BR_LEARNING
+
+static int rtl837x_port_pre_bridge_flags(struct dsa_switch *ds, int port,
+					 struct switchdev_brport_flags flags,
+					 struct netlink_ext_ack *extack)
+{
+	struct rtk_gsw *gsw = ds->priv;
+
+	if (!rtl837x_user_port(gsw, port))
+		return -EINVAL;
+
+	if (flags.mask & ~RTL837X_SUPPORTED_BRIDGE_FLAGS) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "unsupported bridge port flag");
+		return -EOPNOTSUPP;
+	}
+
+	return 0;
+}
+
+static int rtl837x_port_bridge_flags(struct dsa_switch *ds, int port,
+					 struct switchdev_brport_flags flags,
+					 struct netlink_ext_ack *extack)
+{
+	rtk_mac_cnt_t limit;
+	rtk_api_ret_t ret;
+
+	ret = rtl837x_port_pre_bridge_flags(ds, port, flags, extack);
+	if (ret)
+		return ret;
+
+	limit = flags.val & BR_LEARNING ? RTK_MAX_NUM_OF_LEARN_LIMIT : 0;
+	ret = rtk_l2_limitLearningCnt_set(port, limit);
+
+	return rtl837x_to_errno(ret);
+}
+
 static bool rtl837x_support_eee(struct dsa_switch *ds, int port)
 {
 	struct rtk_gsw *gsw = ds->priv;
@@ -1019,6 +1056,8 @@ static const struct dsa_switch_ops rtl837x_dsa_ops = {
 	.get_sset_count = rtl837x_get_sset_count,
 	.get_pause_stats = rtl837x_get_pause_stats,
 	.set_ageing_time = rtl837x_set_ageing_time,
+	.port_pre_bridge_flags = rtl837x_port_pre_bridge_flags,
+	.port_bridge_flags = rtl837x_port_bridge_flags,
 	.support_eee = rtl837x_support_eee,
 	.set_mac_eee = rtl837x_set_mac_eee,
 	.port_bridge_join = dsa_tag_8021q_bridge_join,
