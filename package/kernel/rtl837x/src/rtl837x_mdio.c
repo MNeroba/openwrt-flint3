@@ -374,7 +374,7 @@ static int of_extra_init(struct rtk_gsw *gsw)
 {
 	struct device_node *node = gsw->dev->of_node;
 	const __be32 *list;
-	int size, data_len;
+	int size, data_len, ret;
 	u32 reg, mask, val;
 
 	list = of_get_property(node, "extra-init", &size);
@@ -391,7 +391,13 @@ static int of_extra_init(struct rtk_gsw *gsw)
 		list++;
 		// dev_info(gsw->dev, "of_extra_init: reg:0x%X mask:0x%X val:0x%X\n", 
 		// 					reg, mask, val);
-		rtl8373_setAsicRegBits(reg, mask, val);
+		ret = rtl8373_setAsicRegBits(reg, mask, val);
+		if (ret) {
+			dev_err(gsw->dev,
+				"extra-init register write failed: reg 0x%04x mask 0x%08x value 0x%08x, error:%d\n",
+				reg, mask, val, ret);
+			return ret;
+		}
 	}
 	return 0;
 }
@@ -451,7 +457,11 @@ int rtl8372n_hw_init(struct rtk_gsw *gsw, rtl837x_pnswap_cfg_t swap_cfg)
 		return -EPERM;
 	}
 
-	of_extra_init(gsw);
+	ret = of_extra_init(gsw);
+	if (ret) {
+		dev_err(gsw->dev, "extra-init failed, error:%d\n", ret);
+		return -EPERM;
+	}
 
 	ret = rtk_vlan_reset();
 	if (ret)
