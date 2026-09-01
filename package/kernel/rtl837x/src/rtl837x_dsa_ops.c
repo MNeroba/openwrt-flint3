@@ -74,7 +74,12 @@ static int rtl837x_set_hairpin(struct rtk_gsw *gsw, int port, bool enable)
 }
 
 #define RTL837X_SUPPORTED_BRIDGE_FLAGS \
-	(BR_LEARNING | BR_HAIRPIN_MODE)
+	(BR_LEARNING | BR_HAIRPIN_MODE | BR_ISOLATED)
+
+static int rtl837x_apply_isolation(struct rtk_gsw *gsw,
+					   u32 isolated_port_mask,
+					   int changed_port,
+					   struct net_device *changed_bridge_dev);
 
 static int rtl837x_port_pre_bridge_flags(struct dsa_switch *ds, int port,
 					 struct switchdev_brport_flags flags,
@@ -111,9 +116,30 @@ static int rtl837x_port_bridge_flags(struct dsa_switch *ds, int port,
 			return ret;
 	}
 
-	if (flags.mask & BR_HAIRPIN_MODE)
-		return rtl837x_set_hairpin(ds->priv, port,
+	if (flags.mask & BR_HAIRPIN_MODE) {
+		ret = rtl837x_set_hairpin(ds->priv, port,
 					   flags.val & BR_HAIRPIN_MODE);
+		if (ret)
+			return ret;
+	}
+
+	if (flags.mask & BR_ISOLATED) {
+		struct rtk_gsw *gsw = ds->priv;
+		u32 isolated_port_mask;
+
+		mutex_lock(&gsw->isolation_lock);
+		isolated_port_mask = gsw->isolated_port_mask;
+		if (flags.val & BR_ISOLATED)
+			isolated_port_mask |= BIT(port);
+		else
+			isolated_port_mask &= ~BIT(port);
+
+		ret = rtl837x_apply_isolation(gsw, isolated_port_mask, -1, NULL);
+		if (!ret)
+			gsw->isolated_port_mask = isolated_port_mask;
+		mutex_unlock(&gsw->isolation_lock);
+		return ret;
+	}
 
 	return 0;
 }
@@ -201,6 +227,113 @@ static int rtl837x_open_isolation(struct rtk_gsw *gsw)
 	return 0;
 }
 
+struct rtl837x_isolation_update {
+	u32 old_mask;
+	u32 new_mask;
+	bool attempted;
+};
+
+static struct net_device *
+rtl837x_bridge_dev_for_port(struct rtk_gsw *gsw, int port, int changed_port,
+				     struct net_device *changed_bridge_dev)
+{
+	if (port == changed_port)
+		return changed_bridge_dev;
+
+	return gsw->bridge_dev[port];
+}
+
+static u32 rtl837x_isolation_mask_for_port(struct rtk_gsw *gsw, int port,
+					   u32 isolated_port_mask,
+					   int changed_port,
+					   struct net_device *changed_bridge_dev)
+{
+	struct net_device *bridge_dev;
+	u32 mask = gsw->valid_port_mask;
+	int other;
+
+	if (!(isolated_port_mask & BIT(port)))
+		return mask;
+
+	bridge_dev = rtl837x_bridge_dev_for_port(gsw, port, changed_port,
+						 changed_bridge_dev);
+	if (!bridge_dev)
+		return mask;
+
+	for (other = 0; other < RTK_MAX_NUM_OF_PORT; other++) {
+		struct net_device *other_bridge_dev;
+
+		if (other == port || !rtl837x_valid_port(gsw, other))
+			continue;
+
+		if (!(isolated_port_mask & BIT(other)))
+			continue;
+
+		other_bridge_dev = rtl837x_bridge_dev_for_port(gsw, other,
+								changed_port,
+								changed_bridge_dev);
+		if (other_bridge_dev == bridge_dev)
+			mask &= ~BIT(other);
+	}
+
+	return mask;
+}
+
+/* Rebuild the global isolation matrix from the driver's bridge membership
+ * and isolated-port state.  The temporary changed-port arguments let join
+ * and leave stage their new state without exposing it as committed state.
+ */
+static int rtl837x_apply_isolation(struct rtk_gsw *gsw,
+					   u32 isolated_port_mask,
+					   int changed_port,
+					   struct net_device *changed_bridge_dev)
+{
+	struct rtl837x_isolation_update updates[RTK_MAX_NUM_OF_PORT] = {};
+	int port, rollback_port;
+	rtk_api_ret_t ret;
+
+	for (port = 0; port < RTK_MAX_NUM_OF_PORT; port++) {
+		if (!rtl837x_valid_port(gsw, port))
+			continue;
+
+		ret = rtk_port_isolation_get(port, &updates[port].old_mask);
+		if (ret)
+			return rtl837x_to_errno(ret);
+
+		updates[port].new_mask = rtl837x_isolation_mask_for_port(
+			gsw, port, isolated_port_mask, changed_port,
+			changed_bridge_dev);
+	}
+
+	for (port = 0; port < RTK_MAX_NUM_OF_PORT; port++) {
+		if (!rtl837x_valid_port(gsw, port) ||
+		    updates[port].old_mask == updates[port].new_mask)
+			continue;
+
+		updates[port].attempted = true;
+		ret = rtk_port_isolation_set(port, updates[port].new_mask);
+		if (ret)
+			goto rollback;
+	}
+
+	return 0;
+
+rollback:
+	for (rollback_port = 0; rollback_port < RTK_MAX_NUM_OF_PORT;
+	     rollback_port++) {
+		if (!updates[rollback_port].attempted)
+			continue;
+
+		if (rtk_port_isolation_set(rollback_port,
+					   updates[rollback_port].old_mask))
+			dev_warn(gsw->dev,
+				 "failed to roll back isolation mask for port %d\n",
+				 rollback_port);
+	}
+
+	return rtl837x_to_errno(ret);
+}
+
 /* DSA starts bridge hairpin mode disabled.  Set that state explicitly for
  * user ports because the SDK does not document the reset value of the
  * source-port permit register.  Leave the CPU port unchanged.
@@ -286,34 +419,80 @@ static int rtl837x_port_bridge_join(struct dsa_switch *ds, int port,
 					    struct netlink_ext_ack *extack)
 {
 	struct rtk_gsw *gsw = ds->priv;
-	rtk_api_ret_t ret;
+	u32 isolated_port_mask;
+	int ret;
 
 	if (!rtl837x_user_port(gsw, port))
 		return -EINVAL;
 
 	/* A newly created bridge port starts with Linux's hairpin default off. */
-	ret = rtk_l2_localPktPermit_set(port, DISABLED);
+	ret = rtl837x_set_hairpin(gsw, port, false);
 	if (ret)
-		return rtl837x_to_errno(ret);
+		return ret;
 
-	return dsa_tag_8021q_bridge_join(ds, port, bridge, tx_fwd_offload,
+	ret = dsa_tag_8021q_bridge_join(ds, port, bridge, tx_fwd_offload,
 					 extack);
+	if (ret)
+		return ret;
+
+	mutex_lock(&gsw->isolation_lock);
+	isolated_port_mask = gsw->isolated_port_mask & ~BIT(port);
+	ret = rtl837x_apply_isolation(gsw, isolated_port_mask, port, bridge.dev);
+	if (!ret) {
+		gsw->bridge_dev[port] = bridge.dev;
+		gsw->isolated_port_mask = isolated_port_mask;
+	}
+	mutex_unlock(&gsw->isolation_lock);
+	if (ret) {
+		/* The tag join may already have changed VLAN state.  The DSA core
+		 * does not own partial state from a failed driver callback, so
+		 * explicitly undo it while preserving the isolation error.
+		 * dsa_tag_8021q_bridge_leave() has no return value.
+		 */
+		dsa_tag_8021q_bridge_leave(ds, port, bridge);
+		dev_err(gsw->dev,
+			"failed to apply isolation for port %d: %d; tag_8021q join rollback requested\n",
+			port, ret);
+	}
+
+	return ret;
 }
 
 static void rtl837x_port_bridge_leave(struct dsa_switch *ds, int port,
 					      struct dsa_bridge bridge)
 {
 	struct rtk_gsw *gsw = ds->priv;
-	rtk_api_ret_t ret;
+	u32 isolated_port_mask;
+	int ret;
 
 	if (!rtl837x_user_port(gsw, port))
 		return;
 
+	/* DSA has already removed dp->bridge by the time this callback runs.
+	 * Stage the departing port as standalone explicitly for the matrix.
+	 */
+	mutex_lock(&gsw->isolation_lock);
+	isolated_port_mask = gsw->isolated_port_mask & ~BIT(port);
+	ret = rtl837x_apply_isolation(gsw, isolated_port_mask, port, NULL);
+	if (ret) {
+		dev_err(gsw->dev, "failed to restore isolation for port %d: %d\n",
+			port, ret);
+		/* The callback cannot report an error.  Drop the membership
+		 * pointer anyway so it cannot outlive the bridge device; keep
+		 * isolated_port_mask unchanged because the hardware rolled back.
+		 */
+		gsw->bridge_dev[port] = NULL;
+	} else {
+		gsw->bridge_dev[port] = NULL;
+		gsw->isolated_port_mask = isolated_port_mask;
+	}
+	mutex_unlock(&gsw->isolation_lock);
+
 	/* Do not carry hairpin state into the next bridge-port instance. */
-	ret = rtk_l2_localPktPermit_set(port, DISABLED);
+	ret = rtl837x_set_hairpin(gsw, port, false);
 	if (ret)
 		dev_err(gsw->dev, "failed to reset hairpin state for port %d: %d\n",
-			port, rtl837x_to_errno(ret));
+			port, ret);
 
 	dsa_tag_8021q_bridge_leave(ds, port, bridge);
 }
@@ -785,6 +964,7 @@ static int rtl837x_setup(struct dsa_switch *ds)
 		return ret;
 
 	memset(gsw->bridge_dev, 0, sizeof(gsw->bridge_dev));
+	gsw->isolated_port_mask = 0;
 	memset(gsw->tag8021q_pvid, 0, sizeof(gsw->tag8021q_pvid));
 	memset(gsw->tag8021q_pvid_valid, 0, sizeof(gsw->tag8021q_pvid_valid));
 	memset(gsw->bridge_pvid, 0, sizeof(gsw->bridge_pvid));
@@ -1608,6 +1788,7 @@ int rtl837x_dsa_register(struct rtk_gsw *gsw)
 	int ret;
 
 	rtl837x_stats_init(gsw);
+	mutex_init(&gsw->isolation_lock);
 
 	ds->dev = gsw->dev;
 	ds->priv = gsw;

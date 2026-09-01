@@ -8,6 +8,7 @@
 
 #include <linux/of_mdio.h>
 #include <linux/netdevice.h>
+#include <linux/mutex.h>
 #include <linux/regmap.h>
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
@@ -122,6 +123,9 @@ struct rtk_gsw {
 	bool dsa_registered;
 	struct dsa_switch ds;
 	struct net_device *bridge_dev[RTK_MAX_NUM_OF_PORT];
+	/* Hardware-indexed mask of ports with BR_ISOLATED enabled. */
+	u32 isolated_port_mask;
+	struct mutex isolation_lock;
 	struct net_device *ethernet_master;
 	struct sfp_bus *sfp_bus;
 
