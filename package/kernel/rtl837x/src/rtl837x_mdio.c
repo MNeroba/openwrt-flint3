@@ -741,6 +741,8 @@ static int rtl837x_sfp_probe(struct rtk_gsw *gsw)
 	gsw->sfp_bus = bus;
 
 	ret = sfp_bus_add_upstream(bus, gsw, &sfp_ops);
+	if (ret)
+		gsw->sfp_bus = NULL;
 	sfp_bus_put(bus);
 
 	return ret;
@@ -956,10 +958,16 @@ static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 	}
 
 #ifdef CONFIG_GPIOLIB
-	if (of_property_read_bool(np, "gpio-controller")) 
-		rtl837x_gpiochip_init(gsw);
+	if (of_property_read_bool(np, "gpio-controller")) {
+		ret = rtl837x_gpiochip_init(gsw);
+		if (ret)
+			dev_err_probe(dev, ret,
+				      "failed to register GPIO controller; "
+				      "continuing without GPIO\n");
+	}
 #endif /* CONFIG_GPIOLIB */
 
+	/* SFP is optional; keep a registration failure from tearing down DSA. */
 	rtl837x_sfp_probe(gsw);
 
 	rtl837x_debug_proc_init(gsw);
