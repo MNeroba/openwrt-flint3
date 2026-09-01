@@ -126,6 +126,7 @@ struct rtk_gsw {
 	bool dsa_registered;
 	struct dsa_switch ds;
 	u32 lag_members[TRUNK_GROUP_END];
+	u32 lag_active_members[TRUNK_GROUP_END];
 	u32 lag_hash_mask[TRUNK_GROUP_END];
 	struct net_device *bridge_dev[RTK_MAX_NUM_OF_PORT];
 	/* Hardware-indexed mask of ports with BR_ISOLATED enabled. */
