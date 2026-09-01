@@ -415,11 +415,15 @@ rtl837x_rate_policy_validate(const struct flow_action_entry *act)
 
 	/* The RTL8373 port meters are byte-rate policers which drop when the
 	 * bucket is exceeded. Packet-rate, peak-rate and alternate actions
-	 * cannot be represented by the switch API.
+	 * cannot be represented by the switch API. The Linux byte-burst value
+	 * is also rejected until the RTL8373 burst registers' units and
+	 * ingress/egress mapping are verified; accepting it would silently
+	 * program a different bucket.
 	 */
 	return act->police.rate_bytes_ps && !act->police.rate_pkt_ps &&
 	       !act->police.peakrate_bytes_ps && !act->police.avrate &&
 	       !act->police.overhead && !act->police.burst_pkt &&
+	       !act->police.burst &&
 	       act->police.exceed.act_id == FLOW_ACTION_DROP &&
 	       act->police.notexceed.act_id == FLOW_ACTION_ACCEPT;
 }
@@ -514,14 +518,14 @@ static int rtl837x_cls_flower_add(struct dsa_switch *ds, int port,
 	 */
 	if (!rtl837x_rate_rule_is_port_wide(cls->rule)) {
 		NL_SET_ERR_MSG_MOD(cls->common.extack,
-				   "RTL837x port rate limiter cannot offload flower matches");
+				   "RTL837x rate limiter rejects selective/non-empty matches");
 		return -EOPNOTSUPP;
 	}
 
 	act = rtl837x_rate_policy_extract(cls);
 	if (!rtl837x_rate_policy_validate(act)) {
 		NL_SET_ERR_MSG_MOD(cls->common.extack,
-				   "RTL837x supports one byte-rate drop police action");
+				   "RTL837x rate police requires a zero byte burst");
 		return -EOPNOTSUPP;
 	}
 
