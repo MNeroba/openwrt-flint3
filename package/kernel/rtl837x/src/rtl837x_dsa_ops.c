@@ -258,6 +258,208 @@ static u64 rtl837x_read_stat(int port, u32 counter)
 	return value;
 }
 
+static int rtl837x_read_stat_value(int port, rtk_stat_port_type_t counter,
+				   u64 *value)
+{
+	rtk_stat_counter_t counter_value = 0;
+	int ret;
+
+	ret = rtk_stat_port_get(port, counter, &counter_value);
+	if (ret)
+		return rtl837x_to_errno(ret);
+
+	*value = counter_value;
+	return 0;
+}
+
+static int rtl837x_read_stats_snapshot(int port,
+				       struct rtl837x_mib_snapshot *snapshot)
+{
+	u64 value;
+	int ret;
+
+	ret = rtl837x_read_stat_value(port, ifInOctets, &value);
+	if (ret)
+		return ret;
+	snapshot->rx_octets = value;
+
+	ret = rtl837x_read_stat_value(port, ifOutOctets, &value);
+	if (ret)
+		return ret;
+	snapshot->tx_octets = value;
+
+	ret = rtl837x_read_stat_value(port, ifInUcastPkts, &value);
+	if (ret)
+		return ret;
+	snapshot->rx_ucast_pkts = value;
+
+	ret = rtl837x_read_stat_value(port, ifInMulticastPkts, &value);
+	if (ret)
+		return ret;
+	snapshot->rx_mcast_pkts = value;
+
+	ret = rtl837x_read_stat_value(port, ifInBroadcastPkts, &value);
+	if (ret)
+		return ret;
+	snapshot->rx_bcast_pkts = value;
+
+	ret = rtl837x_read_stat_value(port, ifOutUcastPkts, &value);
+	if (ret)
+		return ret;
+	snapshot->tx_ucast_pkts = value;
+
+	ret = rtl837x_read_stat_value(port, ifOutMulticastPkts, &value);
+	if (ret)
+		return ret;
+	snapshot->tx_mcast_pkts = value;
+
+	ret = rtl837x_read_stat_value(port, ifOutBroadcastPkts, &value);
+	if (ret)
+		return ret;
+	snapshot->tx_bcast_pkts = value;
+
+	ret = rtl837x_read_stat_value(port, ifOutDiscards, &value);
+	if (ret)
+		return ret;
+	snapshot->tx_discards = value;
+
+	ret = rtl837x_read_stat_value(port, tx_etherStatsCollisions, &value);
+	if (ret)
+		return ret;
+	snapshot->collisions = value;
+
+	return 0;
+}
+
+static bool
+rtl837x_stats_reset_detected(const struct rtl837x_mib_snapshot *old,
+				      const struct rtl837x_mib_snapshot *current)
+{
+	return current->rx_octets < old->rx_octets ||
+	       current->tx_octets < old->tx_octets ||
+	       current->rx_ucast_pkts < old->rx_ucast_pkts ||
+	       current->rx_mcast_pkts < old->rx_mcast_pkts ||
+	       current->rx_bcast_pkts < old->rx_bcast_pkts ||
+	       current->tx_ucast_pkts < old->tx_ucast_pkts ||
+	       current->tx_mcast_pkts < old->tx_mcast_pkts ||
+	       current->tx_bcast_pkts < old->tx_bcast_pkts ||
+	       current->tx_discards < old->tx_discards ||
+	       current->collisions < old->collisions;
+}
+
+static void rtl837x_update_port_stats(struct rtk_gsw *gsw, int port,
+				       const struct rtl837x_mib_snapshot *snapshot)
+{
+	struct rtl837x_port_stats *port_stats = &gsw->port_stats[port];
+	const struct rtl837x_mib_snapshot *old = &port_stats->snapshot;
+
+	spin_lock_bh(&port_stats->lock);
+
+	if (!port_stats->snapshot_valid ||
+	    rtl837x_stats_reset_detected(old, snapshot)) {
+		if (port_stats->snapshot_valid)
+			memset(&port_stats->stats, 0, sizeof(port_stats->stats));
+		port_stats->snapshot = *snapshot;
+		port_stats->snapshot_valid = true;
+		spin_unlock_bh(&port_stats->lock);
+		return;
+	}
+
+	port_stats->stats.rx_bytes += snapshot->rx_octets - old->rx_octets;
+	port_stats->stats.tx_bytes += snapshot->tx_octets - old->tx_octets;
+	port_stats->stats.rx_packets +=
+		snapshot->rx_ucast_pkts - old->rx_ucast_pkts +
+		snapshot->rx_mcast_pkts - old->rx_mcast_pkts +
+		snapshot->rx_bcast_pkts - old->rx_bcast_pkts;
+	port_stats->stats.tx_packets +=
+		snapshot->tx_ucast_pkts - old->tx_ucast_pkts +
+		snapshot->tx_mcast_pkts - old->tx_mcast_pkts +
+		snapshot->tx_bcast_pkts - old->tx_bcast_pkts;
+	port_stats->stats.tx_dropped +=
+		(u32)(snapshot->tx_discards - old->tx_discards);
+	port_stats->stats.multicast +=
+		snapshot->rx_mcast_pkts - old->rx_mcast_pkts;
+	port_stats->stats.collisions +=
+		(u32)(snapshot->collisions - old->collisions);
+
+	port_stats->snapshot = *snapshot;
+	spin_unlock_bh(&port_stats->lock);
+}
+
+/*
+ * dal_rtl8373_portMib_read() exposes the ifIn/ifOut octet and packet
+ * counters as 64-bit values.  The discard and collision counters below are
+ * 32-bit, so one second leaves ample margin before they can wrap even at the
+ * RTL8373 line rate.
+ */
+#define RTL837X_STATS_POLL_INTERVAL (HZ)
+
+static void rtl837x_stats_work_func(struct work_struct *work)
+{
+	struct rtk_gsw *gsw = container_of(to_delayed_work(work),
+					 struct rtk_gsw, stats_work);
+	struct rtl837x_mib_snapshot snapshot;
+	unsigned long user_ports = rtl837x_user_ports(gsw);
+	int port, ret;
+
+	for_each_set_bit(port, &user_ports, RTK_MAX_NUM_OF_PORT) {
+		if (READ_ONCE(gsw->stats_work_stopping))
+			return;
+
+		ret = rtl837x_read_stats_snapshot(port, &snapshot);
+		if (ret) {
+			dev_warn_ratelimited(gsw->dev,
+					     "failed to read statistics for port %d: %d\n",
+					     port, ret);
+			continue;
+		}
+
+		rtl837x_update_port_stats(gsw, port, &snapshot);
+	}
+
+	if (!READ_ONCE(gsw->stats_work_stopping))
+		queue_delayed_work(system_wq, &gsw->stats_work,
+				   RTL837X_STATS_POLL_INTERVAL);
+}
+
+static void rtl837x_stats_init(struct rtk_gsw *gsw)
+{
+	int port;
+
+	for (port = 0; port < RTK_MAX_NUM_OF_PORT; port++)
+		spin_lock_init(&gsw->port_stats[port].lock);
+
+	INIT_DELAYED_WORK(&gsw->stats_work, rtl837x_stats_work_func);
+	WRITE_ONCE(gsw->stats_work_stopping, true);
+}
+
+static void rtl837x_stats_start(struct rtk_gsw *gsw)
+{
+	struct rtl837x_port_stats *port_stats;
+	int port;
+
+	for (port = 0; port < RTK_MAX_NUM_OF_PORT; port++) {
+		port_stats = &gsw->port_stats[port];
+
+		spin_lock_bh(&port_stats->lock);
+		/* Establish a post-registration baseline; do not count earlier traffic. */
+		memset(&port_stats->stats, 0, sizeof(port_stats->stats));
+		memset(&port_stats->snapshot, 0, sizeof(port_stats->snapshot));
+		port_stats->snapshot_valid = false;
+		spin_unlock_bh(&port_stats->lock);
+	}
+
+	WRITE_ONCE(gsw->stats_work_stopping, false);
+	queue_delayed_work(system_wq, &gsw->stats_work,
+			   RTL837X_STATS_POLL_INTERVAL);
+}
+
+static void rtl837x_stats_stop(struct rtk_gsw *gsw)
+{
+	WRITE_ONCE(gsw->stats_work_stopping, true);
+	cancel_delayed_work_sync(&gsw->stats_work);
+}
+
 static int rtl837x_write_vlan(struct rtk_gsw *gsw, u16 vid)
 {
 	rtk_vlan_entry_t vlan = { 0 };
@@ -509,12 +711,17 @@ static int rtl837x_setup(struct dsa_switch *ds)
 		return ret;
 	}
 
+	rtl837x_stats_start(gsw);
+
 	return 0;
 }
 
 static void rtl837x_teardown(struct dsa_switch *ds)
 {
+	struct rtk_gsw *gsw = ds->priv;
 	int ret;
+
+	rtl837x_stats_stop(gsw);
 
 	rtnl_lock();
 	dsa_tag_8021q_unregister(ds);
@@ -967,6 +1174,21 @@ static void rtl837x_get_rmon_stats(struct dsa_switch *ds, int port,
 	 */
 }
 
+static void rtl837x_get_stats64(struct dsa_switch *ds, int port,
+				struct rtnl_link_stats64 *stats)
+{
+	struct rtk_gsw *gsw = ds->priv;
+	struct rtl837x_port_stats *port_stats;
+
+	if (!rtl837x_user_port(gsw, port))
+		return;
+
+	port_stats = &gsw->port_stats[port];
+	spin_lock_bh(&port_stats->lock);
+	*stats = port_stats->stats;
+	spin_unlock_bh(&port_stats->lock);
+}
+
 static int rtl837x_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
 {
 	unsigned int secs = DIV_ROUND_UP(msecs, 1000);
@@ -1245,6 +1467,7 @@ static const struct dsa_switch_ops rtl837x_dsa_ops = {
 	.get_strings = rtl837x_get_strings,
 	.get_ethtool_stats = rtl837x_get_ethtool_stats,
 	.get_sset_count = rtl837x_get_sset_count,
+	.get_stats64 = rtl837x_get_stats64,
 	.get_pause_stats = rtl837x_get_pause_stats,
 	.get_eth_phy_stats = rtl837x_get_eth_phy_stats,
 	.get_eth_mac_stats = rtl837x_get_eth_mac_stats,
@@ -1272,6 +1495,8 @@ int rtl837x_dsa_register(struct rtk_gsw *gsw)
 {
 	struct dsa_switch *ds = &gsw->ds;
 	int ret;
+
+	rtl837x_stats_init(gsw);
 
 	ds->dev = gsw->dev;
 	ds->priv = gsw;
@@ -1307,6 +1532,7 @@ void rtl837x_dsa_shutdown(struct rtk_gsw *gsw)
 	if (!gsw->dsa_registered)
 		return;
 
+	rtl837x_stats_stop(gsw);
 	dsa_switch_shutdown(&gsw->ds);
 	gsw->dsa_registered = false;
 }
