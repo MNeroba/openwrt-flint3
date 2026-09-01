@@ -408,22 +408,19 @@ rtl837x_rate_policy_extract(struct flow_cls_offload *cls)
 }
 
 static bool
-rtl837x_rate_policy_validate(const struct flow_action_entry *act)
+rtl837x_egress_rate_policy_validate(const struct flow_action_entry *act)
 {
 	if (!act || act->id != FLOW_ACTION_POLICE)
 		return false;
 
-	/* The RTL8373 port meters are byte-rate policers which drop when the
-	 * bucket is exceeded. Packet-rate, peak-rate and alternate actions
-	 * cannot be represented by the switch API. The Linux byte-burst value
-	 * is also rejected until the RTL8373 burst registers' units and
-	 * ingress/egress mapping are verified; accepting it would silently
-	 * program a different bucket.
+	/* The RTL8373 egress port meter is a byte-rate policer with a byte
+	 * bucket. Packet-rate, peak-rate, alternate actions, MTU enforcement,
+	 * and non-drop actions cannot be represented by the switch API.
 	 */
 	return act->police.rate_bytes_ps && !act->police.rate_pkt_ps &&
 	       !act->police.peakrate_bytes_ps && !act->police.avrate &&
 	       !act->police.overhead && !act->police.burst_pkt &&
-	       !act->police.burst &&
+	       !act->police.mtu && act->police.burst &&
 	       act->police.exceed.act_id == FLOW_ACTION_DROP &&
 	       act->police.notexceed.act_id == FLOW_ACTION_ACCEPT;
 }
@@ -434,19 +431,32 @@ static int rtl837x_rate_to_kbps(const struct flow_action_entry *act,
 	u64 kbps;
 
 	/* RTK's rate argument is expressed in kbit/s and is quantized in
-	 * 16-kbit/s steps by the RTL8373 DAL.
+	 * 16-kbit/s steps by the RTL8373 DAL. Do not silently round a Linux
+	 * rate down to the next representable value.
 	 */
+	if (act->police.rate_bytes_ps % 125)
+		return -ERANGE;
+
 	kbps = div_u64(act->police.rate_bytes_ps, 125);
-	kbps &= ~0xfULL;
-	if (!kbps || kbps > INBW_CTRL_RATE_MAX)
+	if (!kbps || kbps > EBW_CTRL_RATE_MAX || (kbps & 0xfULL))
 		return -ERANGE;
 
 	*rate = (rtk_rate_t)kbps;
 	return 0;
 }
 
-static int rtl837x_rate_enable(int port, const struct flow_action_entry *act,
-				       bool ingress)
+static int rtl837x_rate_burst_set(int port, u32 burst)
+{
+	int ret;
+
+	ret = rtk_rate_egrBwCtrlBurst_set(port, burst);
+	if (ret == RT_ERR_INPUT)
+		return -ERANGE;
+
+	return rtl837x_to_errno(ret);
+}
+
+static int rtl837x_rate_enable(int port, const struct flow_action_entry *act)
 {
 	rtk_rate_t rate;
 	int ret;
@@ -455,42 +465,28 @@ static int rtl837x_rate_enable(int port, const struct flow_action_entry *act,
 	if (ret)
 		return ret;
 
-	if (ingress) {
-		/* Disable flow control so tc police keeps its drop-on-exceed
-		 * semantics instead of applying backpressure to the peer.
-		 */
-		ret = rtl837x_to_errno(rtk_rate_igrBwCtrlRate_set(port, rate,
-								 DISABLED));
-		if (ret)
-			return ret;
+	/* Program only the port-specific rate and burst, preserving the
+	 * chip-global IFG accounting setting.
+	 */
+	ret = rtl837x_to_errno(rtk_rate_egrBwCtrlRate_set(port, rate));
+	if (ret)
+		return ret;
 
-		ret = rtl837x_to_errno(rtk_rate_igrBwCtrlPortEn_set(port,
-								   ENABLED));
-		if (ret)
-			rtk_rate_igrBwCtrlPortEn_set(port, DISABLED);
-	} else {
-		/* Program only the port-specific rate and preserve the
-		 * chip-global IFG accounting setting.
-		 */
-		ret = rtl837x_to_errno(rtk_rate_egrBwCtrlRate_set(port, rate));
-		if (ret)
-			return ret;
-
-		ret = rtl837x_to_errno(rtk_rate_egrBwCtrlPortEn_set(port,
-								 ENABLED));
-		if (ret)
-			rtk_rate_egrBwCtrlPortEn_set(port, DISABLED);
+	ret = rtl837x_rate_burst_set(port, act->police.burst);
+	if (ret) {
+		rtk_rate_egrBwCtrlPortEn_set(port, DISABLED);
+		return ret;
 	}
+
+	ret = rtl837x_to_errno(rtk_rate_egrBwCtrlPortEn_set(port, ENABLED));
+	if (ret)
+		rtk_rate_egrBwCtrlPortEn_set(port, DISABLED);
 
 	return ret;
 }
 
-static int rtl837x_rate_disable(int port, bool ingress)
+static int rtl837x_rate_disable(int port)
 {
-	if (ingress)
-		return rtl837x_to_errno(rtk_rate_igrBwCtrlPortEn_set(port,
-									 DISABLED));
-
 	return rtl837x_to_errno(rtk_rate_egrBwCtrlPortEn_set(port, DISABLED));
 }
 
@@ -505,6 +501,12 @@ static int rtl837x_cls_flower_add(struct dsa_switch *ds, int port,
 
 	if (!rtl837x_user_port(gsw, port))
 		return -EINVAL;
+
+	if (ingress) {
+		NL_SET_ERR_MSG_MOD(cls->common.extack,
+				   "RTL837x police offload supports egress only");
+		return -EOPNOTSUPP;
+	}
 
 	if (cls->common.chain_index) {
 		NL_SET_ERR_MSG_MOD(cls->common.extack,
@@ -523,19 +525,23 @@ static int rtl837x_cls_flower_add(struct dsa_switch *ds, int port,
 	}
 
 	act = rtl837x_rate_policy_extract(cls);
-	if (!rtl837x_rate_policy_validate(act)) {
+	if (!rtl837x_egress_rate_policy_validate(act)) {
 		NL_SET_ERR_MSG_MOD(cls->common.extack,
-				   "RTL837x rate police requires a zero byte burst");
+				   "RTL837x egress police requires a byte rate, non-zero byte burst, and drop/accept actions");
 		return -EOPNOTSUPP;
 	}
 
-	mask = ingress ? &gsw->rate_ingress_mask : &gsw->rate_egress_mask;
+	mask = &gsw->rate_egress_mask;
 	if (test_and_set_bit(port, mask))
 		return -EOPNOTSUPP;
 
-	ret = rtl837x_rate_enable(port, act, ingress);
-	if (ret)
+	ret = rtl837x_rate_enable(port, act);
+	if (ret) {
 		clear_bit(port, mask);
+		if (ret == -ERANGE)
+			NL_SET_ERR_MSG_MOD(cls->common.extack,
+					   "RTL837x egress police rate or burst is not exactly representable");
+	}
 
 	return ret;
 }
@@ -551,11 +557,14 @@ static int rtl837x_cls_flower_del(struct dsa_switch *ds, int port,
 	if (!rtl837x_user_port(gsw, port))
 		return -EINVAL;
 
-	mask = ingress ? &gsw->rate_ingress_mask : &gsw->rate_egress_mask;
+	if (ingress)
+		return 0;
+
+	mask = &gsw->rate_egress_mask;
 	if (!test_bit(port, mask))
 		return 0;
 
-	ret = rtl837x_rate_disable(port, ingress);
+	ret = rtl837x_rate_disable(port);
 	if (!ret)
 		clear_bit(port, mask);
 
@@ -1330,7 +1339,6 @@ static int rtl837x_setup(struct dsa_switch *ds)
 	memset(gsw->tag8021q_pvid_valid, 0, sizeof(gsw->tag8021q_pvid_valid));
 	memset(gsw->bridge_pvid, 0, sizeof(gsw->bridge_pvid));
 	memset(gsw->bridge_pvid_valid, 0, sizeof(gsw->bridge_pvid_valid));
-	gsw->rate_ingress_mask = 0;
 	gsw->rate_egress_mask = 0;
 	gsw->port_enabled[gsw->cpu_port] = true;
 
@@ -1383,18 +1391,8 @@ static void rtl837x_teardown(struct dsa_switch *ds)
 	rtnl_unlock();
 
 	for (port = 0; port < RTK_MAX_NUM_OF_PORT; port++) {
-		if (test_bit(port, &gsw->rate_ingress_mask)) {
-			ret = rtl837x_rate_disable(port, true);
-			if (ret)
-				dev_warn(gsw->dev,
-					 "failed to disable ingress rate limiter on port %d: %d\n",
-					 port, ret);
-			else
-				clear_bit(port, &gsw->rate_ingress_mask);
-		}
-
 		if (test_bit(port, &gsw->rate_egress_mask)) {
-			ret = rtl837x_rate_disable(port, false);
+			ret = rtl837x_rate_disable(port);
 			if (ret)
 				dev_warn(gsw->dev,
 					 "failed to disable egress rate limiter on port %d: %d\n",
