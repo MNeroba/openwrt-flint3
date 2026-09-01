@@ -90,8 +90,8 @@ static int rtl837x_mdio_write(void *ctx, u32 reg, u32 val)
 	if (ret < 0)
 		goto out_unlock;
 
-    if (ret & 0x4) {
-		ret = RT_ERR_BUSYWAIT_TIMEOUT;
+	if (ret & 0x4) {
+		ret = -ETIMEDOUT;
 		goto out_unlock;
     }
 
@@ -116,8 +116,8 @@ static int rtl837x_mdio_write(void *ctx, u32 reg, u32 val)
 	if (ret < 0)
 		goto out_unlock;
 
-    if (ret & 0x4) {
-		ret = RT_ERR_BUSYWAIT_TIMEOUT;
+	if (ret & 0x4) {
+		ret = -ETIMEDOUT;
 		goto out_unlock;
     }
 	ret = 0;
@@ -140,8 +140,8 @@ static int rtl837x_mdio_read(void *ctx, u32 reg, u32 *val)
 	if (ret < 0)
 		goto out_unlock;
 
-    if (ret & 0x4) {
-		ret = RT_ERR_BUSYWAIT_TIMEOUT;
+	if (ret & 0x4) {
+		ret = -ETIMEDOUT;
 		goto out_unlock;
     }
 
@@ -158,8 +158,8 @@ static int rtl837x_mdio_read(void *ctx, u32 reg, u32 *val)
 	if (ret < 0)
 		goto out_unlock;
 
-    if (ret & 0x4) {
-		ret = RT_ERR_BUSYWAIT_TIMEOUT;
+	if (ret & 0x4) {
+		ret = -ETIMEDOUT;
 		goto out_unlock;
     }
 
