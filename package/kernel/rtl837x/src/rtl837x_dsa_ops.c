@@ -394,12 +394,10 @@ static int rtl837x_setup(struct dsa_switch *ds)
 		return ret;
 
 	memset(gsw->bridge_dev, 0, sizeof(gsw->bridge_dev));
-	memset(gsw->port_enabled, 0, sizeof(gsw->port_enabled));
 	memset(gsw->tag8021q_pvid, 0, sizeof(gsw->tag8021q_pvid));
 	memset(gsw->tag8021q_pvid_valid, 0, sizeof(gsw->tag8021q_pvid_valid));
 	memset(gsw->bridge_pvid, 0, sizeof(gsw->bridge_pvid));
 	memset(gsw->bridge_pvid_valid, 0, sizeof(gsw->bridge_pvid_valid));
-	gsw->port_enabled[gsw->cpu_port] = true;
 
 	for (port = 0; port < RTK_MAX_NUM_OF_PORT; port++) {
 		if (!rtl837x_valid_port(gsw, port))
@@ -741,33 +739,6 @@ static int rtl837x_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
 	return rtl837x_to_errno(rtk_l2_aging_set(secs));
 }
 
-static int rtl837x_port_enable(struct dsa_switch *ds, int port,
-			       struct phy_device *phy)
-{
-	struct rtk_gsw *gsw = ds->priv;
-
-	if (!rtl837x_valid_port(gsw, port))
-		return -EINVAL;
-
-	gsw->port_enabled[port] = true;
-
-	return rtl837x_set_stp_state(gsw, port, BR_STATE_FORWARDING);
-}
-
-static void rtl837x_port_disable(struct dsa_switch *ds, int port)
-{
-	struct rtk_gsw *gsw = ds->priv;
-	int ret;
-
-	if (!rtl837x_valid_port(gsw, port))
-		return;
-
-	gsw->port_enabled[port] = false;
-	ret = rtl837x_set_stp_state(gsw, port, BR_STATE_DISABLED);
-	if (ret)
-		dev_err(gsw->dev, "failed to disable port %d: %d\n", port, ret);
-}
-
 static void rtl837x_port_stp_state_set(struct dsa_switch *ds, int port,
 				       u8 state)
 {
@@ -996,8 +967,6 @@ static const struct dsa_switch_ops rtl837x_dsa_ops = {
 	.get_sset_count = rtl837x_get_sset_count,
 	.get_pause_stats = rtl837x_get_pause_stats,
 	.set_ageing_time = rtl837x_set_ageing_time,
-	.port_enable = rtl837x_port_enable,
-	.port_disable = rtl837x_port_disable,
 	.support_eee = rtl837x_support_eee,
 	.set_mac_eee = rtl837x_set_mac_eee,
 	.port_bridge_join = dsa_tag_8021q_bridge_join,
