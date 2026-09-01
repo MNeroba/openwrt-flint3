@@ -291,7 +291,15 @@ static int rtl837x_switch_probe(struct rtk_gsw *gsw)
 CHIP_NOT_SUPPORTED:
 	//未知芯片ID
 	rtk_uint32 regValue;
-	rtl8373_getAsicReg(0x4, &regValue);
+	rtk_api_ret_t ret;
+
+	ret = rtl8373_getAsicReg(0x4, &regValue);
+	if (ret != RT_ERR_OK) {
+		dev_err(gsw->dev,
+			"Error: Can not read device ID, error:%d\n", ret);
+		return ret;
+	}
+
 	dev_err(gsw->dev, "Error: Can not support this device, devid 0x%x\n", regValue);
 	return RT_ERR_CHIP_NOT_SUPPORTED;
 
