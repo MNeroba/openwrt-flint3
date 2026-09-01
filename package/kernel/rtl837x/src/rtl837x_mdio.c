@@ -93,7 +93,7 @@ static int rtl837x_mdio_write(void *ctx, u32 reg, u32 val)
 	if (ret & 0x4) {
 		ret = -ETIMEDOUT;
 		goto out_unlock;
-    }
+	}
 
 	ret = bus->write(bus, priv->mdio_addr, MDC_MDIO_ADDR_REG, reg);
 	if (ret)
@@ -119,7 +119,7 @@ static int rtl837x_mdio_write(void *ctx, u32 reg, u32 val)
 	if (ret & 0x4) {
 		ret = -ETIMEDOUT;
 		goto out_unlock;
-    }
+	}
 	ret = 0;
 out_unlock:
 	mutex_unlock(&bus->mdio_lock);
@@ -143,7 +143,7 @@ static int rtl837x_mdio_read(void *ctx, u32 reg, u32 *val)
 	if (ret & 0x4) {
 		ret = -ETIMEDOUT;
 		goto out_unlock;
-    }
+	}
 
 	ret = bus->write(bus, priv->mdio_addr, MDC_MDIO_ADDR_REG, reg);
 	if (ret)
@@ -161,7 +161,7 @@ static int rtl837x_mdio_read(void *ctx, u32 reg, u32 *val)
 	if (ret & 0x4) {
 		ret = -ETIMEDOUT;
 		goto out_unlock;
-    }
+	}
 
 
 	val_l = bus->read(bus, priv->mdio_addr, MDC_MDIO_DATA_LOW);
