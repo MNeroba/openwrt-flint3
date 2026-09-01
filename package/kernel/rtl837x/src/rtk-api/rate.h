@@ -198,7 +198,7 @@ extern rtk_api_ret_t rtk_rate_egrBwCtrlPortEn_get(rtk_port_t port, rtk_enable_t 
  * IFG accounting setting.
  */
 extern rtk_api_ret_t rtk_rate_egrBwCtrlRate_set(rtk_port_t port,
-							rtk_rate_t rate);
+						rtk_rate_t rate);
 
 /*
  * Set/get the per-port egress bandwidth burst in bytes. The RTL8373
