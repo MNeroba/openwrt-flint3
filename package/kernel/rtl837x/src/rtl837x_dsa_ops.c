@@ -465,7 +465,9 @@ static int rtl837x_rate_enable(int port, const struct flow_action_entry *act,
 		if (ret)
 			rtk_rate_igrBwCtrlPortEn_set(port, DISABLED);
 	} else {
-		/* Do not count preamble or IFG in the configured byte rate. */
+		/* Program only the port-specific rate and preserve the
+		 * chip-global IFG accounting setting.
+		 */
 		ret = rtl837x_to_errno(rtk_rate_egrBwCtrlRate_set(port, rate));
 		if (ret)
 			return ret;
