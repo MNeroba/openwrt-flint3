@@ -311,6 +311,40 @@ rtk_api_ret_t rtk_rate_egrBwCtrlRate_set(rtk_port_t port, rtk_rate_t rate)
 	return retVal;
 }
 
+/*
+ * Set the per-port egress bandwidth burst in bytes.
+ */
+rtk_api_ret_t rtk_rate_egrBwCtrlBurst_set(rtk_port_t port, rtk_uint32 burst)
+{
+	rtk_api_ret_t retVal;
+
+	if (!RT_MAPPER->rate_egrBwCtrlBurst_set)
+		return RT_ERR_DRIVER_NOT_FOUND;
+
+	RTK_API_LOCK();
+	retVal = RT_MAPPER->rate_egrBwCtrlBurst_set(port, burst);
+	RTK_API_UNLOCK();
+
+	return retVal;
+}
+
+/*
+ * Get the per-port egress bandwidth burst in bytes.
+ */
+rtk_api_ret_t rtk_rate_egrBwCtrlBurst_get(rtk_port_t port, rtk_uint32 *pBurst)
+{
+	rtk_api_ret_t retVal;
+
+	if (!RT_MAPPER->rate_egrBwCtrlBurst_get)
+		return RT_ERR_DRIVER_NOT_FOUND;
+
+	RTK_API_LOCK();
+	retVal = RT_MAPPER->rate_egrBwCtrlBurst_get(port, pBurst);
+	RTK_API_UNLOCK();
+
+	return retVal;
+}
+
 
 /* Function Name:
  *      rtk_rate_egrBandwidthCtrlRate_set

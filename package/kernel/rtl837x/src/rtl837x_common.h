@@ -153,7 +153,6 @@ struct rtk_gsw {
 	bool mirror_ingress;
 	struct net_device *ethernet_master;
 	struct sfp_bus *sfp_bus;
-	unsigned long rate_ingress_mask;
 	unsigned long rate_egress_mask;
 
 	struct rtl837x_mib_counter *mib_counters;
