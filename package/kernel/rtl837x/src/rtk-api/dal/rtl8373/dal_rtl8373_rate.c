@@ -162,8 +162,6 @@ rtk_api_ret_t dal_rtl8373_rate_igrBwCtrlRate_set(rtk_port_t port, rtk_rate_t rat
 	return RT_ERR_OK;	
 }
 
-
-
 /* Function Name:
  *      dal_rtl8373_rate_igrBwCtrlRate_get
  * Description:
@@ -593,7 +591,6 @@ rtk_api_ret_t dal_rtl8373_rate_egrBwCtrlRate_get(rtk_port_t port, rtk_rate_t *pR
 
 
 
-
 /* Function Name:
  *      dal_rtl8373_rate_egrQueueMaxBwEn_set
  * Description:
@@ -757,3 +754,4 @@ rtk_api_ret_t dal_rtl8373_rate_egrQueueMaxBwRate_get(rtk_port_t port, rtk_qid_t 
 	
 	return RT_ERR_OK;	
 }
+
