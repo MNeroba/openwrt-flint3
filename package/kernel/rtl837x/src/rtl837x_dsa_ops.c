@@ -537,7 +537,7 @@ static int rtl837x_cls_flower_add(struct dsa_switch *ds, int port,
 		clear_bit(port, mask);
 		if (ret == -ERANGE)
 			NL_SET_ERR_MSG_MOD(cls->common.extack,
-					   "RTL837x egress police rate or burst is not exactly representable");
+					   "RTL837x egress police rate or burst is outside the supported hardware range");
 	}
 
 	return ret;

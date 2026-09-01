@@ -368,3 +368,4 @@ extern rtk_api_ret_t dal_rtl8373_rate_egrQueueMaxBwRate_get(rtk_port_t port, rtk
 
 
 #endif /*  __DAL_RTL8373_RATE_H__ */
+
