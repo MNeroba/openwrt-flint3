@@ -74,7 +74,109 @@ static int rtl837x_set_hairpin(struct rtk_gsw *gsw, int port, bool enable)
 }
 
 #define RTL837X_SUPPORTED_BRIDGE_FLAGS \
-	(BR_LEARNING | BR_HAIRPIN_MODE | BR_ISOLATED)
+	(BR_LEARNING | BR_HAIRPIN_MODE | BR_ISOLATED | BR_FLOOD | \
+	 BR_MCAST_FLOOD | BR_BCAST_FLOOD)
+
+struct rtl837x_flood_mask_update {
+	rtk_l2_flood_type_t type;
+	rtk_portmask_t old;
+	rtk_portmask_t new;
+	bool valid;
+	bool attempted;
+};
+
+static int rtl837x_flood_mask_update_prepare(
+		struct rtl837x_flood_mask_update *update, int port, bool enable)
+{
+	rtk_api_ret_t ret;
+
+	ret = rtk_l2_floodPortMask_get(update->type, &update->old);
+	if (ret != RT_ERR_OK)
+		return rtl837x_to_errno(ret);
+
+	update->new = update->old;
+	if (enable)
+		RTK_PORTMASK_PORT_SET(update->new, port);
+	else
+		RTK_PORTMASK_PORT_CLEAR(update->new, port);
+
+	update->valid = true;
+	return 0;
+}
+
+static void rtl837x_flood_mask_rollback(struct rtk_gsw *gsw,
+					struct rtl837x_flood_mask_update *updates,
+					unsigned int count)
+{
+	unsigned int i;
+	rtk_api_ret_t ret;
+
+	for (i = 0; i < count; i++) {
+		if (!updates[i].valid || !updates[i].attempted)
+			continue;
+
+		ret = rtk_l2_floodPortMask_set(updates[i].type,
+						       &updates[i].old);
+		if (ret != RT_ERR_OK)
+			dev_warn(gsw->dev,
+				 "failed to rollback flood mask type %u: %d\n",
+				 updates[i].type, rtl837x_to_errno(ret));
+	}
+}
+
+static int rtl837x_set_bridge_flood_flags(struct rtk_gsw *gsw, int port,
+						struct switchdev_brport_flags flags)
+{
+	struct rtl837x_flood_mask_update updates[] = {
+		{ .type = FLOOD_UNKNOWNDA },
+		{ .type = FLOOD_UNKNOWNL2MC },
+		{ .type = FLOOD_UNKNOWNV4MC },
+		{ .type = FLOOD_UNKNOWNV6MC },
+		{ .type = FLOOD_BC },
+	};
+	unsigned int i;
+	int ret;
+
+	if (flags.mask & BR_FLOOD) {
+		ret = rtl837x_flood_mask_update_prepare(&updates[0], port,
+							flags.val & BR_FLOOD);
+		if (ret)
+			return ret;
+	}
+
+	if (flags.mask & BR_MCAST_FLOOD) {
+		for (i = 1; i <= 3; i++) {
+			ret = rtl837x_flood_mask_update_prepare(&updates[i], port,
+								flags.val & BR_MCAST_FLOOD);
+			if (ret)
+				return ret;
+		}
+	}
+
+	if (flags.mask & BR_BCAST_FLOOD) {
+		ret = rtl837x_flood_mask_update_prepare(&updates[4], port,
+							flags.val & BR_BCAST_FLOOD);
+		if (ret)
+			return ret;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(updates); i++) {
+		if (!updates[i].valid ||
+		    updates[i].old.bits[0] == updates[i].new.bits[0])
+			continue;
+
+		updates[i].attempted = true;
+		ret = rtl837x_to_errno(rtk_l2_floodPortMask_set(updates[i].type,
+									&updates[i].new));
+		if (ret) {
+			rtl837x_flood_mask_rollback(gsw, updates,
+							ARRAY_SIZE(updates));
+			return ret;
+		}
+	}
+
+	return 0;
+}
 
 static int rtl837x_apply_isolation(struct rtk_gsw *gsw,
 					   u32 isolated_port_mask,
@@ -103,6 +205,7 @@ static int rtl837x_port_bridge_flags(struct dsa_switch *ds, int port,
 					 struct switchdev_brport_flags flags,
 					 struct netlink_ext_ack *extack)
 {
+	struct rtk_gsw *gsw = ds->priv;
 	int ret;
 
 	ret = rtl837x_port_pre_bridge_flags(ds, port, flags, extack);
@@ -110,21 +213,28 @@ static int rtl837x_port_bridge_flags(struct dsa_switch *ds, int port,
 		return ret;
 
 	if (flags.mask & BR_LEARNING) {
-		ret = rtl837x_set_learning(ds->priv, port,
+		ret = rtl837x_set_learning(gsw, port,
 					    flags.val & BR_LEARNING);
 		if (ret)
 			return ret;
 	}
 
 	if (flags.mask & BR_HAIRPIN_MODE) {
-		ret = rtl837x_set_hairpin(ds->priv, port,
+		ret = rtl837x_set_hairpin(gsw, port,
 					   flags.val & BR_HAIRPIN_MODE);
 		if (ret)
 			return ret;
 	}
 
+	if (flags.mask & (BR_FLOOD | BR_MCAST_FLOOD | BR_BCAST_FLOOD)) {
+		mutex_lock(&gsw->flood_lock);
+		ret = rtl837x_set_bridge_flood_flags(gsw, port, flags);
+		mutex_unlock(&gsw->flood_lock);
+		if (ret)
+			return ret;
+	}
+
 	if (flags.mask & BR_ISOLATED) {
-		struct rtk_gsw *gsw = ds->priv;
 		u32 isolated_port_mask;
 
 		mutex_lock(&gsw->isolation_lock);
