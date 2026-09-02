@@ -458,8 +458,14 @@ static int rtl837x_rate_disable(int port)
 	return rtl837x_to_errno(rtk_rate_egrBwCtrlPortEn_set(port, DISABLED));
 }
 
+static void rtl837x_rate_cleanup_on_error(int port, bool *cleanup_pending)
+{
+	if (rtl837x_rate_disable(port) && cleanup_pending)
+		*cleanup_pending = true;
+}
+
 static int rtl837x_rate_program(int port, rtk_rate_t rate, u32 burst,
-					bool disable_on_error)
+					bool disable_on_error, bool *cleanup_pending)
 {
 	int ret;
 
@@ -469,20 +475,20 @@ static int rtl837x_rate_program(int port, rtk_rate_t rate, u32 burst,
 	ret = rtl837x_to_errno(rtk_rate_egrBwCtrlRate_set(port, rate));
 	if (ret) {
 		if (disable_on_error)
-			rtl837x_rate_disable(port);
+			rtl837x_rate_cleanup_on_error(port, cleanup_pending);
 		return ret;
 	}
 
 	ret = rtl837x_rate_burst_set(port, burst);
 	if (ret) {
 		if (disable_on_error)
-			rtl837x_rate_disable(port);
+			rtl837x_rate_cleanup_on_error(port, cleanup_pending);
 		return ret;
 	}
 
 	ret = rtl837x_to_errno(rtk_rate_egrBwCtrlPortEn_set(port, ENABLED));
 	if (ret && disable_on_error)
-		rtl837x_rate_disable(port);
+		rtl837x_rate_cleanup_on_error(port, cleanup_pending);
 
 	return ret;
 }
@@ -507,6 +513,15 @@ static int rtl837x_rate_disable_all(struct rtk_gsw *gsw)
 	}
 
 	return first_ret;
+}
+
+static void rtl837x_rate_clear_state(struct rtk_gsw *gsw, int port)
+{
+	clear_bit(port, &gsw->rate_egress_mask);
+	gsw->rate_egress_cookie[port] = 0;
+	gsw->rate_egress_rate[port] = 0;
+	gsw->rate_egress_burst[port] = 0;
+	gsw->rate_egress_cleanup_pending[port] = false;
 }
 
 static int rtl837x_cls_flower_add(struct dsa_switch *ds, int port,
@@ -563,6 +578,22 @@ static int rtl837x_cls_flower_add(struct dsa_switch *ds, int port,
 
 	mask = &gsw->rate_egress_mask;
 	replacing = test_bit(port, mask);
+	if (gsw->rate_egress_cleanup_pending[port] &&
+	    (!replacing || gsw->rate_egress_cookie[port] != cls->cookie)) {
+		/* A previous operation could not disable the meter. Reclaim it
+		 * before programming a new owner or a new rule.
+		 */
+		ret = rtl837x_rate_disable(port);
+		if (ret) {
+			NL_SET_ERR_MSG_MOD(cls->common.extack,
+					   "RTL837x egress rate limiter cleanup is still pending");
+			return ret;
+		}
+
+		rtl837x_rate_clear_state(gsw, port);
+		replacing = false;
+	}
+
 	if (replacing && gsw->rate_egress_cookie[port] != cls->cookie) {
 		NL_SET_ERR_MSG_MOD(cls->common.extack,
 				   "RTL837x egress rate limiter is already owned by another filter");
@@ -570,7 +601,8 @@ static int rtl837x_cls_flower_add(struct dsa_switch *ds, int port,
 	}
 
 	if (!replacing) {
-		ret = rtl837x_rate_program(port, rate, act->police.burst, true);
+		ret = rtl837x_rate_program(port, rate, act->police.burst, true,
+					   &gsw->rate_egress_cleanup_pending[port]);
 		if (ret) {
 			if (ret == -ERANGE)
 				NL_SET_ERR_MSG_MOD(cls->common.extack,
@@ -582,14 +614,16 @@ static int rtl837x_cls_flower_add(struct dsa_switch *ds, int port,
 		gsw->rate_egress_cookie[port] = cls->cookie;
 		gsw->rate_egress_rate[port] = rate;
 		gsw->rate_egress_burst[port] = act->police.burst;
+		gsw->rate_egress_cleanup_pending[port] = false;
 		return 0;
 	}
 
 	old_rate = gsw->rate_egress_rate[port];
 	old_burst = gsw->rate_egress_burst[port];
-	ret = rtl837x_rate_program(port, rate, act->police.burst, false);
+	ret = rtl837x_rate_program(port, rate, act->police.burst, false, NULL);
 	if (ret) {
-		rollback_ret = rtl837x_rate_program(port, old_rate, old_burst, false);
+		rollback_ret = rtl837x_rate_program(port, old_rate, old_burst, false,
+						     NULL);
 		if (rollback_ret) {
 			dev_err(gsw->dev,
 				 "failed to restore egress rate limiter on port %d after replace failure: %d\n",
@@ -607,6 +641,7 @@ static int rtl837x_cls_flower_add(struct dsa_switch *ds, int port,
 
 	gsw->rate_egress_rate[port] = rate;
 	gsw->rate_egress_burst[port] = act->police.burst;
+	gsw->rate_egress_cleanup_pending[port] = false;
 
 	return 0;
 }
@@ -631,12 +666,10 @@ static int rtl837x_cls_flower_del(struct dsa_switch *ds, int port,
 		return 0;
 
 	ret = rtl837x_rate_disable(port);
-	if (!ret) {
-		clear_bit(port, mask);
-		gsw->rate_egress_cookie[port] = 0;
-		gsw->rate_egress_rate[port] = 0;
-		gsw->rate_egress_burst[port] = 0;
-	}
+	if (!ret)
+		rtl837x_rate_clear_state(gsw, port);
+	else
+		gsw->rate_egress_cleanup_pending[port] = true;
 
 	return ret;
 }
@@ -1417,6 +1450,8 @@ static int rtl837x_setup(struct dsa_switch *ds)
 	memset(gsw->rate_egress_cookie, 0, sizeof(gsw->rate_egress_cookie));
 	memset(gsw->rate_egress_rate, 0, sizeof(gsw->rate_egress_rate));
 	memset(gsw->rate_egress_burst, 0, sizeof(gsw->rate_egress_burst));
+	memset(gsw->rate_egress_cleanup_pending, 0,
+	       sizeof(gsw->rate_egress_cleanup_pending));
 	gsw->port_enabled[gsw->cpu_port] = true;
 
 	for (port = 0; port < RTK_MAX_NUM_OF_PORT; port++) {
@@ -1476,6 +1511,8 @@ static void rtl837x_teardown(struct dsa_switch *ds)
 	memset(gsw->rate_egress_cookie, 0, sizeof(gsw->rate_egress_cookie));
 	memset(gsw->rate_egress_rate, 0, sizeof(gsw->rate_egress_rate));
 	memset(gsw->rate_egress_burst, 0, sizeof(gsw->rate_egress_burst));
+	memset(gsw->rate_egress_cleanup_pending, 0,
+	       sizeof(gsw->rate_egress_cleanup_pending));
 
 	rtl837x_mdio_teardown(ds);
 	ret = rtk_cpuTag_enable_set(EXTERNAL_CPU, DISABLED);
