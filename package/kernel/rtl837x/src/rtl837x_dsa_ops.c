@@ -46,6 +46,20 @@ static u32 rtl837x_user_ports(struct rtk_gsw *gsw)
 	return gsw->valid_port_mask & ~BIT(gsw->cpu_port);
 }
 
+static int rtl837x_set_learning(struct rtk_gsw *gsw, int port, bool enable)
+{
+	rtk_mac_cnt_t limit;
+	rtk_api_ret_t ret;
+
+	if (!rtl837x_user_port(gsw, port))
+		return -EINVAL;
+
+	limit = enable ? RTK_MAX_NUM_OF_LEARN_LIMIT : 0;
+	ret = rtk_l2_limitLearningCnt_set(port, limit);
+
+	return rtl837x_to_errno(ret);
+}
+
 #define RTL837X_SUPPORTED_BRIDGE_FLAGS BR_LEARNING
 
 static int rtl837x_port_pre_bridge_flags(struct dsa_switch *ds, int port,
@@ -70,17 +84,13 @@ static int rtl837x_port_bridge_flags(struct dsa_switch *ds, int port,
 					 struct switchdev_brport_flags flags,
 					 struct netlink_ext_ack *extack)
 {
-	rtk_mac_cnt_t limit;
-	rtk_api_ret_t ret;
+	int ret;
 
 	ret = rtl837x_port_pre_bridge_flags(ds, port, flags, extack);
 	if (ret)
 		return ret;
 
-	limit = flags.val & BR_LEARNING ? RTK_MAX_NUM_OF_LEARN_LIMIT : 0;
-	ret = rtk_l2_limitLearningCnt_set(port, limit);
-
-	return rtl837x_to_errno(ret);
+	return rtl837x_set_learning(ds->priv, port, flags.val & BR_LEARNING);
 }
 
 static bool rtl837x_support_eee(struct dsa_switch *ds, int port)
@@ -409,6 +419,15 @@ static int rtl837x_setup(struct dsa_switch *ds)
 	ret = rtk_l2_init();
 	if (ret)
 		return rtl837x_to_errno(ret);
+
+	for (port = 0; port < RTK_MAX_NUM_OF_PORT; port++) {
+		if (!rtl837x_user_port(gsw, port))
+			continue;
+
+		ret = rtl837x_set_learning(gsw, port, false);
+		if (ret)
+			return ret;
+	}
 
 	ret = rtk_l2_table_clear();
 	if (ret)
