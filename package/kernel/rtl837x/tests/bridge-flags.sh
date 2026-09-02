@@ -168,7 +168,8 @@ cleanup()
 			echo "failed to verify bridge membership during cleanup" >&2
 			status=1
 		elif ! cmp -s "$membership_snapshot" "$membership_current"; then
-			echo "bridge membership changed during the test; refusing to claim a clean run" >&2
+			echo "bridge membership changed during the test; refusing to claim a clean \
+run" >&2
 			status=1
 		fi
 	fi
@@ -388,10 +389,12 @@ set_flag "$port_a" isolated on
 set_flag "$port_b" isolated on
 set_flag "$port_normal" isolated off
 manual_check "isolated ports do not forward to each other" \
-	"Send traffic from the host on $port_a to the host on $port_b while both ports are isolated." \
+	"Send traffic from the host on $port_a to the host on $port_b while both ports \
+	are isolated." \
 	"$port_a to $port_b is blocked"
 manual_check "isolated ports block the reverse direction" \
-	"Send traffic from the host on $port_b to the host on $port_a while both ports are isolated." \
+	"Send traffic from the host on $port_b to the host on $port_a while both ports \
+	are isolated." \
 	"$port_b to $port_a is blocked"
 manual_check "isolated ports keep CPU reachability" \
 	"From hosts on $port_a and $port_b, reach the router/CPU through \
