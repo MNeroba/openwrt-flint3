@@ -46,6 +46,7 @@ ssize_t _sdsreg_rw_write(struct file *filep, const char __user *ubuf,
 	uint32_t sds_id, page, reg, val;
 	int ret;
 
+	_buf_rd_sdsreg[0] = '\0';
 	buf = memdup_user_nul(ubuf, count);
 	if (IS_ERR(buf))
 		return PTR_ERR(buf);
@@ -95,6 +96,7 @@ ssize_t _phyreg_mmd_rw_write(struct file *filep, const char __user *ubuf,
 	uint32_t port, devad, reg, val;
 	int ret;
 
+	_buf_rd_phyreg_mmd[0] = '\0';
 	buf = memdup_user_nul(ubuf, count);
 	if (IS_ERR(buf))
 		return PTR_ERR(buf);
@@ -143,6 +145,9 @@ ssize_t _reg_rw_write(struct file *filep, const char __user *ubuf,
 	char *buf;
 	uint32_t reg, val;
 	int ret;
+
+	_buf_rd_reg[0] = '\0';
+
 	if (*offp)
 		return 0;
 
