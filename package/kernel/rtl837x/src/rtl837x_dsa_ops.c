@@ -278,42 +278,42 @@ static int rtl837x_read_stats_snapshot(int port,
 	u64 value;
 	int ret;
 
-	ret = rtl837x_read_stat_value(port, ifInOctets, &value);
+	ret = rtl837x_read_stat_value(port, ifInOctets_H, &value);
 	if (ret)
 		return ret;
 	snapshot->rx_octets = value;
 
-	ret = rtl837x_read_stat_value(port, ifOutOctets, &value);
+	ret = rtl837x_read_stat_value(port, ifOutOctets_H, &value);
 	if (ret)
 		return ret;
 	snapshot->tx_octets = value;
 
-	ret = rtl837x_read_stat_value(port, ifInUcastPkts, &value);
+	ret = rtl837x_read_stat_value(port, ifInUcastPkts_H, &value);
 	if (ret)
 		return ret;
 	snapshot->rx_ucast_pkts = value;
 
-	ret = rtl837x_read_stat_value(port, ifInMulticastPkts, &value);
+	ret = rtl837x_read_stat_value(port, ifInMulticastPkts_H, &value);
 	if (ret)
 		return ret;
 	snapshot->rx_mcast_pkts = value;
 
-	ret = rtl837x_read_stat_value(port, ifInBroadcastPkts, &value);
+	ret = rtl837x_read_stat_value(port, ifInBroadcastPkts_H, &value);
 	if (ret)
 		return ret;
 	snapshot->rx_bcast_pkts = value;
 
-	ret = rtl837x_read_stat_value(port, ifOutUcastPkts, &value);
+	ret = rtl837x_read_stat_value(port, ifOutUcastPkts_H, &value);
 	if (ret)
 		return ret;
 	snapshot->tx_ucast_pkts = value;
 
-	ret = rtl837x_read_stat_value(port, ifOutMulticastPkts, &value);
+	ret = rtl837x_read_stat_value(port, ifOutMulticastPkts_H, &value);
 	if (ret)
 		return ret;
 	snapshot->tx_mcast_pkts = value;
 
-	ret = rtl837x_read_stat_value(port, ifOutBroadcastPkts, &value);
+	ret = rtl837x_read_stat_value(port, ifOutBroadcastPkts_H, &value);
 	if (ret)
 		return ret;
 	snapshot->tx_bcast_pkts = value;
