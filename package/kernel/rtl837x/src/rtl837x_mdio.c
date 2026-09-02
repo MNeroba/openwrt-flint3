@@ -915,14 +915,6 @@ static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 
 	ret = rtl837x_parse_sdsmode(np, "rtl837x,sds0mode", &gsw->sds0mode);
 	if (ret) {
-		if (ret == -EPROBE_DEFER) {
-			dev_err_probe(dev, ret,
-				      "failed to parse rtl837x,sds0mode\n");
-			if (master)
-				dev_put(master);
-			return ret;
-		}
-
 		dev_warn(dev,
 			 "invalid rtl837x,sds0mode property: %d; "
 			 "leaving SerDes disabled\n", ret);
@@ -930,14 +922,6 @@ static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 
 	ret = rtl837x_parse_sdsmode(np, "rtl837x,sds1mode", &gsw->sds1mode);
 	if (ret) {
-		if (ret == -EPROBE_DEFER) {
-			dev_err_probe(dev, ret,
-				      "failed to parse rtl837x,sds1mode\n");
-			if (master)
-				dev_put(master);
-			return ret;
-		}
-
 		dev_warn(dev,
 			 "invalid rtl837x,sds1mode property: %d; "
 			 "leaving SerDes disabled\n", ret);
