@@ -1539,6 +1539,26 @@ static int rtl837x_fdb_vid(u16 vid, struct dsa_db db, u16 *fdb_vid)
 	}
 }
 
+static int rtl837x_port_vlan_fast_age(struct dsa_switch *ds, int port, u16 vid)
+{
+	struct rtk_gsw *gsw = ds->priv;
+	rtk_l2_flushCfg_t cfg = { 0 };
+	rtk_api_ret_t ret;
+
+	if (!rtl837x_user_port(gsw, port) || !vid || vid > RTK_VID_MAX)
+		return -EINVAL;
+
+	cfg.flushByVid = ENABLED;
+	cfg.vid = vid;
+	/* The RTL8373 VID mode uses FLUSH_PMSK as the port restriction. */
+	cfg.portmask = BIT(port);
+	cfg.flushStaticAddr = DISABLED;
+	cfg.flushAddrOnAllPorts = DISABLED;
+
+	ret = rtk_l2_ucastAddr_flush(&cfg);
+	return rtl837x_to_errno(ret);
+}
+
 static int rtl837x_port_vlan_filtering(struct dsa_switch *ds, int port,
 				       bool vlan_filtering,
 				       struct netlink_ext_ack *extack)
@@ -1773,6 +1793,7 @@ static const struct dsa_switch_ops rtl837x_dsa_ops = {
 	.port_bridge_leave = rtl837x_port_bridge_leave,
 	.port_stp_state_set = rtl837x_port_stp_state_set,
 	.port_fast_age = rtl837x_port_fast_age,
+	.port_vlan_fast_age = rtl837x_port_vlan_fast_age,
 	.port_vlan_filtering = rtl837x_port_vlan_filtering,
 	.port_vlan_add = rtl837x_port_vlan_add,
 	.port_vlan_del = rtl837x_port_vlan_del,
