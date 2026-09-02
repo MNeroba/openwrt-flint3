@@ -14,9 +14,10 @@ ordinary and jumbo frames?
 The chip-specific DAL provides `dal_rtl8373_portMaxLen_set()` and
 `dal_rtl8373_portMaxLen_get()`. Their own comments describe these as *port RX
 max length* operations. They select two speed buckets: FE/10M/100M and
-1G/2.5G/5G/10G. The generated register definitions expose a 14-bit RX field at
-`MAC_L2_PORT_MAX_LEN_CTRL_ADDR(port)` and a separate per-port TX max-length
-register, but no RTL8373 DAL set/get API for the TX register was found.
+1G/2.5G/5G/10G. The generated register definitions expose two 14-bit RX
+fields in `MAC_L2_PORT_MAX_LEN_CTRL_ADDR(port)`, one for each speed bucket,
+and a separate per-port TX max-length register, but no RTL8373 DAL set/get API
+for the TX register was found.
 
 The same DAL file has `portMaxLenIncTag_{set,get}()` for a generic tag-length
 adjustment. The SDK does not establish whether that bit accounts for the
@@ -43,6 +44,12 @@ maximum and converts `new_mtu` to `new_mtu + VLAN_ETH_HLEN + ETH_FCS_LEN`.
 That is useful evidence for the shape of a DSA implementation, but it cannot
 be copied to RTL8373: the chips expose different RX/TX controls and the
 RTL8373 driver uses a switch-internal `tag_8021q` path.
+
+Because this driver does not currently provide `port_max_mtu`, the generic DSA
+fallback advertises the ordinary `ETH_DATA_LEN` (1500-byte) user-port MTU.
+That software limit is independent of the larger values visible in the
+bootloader-configured RX register; documenting the register alone therefore
+does not enable jumbo frames through DSA.
 
 ## Unresolved contract
 
@@ -78,4 +85,4 @@ can add the narrowest proven DSA callbacks with explicit bounds and rollback.
 
 - [RTL8373 port max-length DAL](https://github.com/perceival/openwrt-flint3/blob/flint3-be9300/package/kernel/rtl837x/src/rtk-api/dal/rtl8373/dal_rtl8373_port.c)
 - [RTL8373 generated register definitions](https://github.com/perceival/openwrt-flint3/blob/flint3-be9300/package/kernel/rtl837x/src/rtk-api/dal/rtl8373/rtl8373_reg_definition.h)
-- [OpenWrt RTL8365MB DSA MTU reference](https://github.com/openwrt/openwrt/blob/master/target/linux/generic/backport-6.18/942-04-7.2-net-dsa-realtek-rtl8365mb-prepare-for-multiple-sourc.patch)
+- [Linux RTL8365MB DSA MTU reference](https://github.com/torvalds/linux/blob/master/drivers/net/dsa/realtek/rtl8365mb_main.c)
