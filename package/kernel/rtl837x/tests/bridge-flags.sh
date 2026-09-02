@@ -324,17 +324,21 @@ echo "Running interactive forwarding checks; use physical external peers."
 
 set_flag "$port_a" learning off
 manual_check "learning off" \
-	"Send a frame with a fresh source MAC from the host connected to $port_a. Inspect 'bridge fdb show br $bridge_name' (or the switch FDB) without generating traffic that would make the same source known first." \
+	"Send a frame with a fresh source MAC from the host connected to $port_a. \
+	Inspect 'bridge fdb show br $bridge_name' (or the switch FDB) without \
+	generating traffic that would make the same source known first." \
 	"the fresh source is not dynamically learned"
 set_flag "$port_a" learning on
 manual_check "learning on" \
-	"Repeat the same fresh-source test from the host connected to $port_a and inspect the FDB after the frame arrives." \
+	"Repeat the same fresh-source test from the host connected to $port_a and \
+	inspect the FDB after the frame arrives." \
 	"the fresh source is dynamically learned"
 restore_saved_flag "$port_a" learning
 
 set_flag "$port_b" flood off
 manual_check "unknown-unicast flood off" \
-	"Send an Ethernet frame from the host on $port_a to a destination MAC that is absent from the FDB. Observe the host on $port_b with tcpdump." \
+	"Send an Ethernet frame from the host on $port_a to a destination MAC that \
+	is absent from the FDB. Observe the host on $port_b with tcpdump." \
 	"the frame is not delivered to $port_b"
 set_flag "$port_b" flood on
 manual_check "unknown-unicast flood on" \
@@ -354,21 +358,29 @@ restore_saved_flag "$port_b" bcast_flood
 
 set_flag "$port_b" mcast_flood off
 manual_check "unknown-multicast flood off" \
-	"Send a raw L2 frame with destination MAC 01:00:5e:7f:01:23 and non-IP EtherType 0x88b5 from the host on $port_a. Do not create an MDB entry, send IGMP/MLD, or use an IP multicast tool. Observe the host on $port_b." \
+	"Send a raw L2 frame with destination MAC 01:00:5e:7f:01:23 and non-IP \
+	EtherType 0x88b5 from the host on $port_a. Do not create an MDB entry, \
+	send IGMP/MLD, or use an IP multicast tool. Observe the host on $port_b." \
 	"the multicast is not delivered to $port_b"
 set_flag "$port_b" mcast_flood on
 manual_check "unknown-multicast flood on" \
-	"Repeat the same controlled raw L2 multicast test with multicast flooding enabled. Do not create an MDB entry or send IGMP/MLD; this validates only BR_MCAST_FLOOD, not MDB or IGMP/MLD offload." \
+	"Repeat the same controlled raw L2 multicast test with multicast flooding \
+	enabled. Do not create an MDB entry or send IGMP/MLD; this validates only \
+	BR_MCAST_FLOOD, not MDB or IGMP/MLD offload." \
 	"delivery to $port_b is allowed by the bridge topology"
 restore_saved_flag "$port_b" mcast_flood
 
 set_flag "$port_a" hairpin off
 manual_check "hairpin off" \
-	"Using the required hub/repeater or isolated managed downstream switch, first confirm both host MACs are learned on PORT_A in the RTL8373 FDB. Then send a unicast frame from one host to the other and observe PORT_A for reflected traffic." \
+	"Using the required hub/repeater or isolated managed downstream switch, \
+	first confirm both host MACs are learned on PORT_A in the RTL8373 FDB. Then \
+	send a unicast frame from one host to the other and observe PORT_A for \
+	reflected traffic." \
 	"same-port reflection is blocked"
 set_flag "$port_a" hairpin on
 manual_check "hairpin on" \
-	"Repeat the same learned-destination unicast test with hairpin enabled on $port_a; verify the downstream topology cannot deliver the frame locally." \
+	"Repeat the same learned-destination unicast test with hairpin enabled on \
+	$port_a; verify the downstream topology cannot deliver the frame locally." \
 	"same-port reflection is allowed"
 restore_saved_flag "$port_a" hairpin
 
@@ -382,10 +394,12 @@ manual_check "isolated ports block the reverse direction" \
 	"Send traffic from the host on $port_b to the host on $port_a while both ports are isolated." \
 	"$port_b to $port_a is blocked"
 manual_check "isolated ports keep CPU reachability" \
-	"From hosts on $port_a and $port_b, reach the router/CPU through $bridge_name (for example with ping) while both ports remain isolated." \
+	"From hosts on $port_a and $port_b, reach the router/CPU through \
+	$bridge_name (for example with ping) while both ports remain isolated." \
 	"CPU/router reachability remains possible"
 manual_check "isolated to normal forwarding" \
-	"Send traffic from the host on $port_a to the host on $port_normal with the normal port's bridge rules otherwise permitting forwarding." \
+	"Send traffic from the host on $port_a to the host on $port_normal with \
+	the normal port's bridge rules otherwise permitting forwarding." \
 	"$port_a to $port_normal remains allowed"
 restore_saved_flag "$port_a" isolated
 restore_saved_flag "$port_b" isolated
