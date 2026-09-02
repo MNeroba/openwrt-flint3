@@ -12,9 +12,20 @@ Usage:
   bridge-flags.sh --manual BRIDGE PORT_A PORT_B NORMAL_PORT
 
 The ports must already be members of BRIDGE. PORT_A and PORT_B must be
-connected to separate external hosts. For the hairpin test, connect two
-hosts behind PORT_A through an unmanaged switch or hub. NORMAL_PORT is used
-by the isolated-port test.
+connected to separate external hosts. For the hairpin test, use a true
+Ethernet hub/repeater, or a managed downstream switch configured to prevent
+the two hosts from forwarding directly to each other. The preferred simple
+topology is:
+
+  host A ---\
+             HUB ---- PORT_A on Flint
+  host B ---/
+
+Do not use an ordinary unmanaged switch: it may switch host A to host B
+locally without sending the frame to PORT_A. Before the hairpin check, make
+both hosts send traffic toward Flint and confirm in the RTL8373 FDB that both
+destination MACs are learned on PORT_A. NORMAL_PORT is used by the isolated-
+port test.
 
 The script needs root, ip, bridge, awk, mktemp and a Linux 6.18 DSA driver
 with the bridge flags under test. It changes only bridge-port flags. It
@@ -28,10 +39,12 @@ interactive because they need physical peers and packet observation:
   - flood: an unknown unicast must not/may reach PORT_B;
   - bcast_flood: broadcast must not/may reach PORT_B;
   - mcast_flood: an unknown multicast must not/may reach PORT_B;
-  - hairpin: a frame from one host behind PORT_A must not/may reflect to
-    the other host behind PORT_A;
-  - isolated: isolated PORT_A -> PORT_B is blocked, CPU reachability stays,
-    and isolated -> NORMAL_PORT remains allowed by the bridge topology.
+  - hairpin: after the destination is learned on PORT_A, ingress PORT_A ->
+    egress PORT_A must be blocked when hairpin is off and allowed when it is
+    on;
+  - isolated: isolated PORT_A <-> PORT_B is blocked in both directions, CPU
+    reachability stays, and isolated -> NORMAL_PORT remains allowed by the
+    bridge topology.
 
 Use tcpdump, ping, iperf3 or another suitable external traffic generator to
 perform the packet checks, then enter pass, fail or skip at each prompt.
@@ -341,21 +354,21 @@ restore_saved_flag "$port_b" bcast_flood
 
 set_flag "$port_b" mcast_flood off
 manual_check "unknown-multicast flood off" \
-	"Send an unknown multicast frame from the host on $port_a to a multicast destination with no MDB entry or IGMP-snooping membership. Observe the host on $port_b." \
+	"Send a raw L2 frame with destination MAC 01:00:5e:7f:01:23 and non-IP EtherType 0x88b5 from the host on $port_a. Do not create an MDB entry, send IGMP/MLD, or use an IP multicast tool. Observe the host on $port_b." \
 	"the multicast is not delivered to $port_b"
 set_flag "$port_b" mcast_flood on
 manual_check "unknown-multicast flood on" \
-	"Repeat the same unknown-multicast test with multicast flooding enabled; do not use this check to claim MDB or IGMP-snooping support." \
+	"Repeat the same controlled raw L2 multicast test with multicast flooding enabled. Do not create an MDB entry or send IGMP/MLD; this validates only BR_MCAST_FLOOD, not MDB or IGMP/MLD offload." \
 	"delivery to $port_b is allowed by the bridge topology"
 restore_saved_flag "$port_b" mcast_flood
 
 set_flag "$port_a" hairpin off
 manual_check "hairpin off" \
-	"With two hosts connected behind an unmanaged switch or hub on $port_a, send a frame from one host to the other and observe the ingress port's reflected traffic." \
+	"Using the required hub/repeater or isolated managed downstream switch, first confirm both host MACs are learned on PORT_A in the RTL8373 FDB. Then send a unicast frame from one host to the other and observe PORT_A for reflected traffic." \
 	"same-port reflection is blocked"
 set_flag "$port_a" hairpin on
 manual_check "hairpin on" \
-	"Repeat the two-host test with hairpin enabled on $port_a." \
+	"Repeat the same learned-destination unicast test with hairpin enabled on $port_a; verify the downstream topology cannot deliver the frame locally." \
 	"same-port reflection is allowed"
 restore_saved_flag "$port_a" hairpin
 
@@ -365,6 +378,9 @@ set_flag "$port_normal" isolated off
 manual_check "isolated ports do not forward to each other" \
 	"Send traffic from the host on $port_a to the host on $port_b while both ports are isolated." \
 	"$port_a to $port_b is blocked"
+manual_check "isolated ports block the reverse direction" \
+	"Send traffic from the host on $port_b to the host on $port_a while both ports are isolated." \
+	"$port_b to $port_a is blocked"
 manual_check "isolated ports keep CPU reachability" \
 	"From hosts on $port_a and $port_b, reach the router/CPU through $bridge_name (for example with ping) while both ports remain isolated." \
 	"CPU/router reachability remains possible"
