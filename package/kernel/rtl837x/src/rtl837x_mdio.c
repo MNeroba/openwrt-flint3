@@ -374,7 +374,7 @@ static int rtl837x_sdsmode(const char *name, rtk_sds_mode_t *mode)
 static int rtl8372n_igmp_init(struct rtk_gsw *gsw)
 {
 
-	unsigned int ret;
+	int ret;
 	ret = rtk_igmp_init();
 	if (ret) return ret;
 
@@ -471,7 +471,7 @@ int rtl8372n_hw_init(struct rtk_gsw *gsw, rtl837x_pnswap_cfg_t swap_cfg)
 		ret = gsw->pMapper->rtl8373_sds_regbits_write(0, 6, 2, 0x2000, 1);
 		if (ret) {
 			dev_warn(gsw->dev,
-				 "SDS0 RX PN swap configuration failed, continuing, error:%d\n",
+				 "SDS0 RX PN swap page 6 configuration failed, continuing, error:%d\n",
 				 ret);
 		}
 	}
@@ -490,7 +490,7 @@ int rtl8372n_hw_init(struct rtk_gsw *gsw, rtl837x_pnswap_cfg_t swap_cfg)
 		ret = gsw->pMapper->rtl8373_sds_regbits_write(0, 6, 2, 1 << 14, 1);
 		if (ret) {
 			dev_warn(gsw->dev,
-				 "SDS0 TX PN swap configuration failed, continuing, error:%d\n",
+				 "SDS0 TX PN swap page 6 configuration failed, continuing, error:%d\n",
 				 ret);
 		}
 	}
@@ -509,7 +509,7 @@ int rtl8372n_hw_init(struct rtk_gsw *gsw, rtl837x_pnswap_cfg_t swap_cfg)
 		ret = gsw->pMapper->rtl8373_sds_regbits_write(1, 6, 2, 0x2000, 1);
 		if (ret) {
 			dev_warn(gsw->dev,
-				 "SDS1 RX PN swap configuration failed, continuing, error:%d\n",
+				 "SDS1 RX PN swap page 6 configuration failed, continuing, error:%d\n",
 				 ret);
 		}
 	}
@@ -528,7 +528,7 @@ int rtl8372n_hw_init(struct rtk_gsw *gsw, rtl837x_pnswap_cfg_t swap_cfg)
 		ret = gsw->pMapper->rtl8373_sds_regbits_write(1, 6, 2, 1 << 14, 1);
 		if (ret) {
 			dev_warn(gsw->dev,
-				 "SDS1 TX PN swap configuration failed, continuing, error:%d\n",
+				 "SDS1 TX PN swap page 6 configuration failed, continuing, error:%d\n",
 				 ret);
 		}
 	}
