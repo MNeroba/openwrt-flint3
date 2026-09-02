@@ -436,11 +436,42 @@ static int rtl837x_lag_set_active_members(struct rtk_gsw *gsw, int group)
 	return ret;
 }
 
+static int rtl837x_lag_clear_hardware(struct rtk_gsw *gsw)
+{
+	rtk_portmask_t empty = { .bits = { 0 } };
+	int group, ret, first_ret = 0;
+
+	for (group = 0; group < TRUNK_GROUP_END; group++) {
+		ret = rtl837x_to_errno(rtk_trunk_port_set(group, &empty));
+		if (ret) {
+			dev_warn(gsw->dev,
+				 "failed to clear RTL837x LAG %d members: %d\n",
+				 group, ret);
+			if (!first_ret)
+				first_ret = ret;
+		}
+
+		ret = rtl837x_to_errno(
+			rtk_trunk_distributionAlgorithm_set(group, 0));
+		if (ret) {
+			dev_warn(gsw->dev,
+				 "failed to clear RTL837x LAG %d hash mask: %d\n",
+				 group, ret);
+			if (!first_ret)
+				first_ret = ret;
+		}
+	}
+
+	return first_ret;
+}
+
 static int rtl837x_lag_group_from_lag(const struct dsa_switch *ds,
-					     const struct dsa_lag *lag)
+				      const struct dsa_lag *lag)
 {
 	/* DSA LAG IDs are one-based; the RTL837x trunk table is zero-based. */
-	if (!lag->id || lag->id > ds->num_lag_ids)
+	if (!lag->id)
+		return -EOPNOTSUPP;
+	if (lag->id > ds->num_lag_ids)
 		return -EINVAL;
 
 	return lag->id - 1;
@@ -451,8 +482,10 @@ static int rtl837x_port_lag_change(struct dsa_switch *ds, int port)
 	struct rtk_gsw *gsw = ds->priv;
 	int group, ret = 0;
 
-	if (!rtl837x_user_port(gsw, port))
+	if (!rtl837x_valid_port(gsw, port))
 		return -EINVAL;
+	if (port == gsw->cpu_port)
+		return -EOPNOTSUPP;
 
 	mutex_lock(&gsw->feature_lock);
 
@@ -477,12 +510,19 @@ static int rtl837x_port_lag_join(struct dsa_switch *ds, int port,
 	u32 hash_mask, members, old_members, old_active_members, old_hash_mask;
 	int group, other_group, ret;
 
-	if (!rtl837x_user_port(gsw, port))
+	if (!rtl837x_valid_port(gsw, port))
 		return -EINVAL;
+	if (port == gsw->cpu_port)
+		return -EOPNOTSUPP;
 
 	group = rtl837x_lag_group_from_lag(ds, &lag);
+	if (group == -EOPNOTSUPP) {
+		NL_SET_ERR_MSG_MOD(extack,
+				   "No RTL837x hardware LAG ID is available; using software LAG");
+		return group;
+	}
 	if (group < 0)
-		return -EINVAL;
+		return group;
 
 	ret = rtl837x_lag_hash_mask(info, &hash_mask);
 	if (ret) {
@@ -568,12 +608,14 @@ static int rtl837x_port_lag_leave(struct dsa_switch *ds, int port,
 	u32 members, old_members, old_active_members, old_hash_mask;
 	int group, ret;
 
-	if (!rtl837x_user_port(gsw, port))
+	if (!rtl837x_valid_port(gsw, port))
 		return -EINVAL;
+	if (port == gsw->cpu_port)
+		return -EOPNOTSUPP;
 
 	group = rtl837x_lag_group_from_lag(ds, &lag);
 	if (group < 0)
-		return -EINVAL;
+		return group;
 
 	mutex_lock(&gsw->feature_lock);
 
@@ -1338,6 +1380,11 @@ static int rtl837x_setup(struct dsa_switch *ds)
 	if (ret)
 		return rtl837x_to_errno(ret);
 
+	/* Do not inherit trunk members or hash masks left by a prior instance. */
+	ret = rtl837x_lag_clear_hardware(gsw);
+	if (ret)
+		return ret;
+
 	ret = rtk_l2_table_clear();
 	if (ret)
 		return rtl837x_to_errno(ret);
@@ -1428,6 +1475,15 @@ static void rtl837x_teardown(struct dsa_switch *ds)
 	rtnl_lock();
 	dsa_tag_8021q_unregister(ds);
 	rtnl_unlock();
+
+	ret = rtl837x_lag_clear_hardware(gsw);
+	if (ret)
+		dev_warn(gsw->dev,
+			 "failed to clear RTL837x LAG state during teardown: %d\n",
+			 ret);
+	memset(gsw->lag_members, 0, sizeof(gsw->lag_members));
+	memset(gsw->lag_active_members, 0, sizeof(gsw->lag_active_members));
+	memset(gsw->lag_hash_mask, 0, sizeof(gsw->lag_hash_mask));
 
 	rtl837x_mdio_teardown(ds);
 	ret = rtk_cpuTag_enable_set(EXTERNAL_CPU, DISABLED);
