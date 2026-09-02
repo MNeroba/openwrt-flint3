@@ -13,6 +13,7 @@
 #include <linux/string.h>
 #include <linux/dsa/8021q.h>
 #include <net/dsa.h>
+#include <net/devlink.h>
 #include <net/switchdev.h>
 
 #include "./rtl837x_common.h"
@@ -22,6 +23,19 @@
 static int rtl837x_to_errno(int ret)
 {
 	return ret == RT_ERR_OK ? 0 : -EIO;
+}
+
+static int rtl837x_devlink_info_get(struct dsa_switch *ds,
+					struct devlink_info_req *req,
+					struct netlink_ext_ack *extack)
+{
+	struct rtk_gsw *gsw = ds->priv;
+
+	if (!gsw->chip_name)
+		return -ENODEV;
+
+	return devlink_info_version_fixed_put(
+		req, DEVLINK_INFO_VERSION_GENERIC_ASIC_ID, gsw->chip_name);
 }
 
 static int rtl837x_mdio_setup(struct dsa_switch *ds);
@@ -1011,6 +1025,7 @@ static int rtl837x_port_fdb_del(struct dsa_switch *ds, int port,
 
 static const struct dsa_switch_ops rtl837x_dsa_ops = {
 	.get_tag_protocol = rtl837x_get_tag_protocol,
+	.devlink_info_get = rtl837x_devlink_info_get,
 	.setup = rtl837x_setup,
 	.teardown = rtl837x_teardown,
 	.phylink_get_caps = rtl837x_phylink_get_caps,
