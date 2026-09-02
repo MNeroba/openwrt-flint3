@@ -747,6 +747,19 @@ static void rtl837x_get_pause_stats(struct dsa_switch *ds, int port,
 	pause_stats->tx_pause_frames = rtl837x_read_stat(port, dot3OutPauseFrames);
 }
 
+static void rtl837x_get_eth_phy_stats(struct dsa_switch *ds, int port,
+				      struct ethtool_eth_phy_stats *phy_stats)
+{
+	struct rtk_gsw *gsw = ds->priv;
+	u64 value;
+
+	if (!rtl837x_valid_port(gsw, port))
+		return;
+
+	if (!rtl837x_read_ethtool_stat(port, dot3StatsSymbolErrors, &value))
+		phy_stats->SymbolErrorDuringCarrier = value;
+}
+
 /*
  * RTL8373 exposes the standard packet categories as full-width counters.
  * Read the category counters together so a failed read cannot produce a
@@ -1154,6 +1167,7 @@ static const struct dsa_switch_ops rtl837x_dsa_ops = {
 	.get_ethtool_stats = rtl837x_get_ethtool_stats,
 	.get_sset_count = rtl837x_get_sset_count,
 	.get_pause_stats = rtl837x_get_pause_stats,
+	.get_eth_phy_stats = rtl837x_get_eth_phy_stats,
 	.get_eth_mac_stats = rtl837x_get_eth_mac_stats,
 	.get_eth_ctrl_stats = rtl837x_get_eth_ctrl_stats,
 	.get_rmon_stats = rtl837x_get_rmon_stats,
