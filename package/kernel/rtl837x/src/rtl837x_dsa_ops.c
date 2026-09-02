@@ -21,7 +21,37 @@
 
 static int rtl837x_to_errno(int ret)
 {
-	return ret == RT_ERR_OK ? 0 : -EIO;
+	/*
+	 * Keep this mapping limited to SDK errors with a direct and stable
+	 * Linux errno meaning.  Unknown and subsystem-specific errors stay
+	 * -EIO rather than being guessed at here.
+	 */
+	switch (ret) {
+	case RT_ERR_OK:
+		return 0;
+	case RT_ERR_INPUT:
+	case RT_ERR_PORT_ID:
+	case RT_ERR_PORT_MASK:
+	case RT_ERR_NULL_POINTER:
+	case RT_ERR_MAC:
+	case RT_ERR_OUT_OF_RANGE:
+	case RT_ERR_ENABLE:
+	case RT_ERR_RANGE:
+	case RT_ERR_VLAN_VID:
+	case RT_ERR_L2_FID:
+	case RT_ERR_L2_VID:
+		return -EINVAL;
+	case RT_ERR_BUSYWAIT_TIMEOUT:
+		return -ETIMEDOUT;
+	case RT_ERR_CHIP_NOT_SUPPORTED:
+	case RT_ERR_DRIVER_NOT_FOUND:
+		return -EOPNOTSUPP;
+	case RT_ERR_L2_NO_EMPTY_ENTRY:
+	case RT_ERR_L2_INDEXTBL_FULL:
+		return -ENOSPC;
+	default:
+		return -EIO;
+	}
 }
 
 static int rtl837x_mdio_setup(struct dsa_switch *ds);
