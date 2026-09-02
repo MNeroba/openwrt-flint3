@@ -258,72 +258,58 @@ static u64 rtl837x_read_stat(int port, u32 counter)
 	return value;
 }
 
-static int rtl837x_read_stat_value(int port, rtk_stat_port_type_t counter,
-				   u64 *value)
-{
-	rtk_stat_counter_t counter_value = 0;
-	int ret;
-
-	ret = rtk_stat_port_get(port, counter, &counter_value);
-	if (ret)
-		return rtl837x_to_errno(ret);
-
-	*value = counter_value;
-	return 0;
-}
-
 static int rtl837x_read_stats_snapshot(int port,
-				       struct rtl837x_mib_snapshot *snapshot)
+					       struct rtl837x_mib_snapshot *snapshot)
 {
 	u64 value;
 	int ret;
 
-	ret = rtl837x_read_stat_value(port, ifInOctets_H, &value);
+	ret = rtl837x_read_ethtool_stat(port, ifInOctets_H, &value);
 	if (ret)
 		return ret;
 	snapshot->rx_octets = value;
 
-	ret = rtl837x_read_stat_value(port, ifOutOctets_H, &value);
+	ret = rtl837x_read_ethtool_stat(port, ifOutOctets_H, &value);
 	if (ret)
 		return ret;
 	snapshot->tx_octets = value;
 
-	ret = rtl837x_read_stat_value(port, ifInUcastPkts_H, &value);
+	ret = rtl837x_read_ethtool_stat(port, ifInUcastPkts_H, &value);
 	if (ret)
 		return ret;
 	snapshot->rx_ucast_pkts = value;
 
-	ret = rtl837x_read_stat_value(port, ifInMulticastPkts_H, &value);
+	ret = rtl837x_read_ethtool_stat(port, ifInMulticastPkts_H, &value);
 	if (ret)
 		return ret;
 	snapshot->rx_mcast_pkts = value;
 
-	ret = rtl837x_read_stat_value(port, ifInBroadcastPkts_H, &value);
+	ret = rtl837x_read_ethtool_stat(port, ifInBroadcastPkts_H, &value);
 	if (ret)
 		return ret;
 	snapshot->rx_bcast_pkts = value;
 
-	ret = rtl837x_read_stat_value(port, ifOutUcastPkts_H, &value);
+	ret = rtl837x_read_ethtool_stat(port, ifOutUcastPkts_H, &value);
 	if (ret)
 		return ret;
 	snapshot->tx_ucast_pkts = value;
 
-	ret = rtl837x_read_stat_value(port, ifOutMulticastPkts_H, &value);
+	ret = rtl837x_read_ethtool_stat(port, ifOutMulticastPkts_H, &value);
 	if (ret)
 		return ret;
 	snapshot->tx_mcast_pkts = value;
 
-	ret = rtl837x_read_stat_value(port, ifOutBroadcastPkts_H, &value);
+	ret = rtl837x_read_ethtool_stat(port, ifOutBroadcastPkts_H, &value);
 	if (ret)
 		return ret;
 	snapshot->tx_bcast_pkts = value;
 
-	ret = rtl837x_read_stat_value(port, ifOutDiscards, &value);
+	ret = rtl837x_read_ethtool_stat(port, ifOutDiscards, &value);
 	if (ret)
 		return ret;
 	snapshot->tx_discards = value;
 
-	ret = rtl837x_read_stat_value(port, tx_etherStatsCollisions, &value);
+	ret = rtl837x_read_ethtool_stat(port, tx_etherStatsCollisions, &value);
 	if (ret)
 		return ret;
 	snapshot->collisions = value;
@@ -332,19 +318,17 @@ static int rtl837x_read_stats_snapshot(int port,
 }
 
 static bool
-rtl837x_stats_reset_detected(const struct rtl837x_mib_snapshot *old,
-				      const struct rtl837x_mib_snapshot *current)
+rtl837x_stats_64bit_reset_detected(const struct rtl837x_mib_snapshot *old,
+						   const struct rtl837x_mib_snapshot *latest)
 {
-	return current->rx_octets < old->rx_octets ||
-	       current->tx_octets < old->tx_octets ||
-	       current->rx_ucast_pkts < old->rx_ucast_pkts ||
-	       current->rx_mcast_pkts < old->rx_mcast_pkts ||
-	       current->rx_bcast_pkts < old->rx_bcast_pkts ||
-	       current->tx_ucast_pkts < old->tx_ucast_pkts ||
-	       current->tx_mcast_pkts < old->tx_mcast_pkts ||
-	       current->tx_bcast_pkts < old->tx_bcast_pkts ||
-	       current->tx_discards < old->tx_discards ||
-	       current->collisions < old->collisions;
+	return latest->rx_octets < old->rx_octets ||
+	       latest->tx_octets < old->tx_octets ||
+	       latest->rx_ucast_pkts < old->rx_ucast_pkts ||
+	       latest->rx_mcast_pkts < old->rx_mcast_pkts ||
+	       latest->rx_bcast_pkts < old->rx_bcast_pkts ||
+	       latest->tx_ucast_pkts < old->tx_ucast_pkts ||
+	       latest->tx_mcast_pkts < old->tx_mcast_pkts ||
+	       latest->tx_bcast_pkts < old->tx_bcast_pkts;
 }
 
 static void rtl837x_update_port_stats(struct rtk_gsw *gsw, int port,
@@ -352,18 +336,29 @@ static void rtl837x_update_port_stats(struct rtk_gsw *gsw, int port,
 {
 	struct rtl837x_port_stats *port_stats = &gsw->port_stats[port];
 	const struct rtl837x_mib_snapshot *old = &port_stats->snapshot;
+	u32 tx_discards_delta;
+	u32 collisions_delta;
 
 	spin_lock_bh(&port_stats->lock);
 
 	if (!port_stats->snapshot_valid ||
-	    rtl837x_stats_reset_detected(old, snapshot)) {
-		if (port_stats->snapshot_valid)
-			memset(&port_stats->stats, 0, sizeof(port_stats->stats));
+	    rtl837x_stats_64bit_reset_detected(old, snapshot)) {
+		/* A backwards 64-bit counter means the hardware MIB was reset.
+		 * Keep Linux counters monotonic and use this sample only as the
+		 * new hardware baseline.
+		 */
 		port_stats->snapshot = *snapshot;
 		port_stats->snapshot_valid = true;
 		spin_unlock_bh(&port_stats->lock);
 		return;
 	}
+
+	/* These hardware counters are 32-bit.  Unsigned subtraction is
+	 * intentionally modulo-2^32, so an ordinary wrap is accumulated as
+	 * its real delta instead of being mistaken for a reset.
+	 */
+	tx_discards_delta = snapshot->tx_discards - old->tx_discards;
+	collisions_delta = snapshot->collisions - old->collisions;
 
 	port_stats->stats.rx_bytes += snapshot->rx_octets - old->rx_octets;
 	port_stats->stats.tx_bytes += snapshot->tx_octets - old->tx_octets;
@@ -375,12 +370,10 @@ static void rtl837x_update_port_stats(struct rtk_gsw *gsw, int port,
 		snapshot->tx_ucast_pkts - old->tx_ucast_pkts +
 		snapshot->tx_mcast_pkts - old->tx_mcast_pkts +
 		snapshot->tx_bcast_pkts - old->tx_bcast_pkts;
-	port_stats->stats.tx_dropped +=
-		(u32)(snapshot->tx_discards - old->tx_discards);
+	port_stats->stats.tx_dropped += tx_discards_delta;
 	port_stats->stats.multicast +=
 		snapshot->rx_mcast_pkts - old->rx_mcast_pkts;
-	port_stats->stats.collisions +=
-		(u32)(snapshot->collisions - old->collisions);
+	port_stats->stats.collisions += collisions_delta;
 
 	port_stats->snapshot = *snapshot;
 	spin_unlock_bh(&port_stats->lock);

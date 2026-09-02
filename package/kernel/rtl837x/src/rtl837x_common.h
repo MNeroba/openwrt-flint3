@@ -67,8 +67,8 @@ struct rtl837x_mib_snapshot {
 	u64 tx_ucast_pkts;
 	u64 tx_mcast_pkts;
 	u64 tx_bcast_pkts;
-	u32 tx_discards;
-	u32 collisions;
+	u32 tx_discards; /* RTL8373 ifOutDiscards is 32-bit. */
+	u32 collisions; /* RTL8373 tx_etherStatsCollisions is 32-bit. */
 };
 
 struct rtl837x_port_stats {
