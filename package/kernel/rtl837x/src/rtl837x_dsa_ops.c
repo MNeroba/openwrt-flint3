@@ -453,40 +453,60 @@ static int rtl837x_rate_burst_set(int port, u32 burst)
 	return rtl837x_to_errno(ret);
 }
 
-static int rtl837x_rate_enable(int port, const struct flow_action_entry *act)
+static int rtl837x_rate_disable(int port)
 {
-	rtk_rate_t rate;
-	int ret;
+	return rtl837x_to_errno(rtk_rate_egrBwCtrlPortEn_set(port, DISABLED));
+}
 
-	ret = rtl837x_rate_to_kbps(act, &rate);
-	if (ret)
-		return ret;
+static int rtl837x_rate_program(int port, rtk_rate_t rate, u32 burst,
+					bool disable_on_error)
+{
+	int ret;
 
 	/* Program only the port-specific rate and burst, preserving the
 	 * chip-global IFG accounting setting.
 	 */
 	ret = rtl837x_to_errno(rtk_rate_egrBwCtrlRate_set(port, rate));
 	if (ret) {
-		rtk_rate_egrBwCtrlPortEn_set(port, DISABLED);
+		if (disable_on_error)
+			rtl837x_rate_disable(port);
 		return ret;
 	}
 
-	ret = rtl837x_rate_burst_set(port, act->police.burst);
+	ret = rtl837x_rate_burst_set(port, burst);
 	if (ret) {
-		rtk_rate_egrBwCtrlPortEn_set(port, DISABLED);
+		if (disable_on_error)
+			rtl837x_rate_disable(port);
 		return ret;
 	}
 
 	ret = rtl837x_to_errno(rtk_rate_egrBwCtrlPortEn_set(port, ENABLED));
-	if (ret)
-		rtk_rate_egrBwCtrlPortEn_set(port, DISABLED);
+	if (ret && disable_on_error)
+		rtl837x_rate_disable(port);
 
 	return ret;
 }
 
-static int rtl837x_rate_disable(int port)
+static int rtl837x_rate_disable_all(struct rtk_gsw *gsw)
 {
-	return rtl837x_to_errno(rtk_rate_egrBwCtrlPortEn_set(port, DISABLED));
+	int first_ret = 0;
+	int port, ret;
+
+	for (port = 0; port < RTK_MAX_NUM_OF_PORT; port++) {
+		if (!rtl837x_valid_port(gsw, port))
+			continue;
+
+		ret = rtl837x_rate_disable(port);
+		if (ret) {
+			dev_warn(gsw->dev,
+				 "failed to disable egress rate limiter on port %d: %d\n",
+				 port, ret);
+			if (!first_ret)
+				first_ret = ret;
+		}
+	}
+
+	return first_ret;
 }
 
 static int rtl837x_cls_flower_add(struct dsa_switch *ds, int port,
@@ -496,6 +516,10 @@ static int rtl837x_cls_flower_add(struct dsa_switch *ds, int port,
 	struct rtk_gsw *gsw = ds->priv;
 	const struct flow_action_entry *act;
 	unsigned long *mask;
+	rtk_rate_t rate, old_rate;
+	u32 old_burst;
+	bool replacing;
+	int rollback_ret;
 	int ret;
 
 	if (!rtl837x_user_port(gsw, port))
@@ -530,19 +554,61 @@ static int rtl837x_cls_flower_add(struct dsa_switch *ds, int port,
 		return -EOPNOTSUPP;
 	}
 
-	mask = &gsw->rate_egress_mask;
-	if (test_and_set_bit(port, mask))
-		return -EOPNOTSUPP;
-
-	ret = rtl837x_rate_enable(port, act);
+	ret = rtl837x_rate_to_kbps(act, &rate);
 	if (ret) {
-		clear_bit(port, mask);
+		NL_SET_ERR_MSG_MOD(cls->common.extack,
+				   "RTL837x egress police rate is outside the supported hardware range");
+		return ret;
+	}
+
+	mask = &gsw->rate_egress_mask;
+	replacing = test_bit(port, mask);
+	if (replacing && gsw->rate_egress_cookie[port] != cls->cookie) {
+		NL_SET_ERR_MSG_MOD(cls->common.extack,
+				   "RTL837x egress rate limiter is already owned by another filter");
+		return -EOPNOTSUPP;
+	}
+
+	if (!replacing) {
+		ret = rtl837x_rate_program(port, rate, act->police.burst, true);
+		if (ret) {
+			if (ret == -ERANGE)
+				NL_SET_ERR_MSG_MOD(cls->common.extack,
+						   "RTL837x egress police burst is outside the supported hardware range");
+			return ret;
+		}
+
+		set_bit(port, mask);
+		gsw->rate_egress_cookie[port] = cls->cookie;
+		gsw->rate_egress_rate[port] = rate;
+		gsw->rate_egress_burst[port] = act->police.burst;
+		return 0;
+	}
+
+	old_rate = gsw->rate_egress_rate[port];
+	old_burst = gsw->rate_egress_burst[port];
+	ret = rtl837x_rate_program(port, rate, act->police.burst, false);
+	if (ret) {
+		rollback_ret = rtl837x_rate_program(port, old_rate, old_burst, false);
+		if (rollback_ret) {
+			dev_err(gsw->dev,
+				 "failed to restore egress rate limiter on port %d after replace failure: %d\n",
+				 port, rollback_ret);
+			if (rtl837x_rate_disable(port))
+				dev_err(gsw->dev,
+					 "failed to disable egress rate limiter on port %d after replace rollback failure\n",
+					 port);
+		}
 		if (ret == -ERANGE)
 			NL_SET_ERR_MSG_MOD(cls->common.extack,
 					   "RTL837x egress police rate or burst is outside the supported hardware range");
+		return ret;
 	}
 
-	return ret;
+	gsw->rate_egress_rate[port] = rate;
+	gsw->rate_egress_burst[port] = act->police.burst;
+
+	return 0;
 }
 
 static int rtl837x_cls_flower_del(struct dsa_switch *ds, int port,
@@ -560,12 +626,17 @@ static int rtl837x_cls_flower_del(struct dsa_switch *ds, int port,
 		return 0;
 
 	mask = &gsw->rate_egress_mask;
-	if (!test_bit(port, mask))
+	if (!test_bit(port, mask) ||
+	    gsw->rate_egress_cookie[port] != cls->cookie)
 		return 0;
 
 	ret = rtl837x_rate_disable(port);
-	if (!ret)
+	if (!ret) {
 		clear_bit(port, mask);
+		gsw->rate_egress_cookie[port] = 0;
+		gsw->rate_egress_rate[port] = 0;
+		gsw->rate_egress_burst[port] = 0;
+	}
 
 	return ret;
 }
@@ -1332,6 +1403,10 @@ static int rtl837x_setup(struct dsa_switch *ds)
 	if (ret)
 		return ret;
 
+	ret = rtl837x_rate_disable_all(gsw);
+	if (ret)
+		return ret;
+
 	memset(gsw->bridge_dev, 0, sizeof(gsw->bridge_dev));
 	gsw->isolated_port_mask = 0;
 	memset(gsw->tag8021q_pvid, 0, sizeof(gsw->tag8021q_pvid));
@@ -1339,6 +1414,9 @@ static int rtl837x_setup(struct dsa_switch *ds)
 	memset(gsw->bridge_pvid, 0, sizeof(gsw->bridge_pvid));
 	memset(gsw->bridge_pvid_valid, 0, sizeof(gsw->bridge_pvid_valid));
 	gsw->rate_egress_mask = 0;
+	memset(gsw->rate_egress_cookie, 0, sizeof(gsw->rate_egress_cookie));
+	memset(gsw->rate_egress_rate, 0, sizeof(gsw->rate_egress_rate));
+	memset(gsw->rate_egress_burst, 0, sizeof(gsw->rate_egress_burst));
 	gsw->port_enabled[gsw->cpu_port] = true;
 
 	for (port = 0; port < RTK_MAX_NUM_OF_PORT; port++) {
@@ -1381,7 +1459,7 @@ static int rtl837x_setup(struct dsa_switch *ds)
 static void rtl837x_teardown(struct dsa_switch *ds)
 {
 	struct rtk_gsw *gsw = ds->priv;
-	int port, ret;
+	int ret;
 
 	rtl837x_stats_stop(gsw);
 
@@ -1389,17 +1467,15 @@ static void rtl837x_teardown(struct dsa_switch *ds)
 	dsa_tag_8021q_unregister(ds);
 	rtnl_unlock();
 
-	for (port = 0; port < RTK_MAX_NUM_OF_PORT; port++) {
-		if (test_bit(port, &gsw->rate_egress_mask)) {
-			ret = rtl837x_rate_disable(port);
-			if (ret)
-				dev_warn(gsw->dev,
-					 "failed to disable egress rate limiter on port %d: %d\n",
-					 port, ret);
-			else
-				clear_bit(port, &gsw->rate_egress_mask);
-		}
-	}
+	ret = rtl837x_rate_disable_all(gsw);
+	if (ret)
+		dev_warn(gsw->dev,
+			 "failed to clear egress rate limiter state on teardown: %d\n",
+			 ret);
+	gsw->rate_egress_mask = 0;
+	memset(gsw->rate_egress_cookie, 0, sizeof(gsw->rate_egress_cookie));
+	memset(gsw->rate_egress_rate, 0, sizeof(gsw->rate_egress_rate));
+	memset(gsw->rate_egress_burst, 0, sizeof(gsw->rate_egress_burst));
 
 	rtl837x_mdio_teardown(ds);
 	ret = rtk_cpuTag_enable_set(EXTERNAL_CPU, DISABLED);
