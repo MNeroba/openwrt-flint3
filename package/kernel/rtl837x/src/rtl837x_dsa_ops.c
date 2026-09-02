@@ -179,8 +179,8 @@ static int rtl837x_set_stp_state(struct rtk_gsw *gsw, int port, u8 state)
 	return rtl837x_to_errno(ret);
 }
 
-static int rtl837x_read_stat_value(int port, rtk_stat_port_type_t counter,
-				   u64 *value)
+static int rtl837x_read_ethtool_stat(int port, rtk_stat_port_type_t counter,
+					     u64 *value)
 {
 	rtk_stat_counter_t counter_value = 0;
 	int ret;
@@ -197,7 +197,7 @@ static u64 rtl837x_read_stat(int port, u32 counter)
 {
 	u64 value;
 
-	if (rtl837x_read_stat_value(port, counter, &value))
+	if (rtl837x_read_ethtool_stat(port, counter, &value))
 		return 0;
 
 	return value;
@@ -763,12 +763,12 @@ static void rtl837x_get_eth_mac_stats(struct dsa_switch *ds, int port,
 	if (!rtl837x_valid_port(gsw, port))
 		return;
 
-	if (rtl837x_read_stat_value(port, ifInUcastPkts, &rx_ucast) ||
-	    rtl837x_read_stat_value(port, ifInMulticastPkts, &rx_mcast) ||
-	    rtl837x_read_stat_value(port, ifInBroadcastPkts, &rx_bcast) ||
-	    rtl837x_read_stat_value(port, ifOutUcastPkts, &tx_ucast) ||
-	    rtl837x_read_stat_value(port, ifOutMulticastPkts, &tx_mcast) ||
-	    rtl837x_read_stat_value(port, ifOutBroadcastPkts, &tx_bcast))
+	if (rtl837x_read_ethtool_stat(port, ifInUcastPkts_H, &rx_ucast) ||
+	    rtl837x_read_ethtool_stat(port, ifInMulticastPkts_H, &rx_mcast) ||
+	    rtl837x_read_ethtool_stat(port, ifInBroadcastPkts_H, &rx_bcast) ||
+	    rtl837x_read_ethtool_stat(port, ifOutUcastPkts_H, &tx_ucast) ||
+	    rtl837x_read_ethtool_stat(port, ifOutMulticastPkts_H, &tx_mcast) ||
+	    rtl837x_read_ethtool_stat(port, ifOutBroadcastPkts_H, &tx_bcast))
 		return;
 
 	mac_stats->FramesReceivedOK = rx_ucast + rx_mcast + rx_bcast;
@@ -778,21 +778,21 @@ static void rtl837x_get_eth_mac_stats(struct dsa_switch *ds, int port,
 	mac_stats->MulticastFramesXmittedOK = tx_mcast;
 	mac_stats->BroadcastFramesXmittedOK = tx_bcast;
 
-	if (!rtl837x_read_stat_value(port, ifInOctets, &value))
+	if (!rtl837x_read_ethtool_stat(port, ifInOctets_H, &value))
 		mac_stats->OctetsReceivedOK = value;
-	if (!rtl837x_read_stat_value(port, ifOutOctets, &value))
+	if (!rtl837x_read_ethtool_stat(port, ifOutOctets_H, &value))
 		mac_stats->OctetsTransmittedOK = value;
-	if (!rtl837x_read_stat_value(port, dot3StatsSingleCollisionFrames,
+	if (!rtl837x_read_ethtool_stat(port, dot3StatsSingleCollisionFrames,
 					     &value))
 		mac_stats->SingleCollisionFrames = value;
-	if (!rtl837x_read_stat_value(port, dot3StatMultipleCollisionFrames,
+	if (!rtl837x_read_ethtool_stat(port, dot3StatMultipleCollisionFrames,
 					     &value))
 		mac_stats->MultipleCollisionFrames = value;
-	if (!rtl837x_read_stat_value(port, dot3sDeferredTransmissions, &value))
+	if (!rtl837x_read_ethtool_stat(port, dot3sDeferredTransmissions, &value))
 		mac_stats->FramesWithDeferredXmissions = value;
-	if (!rtl837x_read_stat_value(port, dot3StatsLateCollisions, &value))
+	if (!rtl837x_read_ethtool_stat(port, dot3StatsLateCollisions, &value))
 		mac_stats->LateCollisions = value;
-	if (!rtl837x_read_stat_value(port, dot3StatsExcessiveCollisions,
+	if (!rtl837x_read_ethtool_stat(port, dot3StatsExcessiveCollisions,
 					     &value))
 		mac_stats->FramesAbortedDueToXSColls = value;
 
@@ -812,7 +812,7 @@ static void rtl837x_get_eth_ctrl_stats(struct dsa_switch *ds, int port,
 	if (!rtl837x_valid_port(gsw, port))
 		return;
 
-	if (!rtl837x_read_stat_value(port, dot3ControlInUnknownOpcodes, &value))
+	if (!rtl837x_read_ethtool_stat(port, dot3ControlInUnknownOpcodes, &value))
 		ctrl_stats->UnsupportedOpcodesReceived = value;
 
 	/* Pause frames are already exposed through get_pause_stats(). */
@@ -840,48 +840,48 @@ static void rtl837x_get_rmon_stats(struct dsa_switch *ds, int port,
 	if (!rtl837x_valid_port(gsw, port))
 		return;
 
-	if (!rtl837x_read_stat_value(port, rx_etherStatsUndersizePkts, &value))
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsUndersizePkts, &value))
 		rmon_stats->undersize_pkts = value;
-	if (!rtl837x_read_stat_value(port, rx_etherStatsOversizePkts, &value))
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsOversizePkts, &value))
 		rmon_stats->oversize_pkts = value;
-	if (!rtl837x_read_stat_value(port, rx_etherStatsFragments, &value))
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsFragments, &value))
 		rmon_stats->fragments = value;
-	if (!rtl837x_read_stat_value(port, rx_etherStatsJabbers, &value))
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsJabbers, &value))
 		rmon_stats->jabbers = value;
 
-	if (!rtl837x_read_stat_value(port, rx_etherStatsPkts64Octets, &value))
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsPkts64Octets, &value))
 		rmon_stats->hist[0] = value;
-	if (!rtl837x_read_stat_value(port, rx_etherStatsPkts65to127Octets,
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsPkts65to127Octets,
 					    &value))
 		rmon_stats->hist[1] = value;
-	if (!rtl837x_read_stat_value(port, rx_etherStatsPkts128to255Octets,
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsPkts128to255Octets,
 					    &value))
 		rmon_stats->hist[2] = value;
-	if (!rtl837x_read_stat_value(port, rx_etherStatsPkts256to511Octets,
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsPkts256to511Octets,
 					    &value))
 		rmon_stats->hist[3] = value;
-	if (!rtl837x_read_stat_value(port, rx_etherStatsPkts512to1023Octets,
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsPkts512to1023Octets,
 					    &value))
 		rmon_stats->hist[4] = value;
-	if (!rtl837x_read_stat_value(port, rx_etherStatsPkts1024to1518Octets,
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsPkts1024to1518Octets,
 					    &value))
 		rmon_stats->hist[5] = value;
 
-	if (!rtl837x_read_stat_value(port, tx_etherStatsPkts64Octets, &value))
+	if (!rtl837x_read_ethtool_stat(port, tx_etherStatsPkts64Octets, &value))
 		rmon_stats->hist_tx[0] = value;
-	if (!rtl837x_read_stat_value(port, tx_etherStatsPkts65to127Octets,
+	if (!rtl837x_read_ethtool_stat(port, tx_etherStatsPkts65to127Octets,
 					    &value))
 		rmon_stats->hist_tx[1] = value;
-	if (!rtl837x_read_stat_value(port, tx_etherStatsPkts128to255Octets,
+	if (!rtl837x_read_ethtool_stat(port, tx_etherStatsPkts128to255Octets,
 					    &value))
 		rmon_stats->hist_tx[2] = value;
-	if (!rtl837x_read_stat_value(port, tx_etherStatsPkts256to511Octets,
+	if (!rtl837x_read_ethtool_stat(port, tx_etherStatsPkts256to511Octets,
 					    &value))
 		rmon_stats->hist_tx[3] = value;
-	if (!rtl837x_read_stat_value(port, tx_etherStatsPkts512to1023Octets,
+	if (!rtl837x_read_ethtool_stat(port, tx_etherStatsPkts512to1023Octets,
 					    &value))
 		rmon_stats->hist_tx[4] = value;
-	if (!rtl837x_read_stat_value(port, tx_etherStatsPkts1024to1518Octets,
+	if (!rtl837x_read_ethtool_stat(port, tx_etherStatsPkts1024to1518Octets,
 					    &value))
 		rmon_stats->hist_tx[5] = value;
 
