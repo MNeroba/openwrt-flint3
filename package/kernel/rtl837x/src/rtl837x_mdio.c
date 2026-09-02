@@ -1133,7 +1133,6 @@ static void rtl837x_mdio_shutdown(struct mdio_device *mdiodev)
 		gsw->ethernet_master = NULL;
 	}
 
-	rtl837x_clear_global_priv(gsw);
 	dev_set_drvdata(&mdiodev->dev, NULL);
 }
 
