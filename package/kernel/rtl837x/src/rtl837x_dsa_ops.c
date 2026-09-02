@@ -931,6 +931,11 @@ static int rtl837x_setup(struct dsa_switch *ds)
 			return ret;
 	}
 
+	/* RTL8373 exposes link-down FDB age-out as a chip-global setting. */
+	ret = rtk_l2_flushLinkDownPortAddrEnable_set(ENABLED);
+	if (ret)
+		return rtl837x_to_errno(ret);
+
 	ret = rtk_l2_table_clear();
 	if (ret)
 		return rtl837x_to_errno(ret);

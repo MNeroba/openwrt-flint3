@@ -1123,3 +1123,4 @@ extern rtk_api_ret_t rtk_l2_lookupHitIsolationAction_set(rtk_l2_lookupHitIsolati
 extern rtk_api_ret_t rtk_l2_lookupHitIsolationAction_get(rtk_l2_lookupHitIsolationAction_t *pAction);
 
 #endif /* __RTK_API_L2_H__ */
+
