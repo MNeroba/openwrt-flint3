@@ -1035,9 +1035,9 @@ static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 	{
 		dev_err(gsw->dev, "rtl8372n_hw_init failed, ret=%d\n",ret);
 		rtl837x_clear_global_priv(gsw);
+		dev_set_drvdata(dev, NULL);
 		if (master)
 			dev_put(master);
-		devm_kfree(dev, gsw);
 		return -ENODEV;
 	}
 
@@ -1048,9 +1048,9 @@ static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 	if (ret){
 		dev_err(gsw->dev, "rtl837x_dsa_register failed, ret=%d\n", ret);
 		rtl837x_clear_global_priv(gsw);
+		dev_set_drvdata(dev, NULL);
 		if (master)
 			dev_put(master);
-		devm_kfree(dev, gsw);
 		return ret;
 	}
 
