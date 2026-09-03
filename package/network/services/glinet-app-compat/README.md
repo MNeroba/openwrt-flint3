@@ -50,7 +50,8 @@ provides them.
 * All state and status calls require a short-lived session, except the
   read-only `ui.check_initialized` pre-login check. Challenge data is one-use,
   source-address bound and expires after one second. Sessions expire after
-  five minutes of inactivity and are source-address bound.
+  five minutes of inactivity and are source-address bound. A request from a
+  different source cannot invalidate an active session.
 * The App may include the entered password in the challenge request for SDK4
   wire compatibility. The handler never stores or logs that field; the final
   response is checked against the existing root `/etc/shadow` entry.
@@ -61,7 +62,9 @@ provides them.
 * Diagnostic messages always carry the `glinet-app-compat:` prefix and never
   include passwords, password hashes, nonces, session IDs or cookie values.
   Repeated unsupported/backend and request-validation events are suppressed
-  for one minute.
+  for one minute. With `log_level='debug'`, a rate-limited summary also records
+  the method, argument keys or shape, authentication state, result class and
+  elapsed time without recording argument values.
 
 Package removal removes this package's `/rpc` ucode prefix from the uhttpd
 configuration. Other uhttpd prefixes are left unchanged.
