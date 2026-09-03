@@ -377,6 +377,16 @@ function ipv4_number(address)
 	return result;
 }
 
+function ipv4_string(number)
+{
+	if (number == null || number < 0 || number > 0xffffffff ||
+	    number != int(number))
+		return null;
+
+	return `${(number >> 24) & 255}.${(number >> 16) & 255}.` +
+		`${(number >> 8) & 255}.${number & 255}`;
+}
+
 function ipv4_prefix_mask(prefix)
 {
 	if (prefix == null || prefix == '')
@@ -789,7 +799,10 @@ function find_wifi_target(cursor, iface_name)
 	if (!iface || !radio_config)
 		return null;
 
-	return { section: matches[0], iface, radio, radio_config };
+	return {
+		section: matches[0], iface, radio, radio_config,
+		ifname: safe_ifname(iface.ifname),
+	};
 }
 
 function find_wifi_target_from_status(cursor, iface_name)
@@ -826,6 +839,7 @@ function find_wifi_target_from_status(cursor, iface_name)
 					iface: uci_iface,
 					radio: device,
 					radio_config,
+					ifname: safe_ifname(ifname),
 				});
 			}
 		}
@@ -836,7 +850,78 @@ function find_wifi_target_from_status(cursor, iface_name)
 	return length(matches) == 1 ? matches[0] : null;
 }
 
-function wifi_channel_value(value, band)
+function wifi_band_key(band)
+{
+	switch (`${band ?? ''}`) {
+	case '2':
+	case '2.4':
+	case '2GHz':
+	case '2g':
+		return '2g';
+	case '5':
+	case '5GHz':
+	case '5g':
+		return '5g';
+	case '6':
+	case '6GHz':
+	case '6g':
+		return '6g';
+	case '60':
+	case '60GHz':
+	case '60g':
+		return '60g';
+	}
+
+	return null;
+}
+
+function wifi_band_key_from_frequency(mhz)
+{
+	if (mhz == null || +mhz <= 0)
+		return null;
+
+	mhz = +mhz;
+	if (mhz < 3000)
+		return '2g';
+	if (mhz < 5950)
+		return '5g';
+	if (mhz <= 45000)
+		return '6g';
+	if (mhz >= 58320 && mhz <= 70200)
+		return '60g';
+
+	return null;
+}
+
+function wifi_runtime_channel_supported(ifname, channel, band)
+{
+	if (!safe_ifname(ifname))
+		return null;
+
+	let data = backend_call('iwinfo', 'freqlist', { device: ifname }, true);
+	if (!data || type(data) != 'object' || type(data.results) != 'array')
+		return null;
+
+	let have_channels = false;
+	for (let entry in data.results) {
+		if (!entry || type(entry) != 'object' || entry.channel == null ||
+		    type(entry.channel) != 'int')
+			continue;
+
+		have_channels = true;
+		let entry_band = entry.band == null ? null :
+			wifi_band_key(entry.band);
+		entry_band ??= wifi_band_key_from_frequency(entry.mhz);
+		if (+entry.channel != +channel)
+			continue;
+		if (entry_band == band)
+			return true;
+	}
+
+	return have_channels ? false : null;
+}
+
+function wifi_channel_value(value, band, ifname)
 {
 	if (value == 'auto')
 		return value;
@@ -845,10 +930,19 @@ function wifi_channel_value(value, band)
 	if (!channel)
 		return null;
 
-	band = `${band ?? ''}`;
-	if ((band == '2.4' || band == '2g' || band == '2GHz') && +channel > 14)
+	band = wifi_band_key(band);
+	if (!band)
 		return null;
-	if ((band == '5' || band == '5g' || band == '5GHz') && +channel > 196)
+	if (band == '2g' && +channel > 14)
+		return null;
+	if (band == '5g' && +channel > 196)
+		return null;
+
+	/* iwinfo can provide the driver/regulatory list when the radio is up.
+	 * Keep the source-backed syntax/band checks above as the fallback for a
+	 * disabled or not-yet-created runtime interface. */
+	let runtime = wifi_runtime_channel_supported(ifname, channel, band);
+	if (runtime == false)
 		return null;
 
 	return channel;
@@ -857,8 +951,43 @@ function wifi_channel_value(value, band)
 function wifi_encryption_value(value)
 {
 	let supported = [
-		'none', 'psk2', 'psk-mixed', 'sae-mixed', 'psk2+ccmp',
-		'psk-mixed+ccmp', 'psk+ccmp', 'ccmp'
+		'none', 'psk', 'psk2', 'psk-mixed', 'sae', 'sae-mixed',
+		'psk3', 'psk3-mixed', 'sae-compat',
+		'psk2+ccmp', 'psk-mixed+ccmp', 'psk+ccmp'
+	];
+
+	return type(value) == 'string' && index(supported, value) >= 0 ? value : null;
+}
+
+function wifi_key_value(value, encryption)
+{
+	if (!encryption || encryption == 'none')
+		return null;
+
+	let key = safe_config_text(value, 8, 64);
+	if (!key)
+		return null;
+
+	/* OpenWrt treats a 64-character key as a raw PSK, not a passphrase. */
+	if (length(key) == 64 && !match(key, /^[0-9A-Fa-f]{64}$/))
+		return null;
+
+	return key;
+}
+
+function wifi_hwmode_value(value)
+{
+	let supported = [ '11a', '11b', '11g', '11ad' ];
+	return type(value) == 'string' && index(supported, value) >= 0 ? value : null;
+}
+
+function wifi_htmode_value(value)
+{
+	let supported = [
+		'NOHT', 'HT20', 'HT40-', 'HT40+', 'HT40',
+		'VHT20', 'VHT40', 'VHT80', 'VHT160',
+		'HE20', 'HE40', 'HE80', 'HE160',
+		'EHT20', 'EHT40', 'EHT80', 'EHT160', 'EHT320'
 	];
 
 	return type(value) == 'string' && index(supported, value) >= 0 ? value : null;
@@ -902,7 +1031,11 @@ function wifi_set_config_locked(args)
 	}
 
 	let changes = [];
-	let current_encryption = target.iface.encryption ?? 'none';
+	let current_encryption = wifi_encryption_value(
+		target.iface.encryption ?? 'none');
+	if (!current_encryption)
+		return rpc_invalid_params();
+
 	let encryption = current_encryption;
 	if (args.encryption != null) {
 		encryption = wifi_encryption_value(args.encryption);
@@ -940,8 +1073,8 @@ function wifi_set_config_locked(args)
 	}
 
 	if (args.key != null) {
-		let key = safe_config_text(args.key, 8, 63);
-		if (!key || encryption == 'none')
+		let key = wifi_key_value(args.key, encryption);
+		if (!key)
 			return rpc_invalid_params();
 
 		push(changes, {
@@ -957,13 +1090,13 @@ function wifi_set_config_locked(args)
 
 		push(changes, {
 			package: 'wireless', section: target.section,
-			option: 'hidden', value: hidden ? '1' : '0',
+			option: 'ignore_broadcast_ssid', value: hidden ? '1' : '0',
 		});
 	}
 
 	if (args.channel != null) {
 		let channel = wifi_channel_value(args.channel,
-			radio_band(target.radio_config));
+			radio_band(target.radio_config), target.ifname);
 		if (!channel)
 			return rpc_invalid_params();
 
@@ -974,7 +1107,7 @@ function wifi_set_config_locked(args)
 	}
 
 	if (args.hwmode != null) {
-		let hwmode = config_token(args.hwmode, 32, true);
+		let hwmode = wifi_hwmode_value(args.hwmode);
 		if (!hwmode)
 			return rpc_invalid_params();
 
@@ -985,7 +1118,7 @@ function wifi_set_config_locked(args)
 	}
 
 	if (args.htmode != null) {
-		let htmode = config_token(args.htmode, 32, true);
+		let htmode = wifi_htmode_value(args.htmode);
 		if (!htmode)
 			return rpc_invalid_params();
 
@@ -997,8 +1130,7 @@ function wifi_set_config_locked(args)
 
 	if (encryption != 'none') {
 		let key = args.key ?? target.iface.key;
-		if (type(key) != 'string' || length(key) < 8 || length(key) > 64 ||
-		    !safe_config_text(key, 8, 64))
+		if (!wifi_key_value(key, encryption))
 			return rpc_invalid_params();
 	}
 
@@ -1034,19 +1166,31 @@ function wifi_set_config(args)
 
 function find_lan_dhcp(cursor)
 {
-	let named = uci_section(cursor, 'dhcp', 'lan', 'dhcp');
-	if (named && (named.interface == null || named.interface == 'lan'))
-		return { section: 'lan', config: named };
-
 	let matches = [];
+	let invalid = false;
 	try {
 		cursor.foreach('dhcp', 'dhcp', (config) => {
-			if (config.interface == 'lan')
-				push(matches, { section: config['.name'], config });
+			let name = config['.name'];
+			let interface_name = config.interface;
+			let is_named_lan = name == 'lan';
+
+			if (is_named_lan && interface_name != null &&
+			    type(interface_name) != 'string') {
+				invalid = true;
+				return;
+			}
+
+			if ((is_named_lan &&
+			     (interface_name == null || interface_name == 'lan')) ||
+			    (!is_named_lan && interface_name == 'lan'))
+				push(matches, { section: name, config });
 		});
 	} catch (e) {
 		return { invalid: true };
 	}
+
+	if (invalid)
+		return { invalid: true };
 
 	return length(matches) == 1 ? matches[0] :
 		length(matches) ? { invalid: true } : null;
@@ -1056,7 +1200,9 @@ function lan_pool_from_offsets(network, start, limit)
 {
 	start = decimal_config_value(start, 1, network.host_size - 2);
 	limit = decimal_config_value(limit, 1, network.host_size - 2);
-	if (!start || !limit || +start + +limit - 1 > network.host_size - 2)
+	/* Keep the stock validator's start != end requirement for stored pools. */
+	if (!start || !limit || +limit < 2 ||
+	    +start + +limit - 1 > network.host_size - 2)
 		return null;
 
 	return {
@@ -1139,28 +1285,57 @@ function lan_static_network_conflict(cursor, candidate)
 function lan_active_network_conflict(cursor, candidate)
 {
 	let conflict = false;
+	let invalid = false;
 
 	try {
 		cursor.foreach('network', 'interface', (section) => {
 			let name = section['.name'];
-			if (conflict || name == 'lan' || section.proto == 'static' ||
+			if (conflict || invalid || name == 'lan' || section.proto == 'static' ||
+			    section.proto == null || section.proto == 'none' ||
+			    section.disabled == '1' ||
 			    !safe_ifname(name))
 				return;
 
 			let status = backend_call(`network.interface.${name}`, 'status', {}, true);
-			for (let address in status?.['ipv4-address'] ?? []) {
-				let prefix = address.mask == null ? null : +address.mask;
-				let network = prefix == null ? null :
-					ipv4_network_info(address.address, prefix);
-				if (network && ipv4_networks_overlap(candidate, network)) {
+			if (!status || type(status) != 'object' ||
+			    (status.up == null && status.proto == null &&
+			     status['ipv4-address'] == null)) {
+				invalid = true;
+				return;
+			}
+
+			let addresses = status['ipv4-address'];
+			if (addresses == null)
+				return;
+			if (type(addresses) != 'array') {
+				invalid = true;
+				return;
+			}
+
+			for (let address in addresses) {
+				if (!address || type(address) != 'object' ||
+				    type(address.mask) != 'int') {
+					invalid = true;
+					return;
+				}
+
+				let network = ipv4_network_info(address.address, +address.mask);
+				if (!network) {
+					invalid = true;
+					return;
+				}
+
+				if (ipv4_networks_overlap(candidate, network)) {
 					conflict = true;
 					return;
 				}
 			}
 		});
-	} catch (e) {}
+	} catch (e) {
+		return null;
+	}
 
-	return conflict;
+	return invalid ? null : conflict;
 }
 
 function lan_set_config_locked(args)
@@ -1201,8 +1376,9 @@ function lan_set_config_locked(args)
 		return rpc_invalid_params();
 
 	let conflict = lan_static_network_conflict(cursor, network_info);
-	if (conflict == null || conflict ||
-	    lan_active_network_conflict(cursor, network_info))
+	let active_conflict = lan_active_network_conflict(cursor, network_info);
+	if (conflict == null || conflict || active_conflict == null ||
+	    active_conflict)
 		return rpc_invalid_params();
 
 	let changing_pool = args.start != null || args.end != null;
@@ -1299,60 +1475,40 @@ function lan_set_config(args)
 	return with_configuration_lock(() => lan_set_config_locked(args));
 }
 
-function ipv6_link_local(address)
-{
-	if (type(address) != 'string' || length(address) > 39 ||
-	    !match(address, /^[0-9A-Fa-f:]+$/) ||
-	    !match(lc(address), /^fe[89ab][0-9a-f]:/))
-		return false;
-
-	let compressed = split(address, '::');
-	if (length(compressed) > 2)
-		return false;
-
-	let groups = 0;
-	for (let part in compressed) {
-		if (!length(part))
-			continue;
-
-		for (let group in split(part, ':')) {
-			if (!length(group) || length(group) > 4 ||
-			    !match(group, /^[0-9A-Fa-f]+$/))
-				return false;
-
-			groups++;
-		}
-	}
-
-	return match(address, /::/) ? groups < 8 : groups == 8;
-}
-
 function lan_source_allowed(remote)
 {
 	if (type(remote) != 'string' || !length(remote) || length(remote) > 64)
 		return false;
 
-	if (remote == '127.0.0.1' || remote == '::1')
+	if (remote == '::1')
 		return true;
 
-	/* IPv6 is deliberately limited to link-local callers in this first PR. */
-	if (ipv6_link_local(remote))
-		return true;
+	/* uhttpd provides the source address but not its ingress interface. */
+	if (match(remote, /:/))
+		return false;
 
 	let source = ipv4_number(remote);
 	if (source == null)
 		return false;
+	if (source >= 0x7f000000 && source <= 0x7fffffff)
+		return true;
 
 	let status = backend_call('network.interface.lan', 'status', {}, true);
-	if (!status)
+	if (!status || type(status) != 'object' ||
+	    type(status['ipv4-address']) != 'array')
 		return false;
 
-	for (let address in status['ipv4-address'] ?? []) {
+	for (let address in status['ipv4-address']) {
+		if (!address || type(address) != 'object' ||
+		    type(address.address) != 'string' || type(address.mask) != 'int' ||
+		    address.mask < 1 || address.mask > 32)
+			return false;
+
 		let network = ipv4_number(address.address);
 		let mask = ipv4_prefix_mask(address.mask);
 
 		if (network == null || mask == null)
-			continue;
+			return false;
 
 		if ((source & mask) == (network & mask))
 			return true;
@@ -1468,7 +1624,7 @@ function session_valid(sid, remote, refresh)
 		return false;
 
 	let path = state_file('session', sid);
-	let stat = fs.stat(path);
+	let stat = fs.lstat(path);
 	if (!stat || stat.type != 'file' || stat.uid != 0 || stat.gid != 0 ||
 	    (stat.mode & 0o077))
 		return false;
@@ -1693,7 +1849,8 @@ function wifi_iface_from_config(config, radio, ifname)
 		device: radio,
 		enabled: !bool_value(config.disabled, false),
 		ssid: config.ssid ?? config.mesh_id,
-		encryption: config.encryption,
+		encryption: config.encryption ?? 'none',
+		hidden: bool_value(config.ignore_broadcast_ssid ?? config.hidden, false),
 		network: config.network,
 		mode: config.mode ?? 'ap',
 		key: null,
@@ -1711,6 +1868,18 @@ function radio_band(config)
 	case '11g':
 	case '11b':
 		return '2.4';
+	case '11ad':
+		return '60';
+	}
+
+	switch (config.hw_mode) {
+	case '11a':
+		return '5';
+	case '11g':
+	case '11b':
+		return '2.4';
+	case '11ad':
+		return '60';
 	}
 
 	return null;
@@ -1728,6 +1897,8 @@ function wifi_data_from_uci()
 				name,
 				enabled: !bool_value(config.disabled, false),
 				channel: config.channel,
+				hwmode: config.hwmode ?? config.hw_mode,
+				htmode: config.htmode,
 				band: radio_band(config),
 				state: bool_value(config.disabled, false) ? 'down' : 'unknown',
 				ifaces: [],
@@ -1770,6 +1941,8 @@ function wifi_data()
 				up: bool_value(data.up, false),
 				state: bool_value(data.up, false) ? 'up' : 'down',
 				channel: config.channel,
+				hwmode: config.hwmode ?? config.hw_mode,
+				htmode: config.htmode,
 				band: radio_band(config),
 				ifaces: [],
 			};
@@ -1961,25 +2134,58 @@ function lan_config_result()
 	if (!status)
 		return null;
 
-	let network = config_section('network', 'lan');
-	let dhcp = config_section('dhcp', 'lan');
-	let address = first_address(status, 'ipv4-address');
+	let cursor;
+	try {
+		cursor = uci.cursor();
+	} catch (e) {
+		return null;
+	}
+
+	let network = uci_section(cursor, 'network', 'lan', 'interface');
+	let dhcp = find_lan_dhcp(cursor);
+	if (!network || !dhcp || dhcp.invalid || network.proto != 'static')
+		return null;
+
+	let ip = ipv4_canonical(network.ipaddr);
+	let netmask = ipv4_canonical(network.netmask);
+	let prefix = ipv4_prefix_from_mask(netmask);
+	let network_info = prefix == null ? null :
+		ipv4_network_info(ip, prefix);
+	if (!ip || !netmask || !network_info || prefix < 1 || prefix > 30)
+		return null;
+
+	let ignore = dhcp.config.ignore ?? '0';
+	if (ignore != '0' && ignore != '1')
+		return null;
+
+	let has_start = dhcp.config.start != null;
+	let has_limit = dhcp.config.limit != null;
+	let pool = null;
+	if (has_start || has_limit) {
+		if (!has_start || !has_limit)
+			return null;
+		pool = lan_pool_from_offsets(network_info,
+			dhcp.config.start, dhcp.config.limit);
+		if (!pool)
+			return null;
+	}
+
 	let lan_mac = read_net_mac(status.l3_device ?? status.device) ??
 		normalize_mac(read_factory_value('device_mac'));
 	let config = {
 		name: 'lan',
 		interface: 'lan',
-		proto: network.proto ?? status.proto,
+		proto: network.proto,
 		up: status.up,
-		ipaddr: address?.address,
-		ip: address?.address,
-		prefix: address?.mask,
-		netmask: ipv4_mask_string(address?.mask),
+		ipaddr: ip,
+		ip,
+		prefix,
+		netmask,
 		mac: lan_mac,
 		dhcp: {
-			enabled: !bool_value(dhcp.ignore, false),
-			start: dhcp.start,
-			limit: dhcp.limit == null ? null : +dhcp.limit,
+			enabled: ignore == '0',
+			start: pool ? ipv4_string(pool.start) : null,
+			end: pool ? ipv4_string(pool.end) : null,
 			leasetime: dhcp.leasetime,
 		},
 	};
