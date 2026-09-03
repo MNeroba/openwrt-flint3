@@ -100,7 +100,6 @@ struct rtk_gsw {
 	bool dsa_registered;
 	struct dsa_switch ds;
 	struct net_device *bridge_dev[RTK_MAX_NUM_OF_PORT];
-	bool port_enabled[RTK_MAX_NUM_OF_PORT];
 	struct net_device *ethernet_master;
 	struct sfp_bus *sfp_bus;
 
