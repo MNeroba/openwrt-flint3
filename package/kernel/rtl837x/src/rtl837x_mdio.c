@@ -888,10 +888,28 @@ static const struct of_device_id rtk_gsw_match[] = {
 
 MODULE_DEVICE_TABLE(of, rtk_gsw_match);
 
+static DEFINE_MUTEX(rtl837x_instance_lock);
+
+static int rtl837x_claim_global_priv(struct rtk_gsw *gsw)
+{
+	int ret = 0;
+
+	mutex_lock(&rtl837x_instance_lock);
+	if (rtl_gbl_priv)
+		ret = -EBUSY;
+	else
+		rtl_gbl_priv = gsw;
+	mutex_unlock(&rtl837x_instance_lock);
+
+	return ret;
+}
+
 static void rtl837x_clear_global_priv(struct rtk_gsw *gsw)
 {
+	mutex_lock(&rtl837x_instance_lock);
 	if (rtl_gbl_priv == gsw)
 		rtl_gbl_priv = NULL;
+	mutex_unlock(&rtl837x_instance_lock);
 }
 
 static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
@@ -1029,8 +1047,15 @@ static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 	dev_info(gsw->dev, "rtl837x dev info:smi-addr:%d configured-cpu-port:%u serdes-mode:%d swap_cfg:0x%x\n",
 						 gsw->mdio_addr, gsw->cpu_port, gsw->sds0mode, *(uint8_t*)&(gsw->swap_cfg));
 
+	ret = rtl837x_claim_global_priv(gsw);
+	if (ret) {
+		dev_err(dev, "another RTL837x switch instance is already active\n");
+		if (master)
+			dev_put(master);
+		return ret;
+	}
+
 	dev_set_drvdata(dev, gsw);
-	rtl_gbl_priv = gsw;
 
 	ret = rtl8372n_hw_init(gsw, gsw->swap_cfg);
 	if (ret)
