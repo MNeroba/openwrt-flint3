@@ -60,7 +60,21 @@ static int rtl837x_set_learning(struct rtk_gsw *gsw, int port, bool enable)
 	return rtl837x_to_errno(ret);
 }
 
-#define RTL837X_SUPPORTED_BRIDGE_FLAGS BR_LEARNING
+static int rtl837x_set_hairpin(struct rtk_gsw *gsw, int port, bool enable)
+{
+	rtk_api_ret_t ret;
+
+	if (!rtl837x_user_port(gsw, port))
+		return -EINVAL;
+
+	ret = rtk_l2_localPktPermit_set(port,
+						enable ? ENABLED : DISABLED);
+
+	return rtl837x_to_errno(ret);
+}
+
+#define RTL837X_SUPPORTED_BRIDGE_FLAGS \
+	(BR_LEARNING | BR_HAIRPIN_MODE)
 
 static int rtl837x_port_pre_bridge_flags(struct dsa_switch *ds, int port,
 					 struct switchdev_brport_flags flags,
@@ -90,7 +104,18 @@ static int rtl837x_port_bridge_flags(struct dsa_switch *ds, int port,
 	if (ret)
 		return ret;
 
-	return rtl837x_set_learning(ds->priv, port, flags.val & BR_LEARNING);
+	if (flags.mask & BR_LEARNING) {
+		ret = rtl837x_set_learning(ds->priv, port,
+					    flags.val & BR_LEARNING);
+		if (ret)
+			return ret;
+	}
+
+	if (flags.mask & BR_HAIRPIN_MODE)
+		return rtl837x_set_hairpin(ds->priv, port,
+					   flags.val & BR_HAIRPIN_MODE);
+
+	return 0;
 }
 
 static bool rtl837x_support_eee(struct dsa_switch *ds, int port)
@@ -176,6 +201,57 @@ static int rtl837x_open_isolation(struct rtk_gsw *gsw)
 	return 0;
 }
 
+/* DSA starts bridge hairpin mode disabled.  Set that state explicitly for
+ * user ports because the SDK does not document the reset value of the
+ * source-port permit register.  Leave the CPU port unchanged.
+ */
+static int rtl837x_disable_hairpin(struct rtk_gsw *gsw)
+{
+	struct {
+		rtk_enable_t old;
+		bool attempted;
+	} updates[RTK_MAX_NUM_OF_PORT] = {};
+	int port, rollback_port;
+	rtk_api_ret_t ret;
+
+	for (port = 0; port < RTK_MAX_NUM_OF_PORT; port++) {
+		if (!rtl837x_user_port(gsw, port))
+			continue;
+
+		ret = rtk_l2_localPktPermit_get(port, &updates[port].old);
+		if (ret)
+			return rtl837x_to_errno(ret);
+	}
+
+	for (port = 0; port < RTK_MAX_NUM_OF_PORT; port++) {
+		if (!rtl837x_user_port(gsw, port) ||
+		    updates[port].old == DISABLED)
+			continue;
+
+		updates[port].attempted = true;
+		ret = rtk_l2_localPktPermit_set(port, DISABLED);
+		if (ret)
+			goto rollback;
+	}
+
+	return 0;
+
+rollback:
+	for (rollback_port = 0; rollback_port < RTK_MAX_NUM_OF_PORT;
+	     rollback_port++) {
+		if (!updates[rollback_port].attempted)
+			continue;
+
+		if (rtk_l2_localPktPermit_set(rollback_port,
+					       updates[rollback_port].old))
+			dev_warn(gsw->dev,
+				 "failed to roll back hairpin state for port %d\n",
+				 rollback_port);
+	}
+
+	return rtl837x_to_errno(ret);
+}
+
 static int rtl837x_commit_pvid_for_mode(struct rtk_gsw *gsw, int port,
 					bool vlan_filtering)
 {
@@ -202,6 +278,44 @@ static int rtl837x_commit_pvid(struct rtk_gsw *gsw, int port)
 
 	return rtl837x_commit_pvid_for_mode(gsw, port,
 					    dsa_port_is_vlan_filtering(dp));
+}
+
+static int rtl837x_port_bridge_join(struct dsa_switch *ds, int port,
+					    struct dsa_bridge bridge,
+					    bool *tx_fwd_offload,
+					    struct netlink_ext_ack *extack)
+{
+	struct rtk_gsw *gsw = ds->priv;
+	rtk_api_ret_t ret;
+
+	if (!rtl837x_user_port(gsw, port))
+		return -EINVAL;
+
+	/* A newly created bridge port starts with Linux's hairpin default off. */
+	ret = rtk_l2_localPktPermit_set(port, DISABLED);
+	if (ret)
+		return rtl837x_to_errno(ret);
+
+	return dsa_tag_8021q_bridge_join(ds, port, bridge, tx_fwd_offload,
+					 extack);
+}
+
+static void rtl837x_port_bridge_leave(struct dsa_switch *ds, int port,
+					      struct dsa_bridge bridge)
+{
+	struct rtk_gsw *gsw = ds->priv;
+	rtk_api_ret_t ret;
+
+	if (!rtl837x_user_port(gsw, port))
+		return;
+
+	/* Do not carry hairpin state into the next bridge-port instance. */
+	ret = rtk_l2_localPktPermit_set(port, DISABLED);
+	if (ret)
+		dev_err(gsw->dev, "failed to reset hairpin state for port %d: %d\n",
+			port, rtl837x_to_errno(ret));
+
+	dsa_tag_8021q_bridge_leave(ds, port, bridge);
 }
 
 static int rtl837x_set_stp_state(struct rtk_gsw *gsw, int port, u8 state)
@@ -450,6 +564,10 @@ static int rtl837x_setup(struct dsa_switch *ds)
 	ret = rtk_l2_aging_set(300);
 	if (ret)
 		return rtl837x_to_errno(ret);
+
+	ret = rtl837x_disable_hairpin(gsw);
+	if (ret)
+		return ret;
 
 	ret = rtk_stat_global_reset();
 	if (ret)
@@ -1255,8 +1373,8 @@ static const struct dsa_switch_ops rtl837x_dsa_ops = {
 	.port_bridge_flags = rtl837x_port_bridge_flags,
 	.support_eee = rtl837x_support_eee,
 	.set_mac_eee = rtl837x_set_mac_eee,
-	.port_bridge_join = dsa_tag_8021q_bridge_join,
-	.port_bridge_leave = dsa_tag_8021q_bridge_leave,
+	.port_bridge_join = rtl837x_port_bridge_join,
+	.port_bridge_leave = rtl837x_port_bridge_leave,
 	.port_stp_state_set = rtl837x_port_stp_state_set,
 	.port_fast_age = rtl837x_port_fast_age,
 	.port_vlan_filtering = rtl837x_port_vlan_filtering,
