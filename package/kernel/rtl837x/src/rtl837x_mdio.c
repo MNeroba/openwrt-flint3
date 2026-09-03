@@ -389,7 +389,7 @@ static int rtl837x_parse_sdsmode(struct device_node *np, const char *propname,
 static int rtl8372n_igmp_init(struct rtk_gsw *gsw)
 {
 
-	unsigned int ret;
+	int ret;
 	ret = rtk_igmp_init();
 	if (ret) return ret;
 
@@ -474,34 +474,101 @@ int rtl8372n_hw_init(struct rtk_gsw *gsw, rtl837x_pnswap_cfg_t swap_cfg)
     // 		page6 reg2 bit14:1
 	if (swap_cfg.sds0_rx_swap)
 	{
-		gsw->pMapper->rtl8373_sds_regbits_write(0, 0, 0, 0x200, 1); //#SDS0RX PN swap
-		gsw->pMapper->rtl8373_sds_regbits_write(0, 6, 2, 0x2000, 1);
+		/* SDS0 RX PN swap */
+		ret = gsw->pMapper->rtl8373_sds_regbits_write(
+			0, 0, 0, 0x200, 1);
+		if (ret) {
+			dev_warn(gsw->dev,
+				 "SDS0 RX PN swap configuration failed, continuing, error:%d\n",
+				 ret);
+		}
+
+		ret = gsw->pMapper->rtl8373_sds_regbits_write(0, 6, 2, 0x2000, 1);
+		if (ret) {
+			dev_warn(gsw->dev,
+				 "SDS0 RX PN swap page 6 configuration failed, continuing, error:%d\n",
+				 ret);
+		}
 	}
 
 	if (swap_cfg.sds0_tx_swap)
 	{
-		gsw->pMapper->rtl8373_sds_regbits_write(0, 0, 0, 1 << 8, 1); //#SDS0RTX PN swap
-		gsw->pMapper->rtl8373_sds_regbits_write(0, 6, 2, 1 << 14, 1);
+		/* SDS0 TX PN swap */
+		ret = gsw->pMapper->rtl8373_sds_regbits_write(
+			0, 0, 0, 1 << 8, 1);
+		if (ret) {
+			dev_warn(gsw->dev,
+				 "SDS0 TX PN swap configuration failed, continuing, error:%d\n",
+				 ret);
+		}
+
+		ret = gsw->pMapper->rtl8373_sds_regbits_write(0, 6, 2, 1 << 14, 1);
+		if (ret) {
+			dev_warn(gsw->dev,
+				 "SDS0 TX PN swap page 6 configuration failed, continuing, error:%d\n",
+				 ret);
+		}
 	}
 
 	if (swap_cfg.sds1_rx_swap)
 	{
-		gsw->pMapper->rtl8373_sds_regbits_write(1, 0, 0, 0x200, 1); //#SDS1RX PN swap
-		gsw->pMapper->rtl8373_sds_regbits_write(1, 6, 2, 0x2000, 1);
+		/* SDS1 RX PN swap */
+		ret = gsw->pMapper->rtl8373_sds_regbits_write(
+			1, 0, 0, 0x200, 1);
+		if (ret) {
+			dev_warn(gsw->dev,
+				 "SDS1 RX PN swap configuration failed, continuing, error:%d\n",
+				 ret);
+		}
+
+		ret = gsw->pMapper->rtl8373_sds_regbits_write(1, 6, 2, 0x2000, 1);
+		if (ret) {
+			dev_warn(gsw->dev,
+				 "SDS1 RX PN swap page 6 configuration failed, continuing, error:%d\n",
+				 ret);
+		}
 	}
 
 	if (swap_cfg.sds1_tx_swap)
 	{
-		gsw->pMapper->rtl8373_sds_regbits_write(1, 0, 0, 1 << 8, 1); //#SDS1TX PN swap
-		gsw->pMapper->rtl8373_sds_regbits_write(1, 6, 2, 1 << 14, 1);
+		/* SDS1 TX PN swap */
+		ret = gsw->pMapper->rtl8373_sds_regbits_write(
+			1, 0, 0, 1 << 8, 1);
+		if (ret) {
+			dev_warn(gsw->dev,
+				 "SDS1 TX PN swap configuration failed, continuing, error:%d\n",
+				 ret);
+		}
+
+		ret = gsw->pMapper->rtl8373_sds_regbits_write(1, 6, 2, 1 << 14, 1);
+		if (ret) {
+			dev_warn(gsw->dev,
+				 "SDS1 TX PN swap page 6 configuration failed, continuing, error:%d\n",
+				 ret);
+		}
 	}
 
     // ##MDI reverse configuration for Demo Tap UP RJ45, RTL8366U/RTL8373N/RTL8372N
-	if (swap_cfg.phy_mdi_reverse)
-		gsw->pMapper->rtl8373_setAsicRegBits(RTL8373_CFG_PHY_MDI_REVERSE_ADDR, 0xF, 0xC);
+	if (swap_cfg.phy_mdi_reverse) {
+		ret = gsw->pMapper->rtl8373_setAsicRegBits(
+			RTL8373_CFG_PHY_MDI_REVERSE_ADDR, 0xF, 0xC);
+		if (ret) {
+			dev_warn(gsw->dev,
+				 "PHY MDI reverse configuration failed, continuing, error:%d\n",
+				 ret);
+		}
+	}
 
-	if (swap_cfg.phy_tx_polarity_swap)
-    	gsw->pMapper->rtl8373_setAsicRegBits(RTL8373_CFG_PHY_TX_POLARITY_SWAP_ADDR, 0xFFFF, 0x596A); //#TX_POLARITY_SWAP
+	if (swap_cfg.phy_tx_polarity_swap) {
+		/* PHY TX polarity swap */
+		ret = gsw->pMapper->rtl8373_setAsicRegBits(
+			RTL8373_CFG_PHY_TX_POLARITY_SWAP_ADDR, 0xFFFF, 0x596A);
+		if (ret) {
+			dev_warn(gsw->dev,
+				 "PHY TX polarity swap configuration failed, continuing, error:%d\n",
+				 ret);
+		}
+	}
 
 	ret = rtk_switch_init();
 	if(ret){
