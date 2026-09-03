@@ -10,7 +10,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=glinet-app-compat
-PKG_RELEASE:=1
+PKG_RELEASE:=3
 
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=MNeroba
@@ -23,7 +23,7 @@ define Package/glinet-app-compat
   TITLE:=Local GL.iNet App compatibility core
   DEPENDS:=+uhttpd +uhttpd-mod-ucode +ucode +ucode-mod-digest \
 	+ucode-mod-fs +ucode-mod-log +ucode-mod-ubus +ucode-mod-uci \
-	+rpcd-mod-iwinfo
+	+rpcd-mod-iwinfo +firewall4
 endef
 
 define Package/glinet-app-compat/description
