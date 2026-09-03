@@ -28,8 +28,9 @@ endef
 
 define Package/glinet-app-compat/description
  The package provides a local, LAN-only JSON-RPC compatibility endpoint for
- the GL.iNet mobile application. It exposes authenticated, read-only status
- data through standard OpenWrt ubus and UCI interfaces.
+ the GL.iNet mobile application. It exposes authenticated status data and
+ explicitly scoped local-management actions through standard OpenWrt ubus
+ and UCI interfaces.
 endef
 
 define Package/glinet-app-compat/conffiles
