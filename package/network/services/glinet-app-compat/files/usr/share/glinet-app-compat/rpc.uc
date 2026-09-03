@@ -22,6 +22,7 @@ const LOG_STATE_TTL = 60 * 60;
 
 let ubus;
 let rpc_enabled = true;
+let rpc_debug_enabled = false;
 let last_state_cleanup;
 
 function monotonic_millis()
@@ -58,6 +59,7 @@ function init_logging()
 	log.ulog_open(['syslog'], 'daemon', 'glinet-app-compat');
 	log.ulog_threshold(level);
 	rpc_enabled = bool_value(config.enabled, true);
+	rpc_debug_enabled = level == 'debug';
 }
 
 function state_file(prefix, key)
@@ -174,6 +176,41 @@ function log_once(priority, key, message)
 	}
 
 	log.ulog(priority, `glinet-app-compat: ${message}`);
+}
+
+function argument_summary(args)
+{
+	if (args == null)
+		return 'null';
+
+	if (type(args) == 'array')
+		return `array(${length(args)})`;
+
+	if (type(args) != 'object')
+		return type(args);
+
+	let names = [];
+	for (let name in args) {
+		if (length(names) >= 16)
+			break;
+
+		if (type(name) == 'string' &&
+		    match(name, /^[A-Za-z0-9_.-]{1,64}$/))
+			push(names, name);
+	}
+
+	return length(names) ? join(',', names) : 'object';
+}
+
+function log_call_debug(module, method, args, remote, auth, started, result)
+{
+	if (!rpc_debug_enabled)
+		return;
+
+	log_once('debug', `call:${module}.${method}`,
+		`rpc module=${module} method=${method} args=[${argument_summary(args)}] ` +
+		`source=${remote} auth=${auth} result=${result} ` +
+		`duration_ms=${monotonic_millis() - started}`);
 }
 
 function backend_call(object, method, args, optional)
@@ -501,12 +538,16 @@ function session_valid(sid, remote)
 
 	let session = read_state(path);
 	let now = monotonic_millis();
-	if (!session || session.username != 'root' || session.remote != remote ||
-	    session.last == null || now < session.last ||
-	    now - session.last > SESSION_TTL * 1000) {
+	if (!session || session.username != 'root' || session.last == null ||
+	    now < +session.last ||
+	    now - +session.last > SESSION_TTL * 1000) {
 		remove_state(path);
 		return false;
 	}
+
+	/* A foreign source must not be able to invalidate an active session. */
+	if (session.remote != remote)
+		return false;
 
 	/* Rewriting the same root-owned file refreshes the inactivity timeout. */
 	session.last = now;
@@ -1268,18 +1309,29 @@ function handle_call(request, remote)
 		return rpc_error(id, -32602, 'invalid params');
 	}
 
+	let started = monotonic_millis();
+	let auth = no_auth_method(module, method) ? 'preauth' : 'session';
 	if (!no_auth_method(module, method) && !session_valid(sid, remote)) {
 		log_once('warning', `auth-session:${remote}`,
 			`invalid or expired session from ${remote}`);
+		log_call_debug(module, method, args, remote, 'invalid', started,
+			'authentication-failed');
 		return rpc_error(id, -32000, 'authentication failed');
 	}
 
 	let result = call_method(module, method, args ?? {});
-	if (result?.__unsupported)
+	if (result?.__unsupported) {
+		log_call_debug(module, method, args, remote, auth, started,
+			'method-not-found');
 		return rpc_error(id, -32601, 'method not found');
-	if (result == null)
+	}
+	if (result == null) {
+		log_call_debug(module, method, args, remote, auth, started,
+			'backend-unavailable');
 		return rpc_error(id, -32001, 'backend unavailable');
+	}
 
+	log_call_debug(module, method, args, remote, auth, started, 'success');
 	return rpc_result(id, result);
 }
 
