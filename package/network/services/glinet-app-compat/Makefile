@@ -10,7 +10,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=glinet-app-compat
-PKG_RELEASE:=3
+PKG_RELEASE:=4
 
 PKG_LICENSE:=GPL-2.0-only
 PKG_MAINTAINER:=MNeroba
@@ -39,13 +39,17 @@ endef
 
 define Package/glinet-app-compat/install
 	$(INSTALL_DIR) $(1)/etc/config $(1)/etc/uci-defaults \
-		$(1)/usr/share/glinet-app-compat
+		$(1)/usr/share/glinet-app-compat $(1)/usr/libexec
 	$(INSTALL_CONF) ./files/etc/config/glinet-app-compat \
 		$(1)/etc/config/glinet-app-compat
 	$(INSTALL_BIN) ./files/etc/uci-defaults/90-glinet-app-compat \
 		$(1)/etc/uci-defaults/90-glinet-app-compat
 	$(INSTALL_DATA) ./files/usr/share/glinet-app-compat/rpc.uc \
 		$(1)/usr/share/glinet-app-compat/rpc.uc
+	$(INSTALL_BIN) ./files/usr/libexec/glinet-app-compat-check \
+		$(1)/usr/libexec/glinet-app-compat-check
+	$(INSTALL_BIN) ./files/usr/libexec/glinet-app-compat-support \
+		$(1)/usr/libexec/glinet-app-compat-support
 endef
 
 define Package/glinet-app-compat/postinst
