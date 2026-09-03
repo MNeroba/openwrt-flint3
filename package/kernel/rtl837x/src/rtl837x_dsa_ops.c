@@ -234,11 +234,25 @@ static int rtl837x_set_stp_state(struct rtk_gsw *gsw, int port, u8 state)
 	return rtl837x_to_errno(ret);
 }
 
+static int rtl837x_read_ethtool_stat(int port, rtk_stat_port_type_t counter,
+					     u64 *value)
+{
+	rtk_stat_counter_t counter_value = 0;
+	int ret;
+
+	ret = rtk_stat_port_get(port, counter, &counter_value);
+	if (ret)
+		return rtl837x_to_errno(ret);
+
+	*value = counter_value;
+	return 0;
+}
+
 static u64 rtl837x_read_stat(int port, u32 counter)
 {
-	rtk_stat_counter_t value = 0;
+	u64 value;
 
-	if (rtk_stat_port_get(port, counter, &value))
+	if (rtl837x_read_ethtool_stat(port, counter, &value))
 		return 0;
 
 	return value;
@@ -795,6 +809,164 @@ static void rtl837x_get_pause_stats(struct dsa_switch *ds, int port,
 	pause_stats->tx_pause_frames = rtl837x_read_stat(port, dot3OutPauseFrames);
 }
 
+static void rtl837x_get_eth_phy_stats(struct dsa_switch *ds, int port,
+				      struct ethtool_eth_phy_stats *phy_stats)
+{
+	struct rtk_gsw *gsw = ds->priv;
+	u64 value;
+
+	if (!rtl837x_valid_port(gsw, port))
+		return;
+
+	if (!rtl837x_read_ethtool_stat(port, dot3StatsSymbolErrors, &value))
+		phy_stats->SymbolErrorDuringCarrier = value;
+}
+
+/*
+ * RTL8373 exposes the standard packet categories as full-width counters.
+ * Read the category counters together so a failed read cannot produce a
+ * partial aggregate.
+ */
+static void rtl837x_get_eth_mac_stats(struct dsa_switch *ds, int port,
+					      struct ethtool_eth_mac_stats *mac_stats)
+{
+	struct rtk_gsw *gsw = ds->priv;
+	u64 rx_ucast, rx_mcast, rx_bcast;
+	u64 tx_ucast, tx_mcast, tx_bcast;
+	u64 value;
+
+	if (!rtl837x_valid_port(gsw, port))
+		return;
+
+	if (rtl837x_read_ethtool_stat(port, ifInUcastPkts_H, &rx_ucast) ||
+	    rtl837x_read_ethtool_stat(port, ifInMulticastPkts_H, &rx_mcast) ||
+	    rtl837x_read_ethtool_stat(port, ifInBroadcastPkts_H, &rx_bcast) ||
+	    rtl837x_read_ethtool_stat(port, ifOutUcastPkts_H, &tx_ucast) ||
+	    rtl837x_read_ethtool_stat(port, ifOutMulticastPkts_H, &tx_mcast) ||
+	    rtl837x_read_ethtool_stat(port, ifOutBroadcastPkts_H, &tx_bcast))
+		return;
+
+	mac_stats->FramesReceivedOK = rx_ucast + rx_mcast + rx_bcast;
+	mac_stats->FramesTransmittedOK = tx_ucast + tx_mcast + tx_bcast;
+	mac_stats->MulticastFramesReceivedOK = rx_mcast;
+	mac_stats->BroadcastFramesReceivedOK = rx_bcast;
+	mac_stats->MulticastFramesXmittedOK = tx_mcast;
+	mac_stats->BroadcastFramesXmittedOK = tx_bcast;
+
+	if (!rtl837x_read_ethtool_stat(port, ifInOctets_H, &value))
+		mac_stats->OctetsReceivedOK = value;
+	if (!rtl837x_read_ethtool_stat(port, ifOutOctets_H, &value))
+		mac_stats->OctetsTransmittedOK = value;
+	if (!rtl837x_read_ethtool_stat(port, dot3StatsSingleCollisionFrames,
+					     &value))
+		mac_stats->SingleCollisionFrames = value;
+	if (!rtl837x_read_ethtool_stat(port, dot3StatMultipleCollisionFrames,
+					     &value))
+		mac_stats->MultipleCollisionFrames = value;
+	if (!rtl837x_read_ethtool_stat(port, dot3sDeferredTransmissions, &value))
+		mac_stats->FramesWithDeferredXmissions = value;
+	if (!rtl837x_read_ethtool_stat(port, dot3StatsLateCollisions, &value))
+		mac_stats->LateCollisions = value;
+	if (!rtl837x_read_ethtool_stat(port, dot3StatsExcessiveCollisions,
+					     &value))
+		mac_stats->FramesAbortedDueToXSColls = value;
+
+	/*
+	 * rx_etherStatsCRCAlignErrors combines FCS and alignment errors, while
+	 * the standard interface exposes them separately.  Leave both fields
+	 * unset instead of reporting the same combined counter twice.
+	 */
+}
+
+static void rtl837x_get_eth_ctrl_stats(struct dsa_switch *ds, int port,
+					      struct ethtool_eth_ctrl_stats *ctrl_stats)
+{
+	struct rtk_gsw *gsw = ds->priv;
+	u64 value;
+
+	if (!rtl837x_valid_port(gsw, port))
+		return;
+
+	if (!rtl837x_read_ethtool_stat(port, dot3ControlInUnknownOpcodes, &value))
+		ctrl_stats->UnsupportedOpcodesReceived = value;
+
+	/* Pause frames are already exposed through get_pause_stats(). */
+}
+
+static const struct ethtool_rmon_hist_range rtl837x_rmon_ranges[] = {
+	{ 0, 64 },
+	{ 65, 127 },
+	{ 128, 255 },
+	{ 256, 511 },
+	{ 512, 1023 },
+	{ 1024, 1518 },
+	{}
+};
+
+static void rtl837x_get_rmon_stats(struct dsa_switch *ds, int port,
+					      struct ethtool_rmon_stats *rmon_stats,
+					      const struct ethtool_rmon_hist_range **ranges)
+{
+	struct rtk_gsw *gsw = ds->priv;
+	u64 value;
+
+	*ranges = rtl837x_rmon_ranges;
+
+	if (!rtl837x_valid_port(gsw, port))
+		return;
+
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsUndersizePkts, &value))
+		rmon_stats->undersize_pkts = value;
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsOversizePkts, &value))
+		rmon_stats->oversize_pkts = value;
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsFragments, &value))
+		rmon_stats->fragments = value;
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsJabbers, &value))
+		rmon_stats->jabbers = value;
+
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsPkts64Octets, &value))
+		rmon_stats->hist[0] = value;
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsPkts65to127Octets,
+					    &value))
+		rmon_stats->hist[1] = value;
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsPkts128to255Octets,
+					    &value))
+		rmon_stats->hist[2] = value;
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsPkts256to511Octets,
+					    &value))
+		rmon_stats->hist[3] = value;
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsPkts512to1023Octets,
+					    &value))
+		rmon_stats->hist[4] = value;
+	if (!rtl837x_read_ethtool_stat(port, rx_etherStatsPkts1024to1518Octets,
+					    &value))
+		rmon_stats->hist[5] = value;
+
+	if (!rtl837x_read_ethtool_stat(port, tx_etherStatsPkts64Octets, &value))
+		rmon_stats->hist_tx[0] = value;
+	if (!rtl837x_read_ethtool_stat(port, tx_etherStatsPkts65to127Octets,
+					    &value))
+		rmon_stats->hist_tx[1] = value;
+	if (!rtl837x_read_ethtool_stat(port, tx_etherStatsPkts128to255Octets,
+					    &value))
+		rmon_stats->hist_tx[2] = value;
+	if (!rtl837x_read_ethtool_stat(port, tx_etherStatsPkts256to511Octets,
+					    &value))
+		rmon_stats->hist_tx[3] = value;
+	if (!rtl837x_read_ethtool_stat(port, tx_etherStatsPkts512to1023Octets,
+					    &value))
+		rmon_stats->hist_tx[4] = value;
+	if (!rtl837x_read_ethtool_stat(port, tx_etherStatsPkts1024to1518Octets,
+					    &value))
+		rmon_stats->hist_tx[5] = value;
+
+	/*
+	 * The SDK has 1519-to-max counters too, but does not expose the
+	 * RTL8373 maximum frame size needed to describe that range.  Keep the
+	 * seventh bucket unset rather than publishing an invented upper bound.
+	 */
+}
+
 static int rtl837x_set_ageing_time(struct dsa_switch *ds, unsigned int msecs)
 {
 	unsigned int secs = DIV_ROUND_UP(msecs, 1000);
@@ -1074,6 +1246,10 @@ static const struct dsa_switch_ops rtl837x_dsa_ops = {
 	.get_ethtool_stats = rtl837x_get_ethtool_stats,
 	.get_sset_count = rtl837x_get_sset_count,
 	.get_pause_stats = rtl837x_get_pause_stats,
+	.get_eth_phy_stats = rtl837x_get_eth_phy_stats,
+	.get_eth_mac_stats = rtl837x_get_eth_mac_stats,
+	.get_eth_ctrl_stats = rtl837x_get_eth_ctrl_stats,
+	.get_rmon_stats = rtl837x_get_rmon_stats,
 	.set_ageing_time = rtl837x_set_ageing_time,
 	.port_pre_bridge_flags = rtl837x_port_pre_bridge_flags,
 	.port_bridge_flags = rtl837x_port_bridge_flags,
