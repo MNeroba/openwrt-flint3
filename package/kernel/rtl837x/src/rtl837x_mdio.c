@@ -329,13 +329,13 @@ END_DETECT_CHIP:
 
 static int rtl837x_hw_reset(struct rtk_gsw *gsw)
 {
-	if (!IS_ERR(gsw->reset_pin)) {
+	if (!IS_ERR_OR_NULL(gsw->reset_pin)) {
 		dev_info(gsw->dev, "START HW RESET");
-		gpiod_set_value(gsw->reset_pin, 1);
+		gpiod_set_value_cansleep(gsw->reset_pin, 1);
 		mdelay(100);
-		gpiod_set_value(gsw->reset_pin, 0);
+		gpiod_set_value_cansleep(gsw->reset_pin, 0);
 		mdelay(100);
-		gpiod_set_value(gsw->reset_pin, 1);
+		gpiod_set_value_cansleep(gsw->reset_pin, 1);
 		mdelay(100);
 		dev_info(gsw->dev, "FINISH HW RESET");
 	}
@@ -977,7 +977,18 @@ static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 
 	gsw->reset_pin = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_LOW);
 	if (IS_ERR(gsw->reset_pin)) {
-		dev_warn(dev, "failed to get RESET GPIO!!!\n");
+		ret = PTR_ERR(gsw->reset_pin);
+		if (ret == -EPROBE_DEFER) {
+			dev_err_probe(dev, ret, "failed to get reset GPIO\n");
+			if (master)
+				dev_put(master);
+			return ret;
+		}
+
+		dev_warn(dev,
+			 "failed to get reset GPIO: %d; "
+			 "continuing without reset GPIO\n", ret);
+		gsw->reset_pin = NULL;
 	}
 
 	ret = rtl837x_parse_sdsmode(np, "rtl837x,sds0mode", &gsw->sds0mode);
