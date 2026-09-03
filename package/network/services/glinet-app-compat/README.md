@@ -85,6 +85,23 @@ passes it to `gl-session.logout` and returns a JSON `null` result. The local
 implementation keeps the stronger source-bound ownership checks used by this
 compatibility layer.
 
+## Local-management follow-up
+
+This local-management follow-up adds only two authenticated methods
+whose wire names and local behavior are source-proven by the stock SDK4
+system RPC and standard OpenWrt configuration lifecycle:
+
+| RPC | Result |
+| --- | --- |
+| `system.set_timezone_config` | Validates and commits `timezone`, `zonename` and optional `autotimezone` in the existing `system` section, then reloads system configuration |
+| `system.reboot` | Requests the standard OpenWrt ubus `system.reboot` action |
+
+The follow-up rejects unknown fields, invalid zone names and malformed boolean
+values. It does not add a hostname setter because no exact SDK4 setter schema
+was established in the source audit. Wi-Fi, LAN/DHCP, DNS and firewall setters
+remain separate future work until their complete argument and rollback
+semantics are source-proven.
+
 ## Diagnostics
 
 The endpoint logs with the `glinet-app-compat:` prefix. To follow those logs:

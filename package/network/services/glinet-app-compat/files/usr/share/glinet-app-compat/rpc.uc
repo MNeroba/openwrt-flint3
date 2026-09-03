@@ -1156,6 +1156,140 @@ function system_load_result()
 	return length(keys(result)) ? result : null;
 }
 
+function valid_timezone(value)
+{
+	return type(value) == 'string' && length(value) > 0 &&
+		length(value) <= 128 &&
+		match(value, /^[A-Za-z0-9_+.,:\/-]+$/);
+}
+
+function valid_zonename(value)
+{
+	if (type(value) != 'string' || length(value) == 0 || length(value) > 128 ||
+	    !match(value, /^[A-Za-z0-9_+.-]+(\/[A-Za-z0-9_+.-]+)*$/))
+		return false;
+
+	for (let component in split(value, '/'))
+		if (component == '.' || component == '..')
+			return false;
+
+	let stat = fs.stat(`/usr/share/zoneinfo/${value}`);
+	return !!stat && stat.type == 'file';
+}
+
+function bool_config_value(value)
+{
+	if (type(value) == 'bool')
+		return value;
+	if (type(value) == 'int' && (value == 0 || value == 1))
+		return value == 1;
+	if (type(value) == 'string') {
+		if (value == '0' || value == 'false')
+			return false;
+		if (value == '1' || value == 'true')
+			return true;
+	}
+
+	return null;
+}
+
+function timezone_config_result(args)
+{
+	if (type(args) != 'object')
+		return { __invalid: true };
+
+	let allowed = ['timezone', 'zonename', 'autotimezone'];
+	for (let key, value in args)
+		if (index(allowed, key) < 0)
+			return { __invalid: true };
+
+	let updates = 0;
+	if (args.timezone != null) {
+		if (!valid_timezone(args.timezone))
+			return { __invalid: true };
+		updates++;
+	}
+	if (args.zonename != null) {
+		if (!valid_zonename(args.zonename))
+			return { __invalid: true };
+		updates++;
+	}
+	if (args.autotimezone != null) {
+		if (bool_config_value(args.autotimezone) == null)
+			return { __invalid: true };
+		updates++;
+	}
+	if (!updates)
+		return { __invalid: true };
+
+	if (!system_sections()['.name'])
+		return { __backend_error: true };
+
+	let cursor = uci.cursor();
+	if (!cursor)
+		return { __backend_error: true };
+
+	if (args.timezone != null &&
+	    cursor.set('system', '@system[0]', 'timezone', args.timezone) != true)
+		return { __backend_error: true };
+	if (args.zonename != null &&
+	    cursor.set('system', '@system[0]', 'zonename', args.zonename) != true)
+		return { __backend_error: true };
+	if (args.autotimezone != null &&
+	    cursor.set('system', '@system[0]', 'autotimezone',
+		bool_config_value(args.autotimezone) ? '1' : '0') != true)
+		return { __backend_error: true };
+
+	if (cursor.commit('system') != true)
+		return { __backend_error: true };
+
+	if (system('/sbin/reload_config') != 0) {
+		log_once('err', 'config:system-reload',
+			'failed to reload system configuration');
+		return { __backend_error: true };
+	}
+
+	return { updated: true };
+}
+
+function backend_call_status(object, method, args, optional)
+{
+	if (!ubus) {
+		log_once(optional ? 'info' : 'err', `backend:${object}.${method}`,
+			`ubus unavailable for ${object}.${method}`);
+		return false;
+	}
+
+	try {
+		/* Some successful ubus methods, including system.reboot, send no body. */
+		ubus.call(object, method, args ?? {});
+	} catch (e) {
+		log_once(optional ? 'info' : 'err', `backend:${object}.${method}`,
+			`ubus ${object}.${method} raised an exception`);
+		return false;
+	}
+
+	let error = libubus.error(true);
+	if (error != null) {
+		log_once(optional ? 'info' : 'err', `backend:${object}.${method}`,
+			`ubus ${object}.${method} failed with status ${error}`);
+		return false;
+	}
+
+	return true;
+}
+
+function reboot_result(args)
+{
+	if (type(args) != 'object' || length(keys(args)))
+		return { __invalid: true };
+
+	if (!backend_call_status('system', 'reboot', {}, false))
+		return { __backend_error: true };
+
+	return { reboot: true };
+}
+
 function call_method(module, method, args)
 {
 	switch (`${module}.${method}`) {
@@ -1167,6 +1301,10 @@ function call_method(module, method, args)
 		return system_status_result();
 	case 'system.get_load':
 		return system_load_result();
+	case 'system.set_timezone_config':
+		return timezone_config_result(args);
+	case 'system.reboot':
+		return reboot_result(args);
 	case 'cable.get_status':
 		return wan_status_result();
 	case 'lan.get_config_list':
@@ -1366,6 +1504,10 @@ function handle_call(request, remote)
 	}
 
 	let result = call_method(module, method, args ?? {});
+	if (result?.__invalid)
+		return rpc_error(id, -32602, 'invalid params');
+	if (result?.__backend_error)
+		return rpc_error(id, -32001, 'backend unavailable');
 	if (result?.__unsupported) {
 		log_call_debug(module, method, args, remote, auth, started,
 			'method-not-found');
