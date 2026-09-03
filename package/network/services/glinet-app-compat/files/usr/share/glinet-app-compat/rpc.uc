@@ -27,11 +27,22 @@ let ubus;
 let rpc_enabled = true;
 let rpc_debug_enabled = false;
 let last_state_cleanup;
+let request_sequence = 0;
+let active_request_id;
 
 function monotonic_millis()
 {
 	let value = clock(true);
 	return value ? value[0] * 1000 + value[1] / 1000 : time() * 1000;
+}
+
+function next_request_id()
+{
+	request_sequence++;
+	if (request_sequence > 999999)
+		request_sequence = 1;
+
+	return request_sequence;
 }
 
 function bool_value(value, fallback)
@@ -188,7 +199,9 @@ function log_once(priority, key, message)
 		write_state(path, { last: now });
 	}
 
-	log.ulog(priority, `glinet-app-compat: ${message}`);
+	let request = active_request_id == null ? '' :
+		`req=${active_request_id} `;
+	log.ulog(priority, `glinet-app-compat: ${request}${message}`);
 }
 
 function argument_summary(args)
@@ -226,6 +239,16 @@ function log_call_debug(module, method, args, remote, auth, started, result)
 		`duration_ms=${monotonic_millis() - started}`);
 }
 
+function log_call_start(module, method, args, remote, auth)
+{
+	if (!rpc_debug_enabled)
+		return;
+
+	log_once('debug', `call-start:${module}.${method}`,
+		`rpc module=${module} method=${method} args=[${argument_summary(args)}] ` +
+		`source=${remote} auth=${auth} result=start`);
+}
+
 function backend_call(object, method, args, optional)
 {
 	if (!ubus) {
@@ -249,6 +272,10 @@ function backend_call(object, method, args, optional)
 			`ubus ${object}.${method} failed with status ${error}`);
 		return null;
 	}
+
+	if (rpc_debug_enabled)
+		log_once('debug', `backend-ok:${object}.${method}`,
+			`backend=${object}.${method} result=ok`);
 
 	return result;
 }
@@ -275,6 +302,10 @@ function backend_call_status(object, method, args)
 			`ubus ${object}.${method} failed with status ${error}`);
 		return false;
 	}
+
+	if (rpc_debug_enabled)
+		log_once('debug', `backend-ok:${object}.${method}`,
+			`backend=${object}.${method} result=ok`);
 
 	return true;
 }
@@ -649,6 +680,9 @@ function rollback_configuration(snapshots, packages)
 		return false;
 	}
 
+	if (rpc_debug_enabled)
+		log_once('debug', 'config:rollback-ok', 'rollback result=success');
+
 	return true;
 }
 
@@ -814,6 +848,10 @@ function firewall_rollback(snapshot)
 			'firewall rollback reload failed');
 		return false;
 	}
+
+	if (rpc_debug_enabled)
+		log_once('debug', 'firewall:rollback-ok',
+			'firewall rollback result=success');
 
 	return true;
 }
@@ -3200,11 +3238,14 @@ function read_request_body(env)
 function handle_authentication(request, remote)
 {
 	let id = request.id ?? null;
+	let started = monotonic_millis();
 
 	if (request.method == 'challenge') {
 		if (type(request.params) != 'object' || request.params.username != 'root') {
 			log_once('warning', `auth-challenge:${remote}`,
 				`authentication challenge rejected from ${remote}`);
+			log_call_debug('auth', request.method, request.params, remote,
+				'preauth', started, 'authentication-failed');
 			return rpc_error(id, -32000, 'authentication failed');
 		}
 
@@ -3212,21 +3253,30 @@ function handle_authentication(request, remote)
 		if (!result) {
 			log_once('err', 'authentication:challenge',
 				'could not create authentication challenge');
+			log_call_debug('auth', request.method, request.params, remote,
+				'preauth', started, 'backend-unavailable');
 			return rpc_error(id, -32001, 'authentication unavailable');
 		}
 
+		log_call_debug('auth', request.method, request.params, remote,
+			'preauth', started, 'success');
 		return rpc_result(id, result);
 	}
 
 	if (request.method == 'login') {
-		if (auth_is_blocked(remote))
+		if (auth_is_blocked(remote)) {
+			log_call_debug('auth', request.method, request.params, remote,
+				'preauth', started, 'rate-limited');
 			return rpc_error(id, -32000, 'authentication failed');
+		}
 
 		let params = request.params;
 		if (type(params) != 'object' || params.username != 'root' ||
 		    type(params.hash) != 'string' ||
 		    !match(lc(params.hash), /^[0-9a-f]{32}$/)) {
 			record_auth_failure(remote);
+			log_call_debug('auth', request.method, request.params, remote,
+				'preauth', started, 'authentication-failed');
 			return rpc_error(id, -32000, 'authentication failed');
 		}
 
@@ -3239,12 +3289,16 @@ function handle_authentication(request, remote)
 		    challenge_age < 0 || challenge_age > CHALLENGE_TTL * 1000 ||
 		    challenge.alg != shadow.alg || challenge.salt != shadow.salt) {
 			record_auth_failure(remote);
+			log_call_debug('auth', request.method, request.params, remote,
+				'preauth', started, 'authentication-failed');
 			return rpc_error(id, -32000, 'authentication failed');
 		}
 
 		let expected = digest.md5(`root:${shadow.hash}:${challenge.nonce}`);
 		if (lc(params.hash) != expected) {
 			record_auth_failure(remote);
+			log_call_debug('auth', request.method, request.params, remote,
+				'preauth', started, 'authentication-failed');
 			return rpc_error(id, -32000, 'authentication failed');
 		}
 
@@ -3252,10 +3306,14 @@ function handle_authentication(request, remote)
 		if (!sid) {
 			log_once('err', 'authentication:session',
 				'could not create authenticated session');
+			log_call_debug('auth', request.method, request.params, remote,
+				'preauth', started, 'backend-unavailable');
 			return rpc_error(id, -32001, 'authentication unavailable');
 		}
 
 		clear_auth_failures(remote);
+		log_call_debug('auth', request.method, request.params, remote,
+			'authenticated', started, 'success');
 		return rpc_result(id, { username: 'root', sid });
 	}
 
@@ -3297,11 +3355,18 @@ function handle_call(request, remote)
 		return rpc_error(id, -32000, 'authentication failed');
 	}
 
+	log_call_start(module, method, args, remote, auth);
 	let result = call_method(module, method, args ?? {});
-	if (result?.__invalid)
+	if (result?.__invalid) {
+		log_call_debug(module, method, args, remote, auth, started,
+			'invalid-params');
 		return rpc_error(id, -32602, 'invalid params');
-	if (result?.__backend_error)
+	}
+	if (result?.__backend_error) {
+		log_call_debug(module, method, args, remote, auth, started,
+			'backend-unavailable');
 		return rpc_error(id, -32001, 'backend unavailable');
+	}
 	if (result?.__unsupported) {
 		log_call_debug(module, method, args, remote, auth, started,
 			'method-not-found');
@@ -3337,6 +3402,7 @@ function send_json(status, response, sid)
 
 function handle_request(env)
 {
+	active_request_id = next_request_id();
 	let remote = env.REMOTE_ADDR ?? '';
 
 	if (!rpc_enabled) {

@@ -14,12 +14,16 @@ not the stock GL.iNet firmware stack.
 | `system.get_info` | OpenWrt board, release, time, MAC and hardware-info data when available |
 | `system.get_status` | Uptime/load/memory plus normalized LAN/WAN/Wi-Fi status |
 | `system.get_load` | Standard OpenWrt load, uptime and memory fields when available |
+| `system.set_timezone_config` | Authenticated timezone and zonename update through standard system UCI |
+| `system.reboot` | Authenticated standard OpenWrt ubus reboot request |
 | `cable.get_status` | Normalized `wan` interface/link state when present |
 | `dns.get_config` | Current automatic/manual IPv4 DNS mode and runtime automatic servers |
 | `dns.set_config` | Authenticated automatic or manual IPv4 DNS through `network.wan` |
 | `lan.get_config_list` | Read-only LAN address and DHCP configuration |
+| `lan.set_config` | Authenticated LAN IPv4 and DHCP pool/lease configuration for the `lan` interface |
 | `lan.get_static_bind_list` | Read-only UCI DHCP host reservations |
 | `wifi.get_config` | Read-only radio/BSS configuration without returning keys |
+| `wifi.set_config` | Authenticated UCI-backed BSS and radio configuration for an existing `iface_name` |
 | `wifi.get_status` | Read-only radio state, band and channel |
 | `clients.get_list` | Wi-Fi associations plus optional dnsmasq/static-host records |
 | `clients.get_status` | Wired/wireless counts, explicitly marking unavailable wired data |
@@ -153,18 +157,19 @@ nftables, iptables or stock `port_forward` kernel-module commands are used.
   nftables rules. Unknown and not-yet-proven methods return a JSON-RPC `-32601`
   error and are logged for a later, separate PR. Static DHCP bindings,
   guest-network configuration, Wi-Fi txpower/MLO/environment configuration,
-  radio-wide Wi-Fi enable/disable, reboot and password changes remain outside
-  this focused setter follow-up.
-* Top-level `alive`/`logout` and the stock `/ws` event stream remain
-  unsupported until their local state and event contracts are runtime-verified.
+  radio-wide Wi-Fi enable/disable and password changes remain outside this
+  focused setter follow-up.
+* The stock `/ws` event stream remains unsupported until its local state and
+  event contract are runtime-verified.
 * No stock OTA advertisement or firmware upgrade initiation. Firmware data is
   identified as the running OpenWrt build and the package never accepts an
   unverified stock image.
 
 ## Security properties
 
-* `/rpc` accepts only HTTP POST and is restricted to loopback, the configured
-  LAN IPv4 subnets, and IPv6 link-local peers.
+* `/rpc` accepts only HTTP POST and is restricted to loopback and the configured
+  LAN IPv4 subnets. IPv6 network peers, including link-local peers, are rejected
+  because uhttpd does not provide reliable ingress-interface provenance.
 * All state and status calls require a short-lived session, except the
   read-only `ui.check_initialized` pre-login check. Challenge data is one-use,
   source-address bound and expires after one second. Sessions expire after
@@ -230,3 +235,18 @@ For temporary diagnostic verbosity, use UCI and reload uhttpd:
     uci set glinet-app-compat.main.log_level='debug'
     uci commit glinet-app-compat
     /etc/init.d/uhttpd reload
+
+Debug records include a non-secret worker-local `req=<number>` correlation ID,
+module/method, argument key names or shape, source/authentication class, backend
+result class and duration. Repeated events remain suppressed for one minute.
+Rollback success/failure is logged without configuration values.
+
+For a read-only runtime preflight and a sanitized post-test bundle:
+
+    /usr/libexec/glinet-app-compat-check
+    /usr/libexec/glinet-app-compat-support /tmp/glinet-app-compat-support.txt
+
+The complete manual sequence, expected UCI/ubus/runtime observations, source
+guard checks and official-App evidence checklist is in
+`RUNTIME-VALIDATION.md`. The support script never uploads data and never reads
+`/etc/shadow` or session/challenge state.
