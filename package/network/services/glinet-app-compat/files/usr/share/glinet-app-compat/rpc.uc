@@ -17,9 +17,12 @@ const AUTH_MAX_FAILURES = 10;
 const AUTH_BLOCK_TIME = 600;
 const LOG_SUPPRESSION_TIME = 60;
 const MAX_BODY_LENGTH = 64 * 1024;
+const STATE_CLEANUP_INTERVAL = 60 * 1000;
+const LOG_STATE_TTL = 60 * 60;
 
 let ubus;
 let rpc_enabled = true;
+let last_state_cleanup;
 
 function monotonic_millis()
 {
@@ -62,22 +65,6 @@ function state_file(prefix, key)
 	return `${STATE_DIR}/${prefix}.${digest.md5(key)}`;
 }
 
-function state_directory_ready()
-{
-	let stat = fs.stat(STATE_DIR);
-
-	if (!stat)
-		stat = fs.mkdir(STATE_DIR, 0o700) ? fs.stat(STATE_DIR) : null;
-
-	if (!stat || stat.type != 'directory' || stat.uid != 0 || stat.gid != 0)
-		return false;
-
-	if (stat.mode != 0o700 && !fs.chmod(STATE_DIR, 0o700))
-		return false;
-
-	return true;
-}
-
 function read_state(path)
 {
 	let stat = fs.stat(path);
@@ -98,6 +85,69 @@ function read_state(path)
 	}
 }
 
+function remove_state(path)
+{
+	fs.unlink(path);
+}
+
+function cleanup_expired_state()
+{
+	let now = monotonic_millis();
+	if (last_state_cleanup != null &&
+	    now - last_state_cleanup < STATE_CLEANUP_INTERVAL)
+		return;
+
+	last_state_cleanup = now;
+	let wall = time();
+
+	for (let path in fs.glob(`${STATE_DIR}/session.*`) ?? []) {
+		let state = read_state(path);
+		if (!state || state.last == null || now < +state.last ||
+		    now - +state.last > SESSION_TTL * 1000)
+			remove_state(path);
+	}
+
+	for (let path in fs.glob(`${STATE_DIR}/challenge.*`) ?? []) {
+		let state = read_state(path);
+		if (!state || state.created == null || now < +state.created ||
+		    now - +state.created > CHALLENGE_TTL * 1000)
+			remove_state(path);
+	}
+
+	for (let path in fs.glob(`${STATE_DIR}/log.*`) ?? []) {
+		let state = read_state(path);
+		if (!state || state.last == null || wall < +state.last ||
+		    wall - +state.last > LOG_STATE_TTL)
+			remove_state(path);
+	}
+
+	for (let path in fs.glob(`${STATE_DIR}/failure.*`) ?? []) {
+		let state = read_state(path);
+		if (!state)
+			remove_state(path);
+		else if (!(+state.until || 0) > wall && state.updated != null &&
+			 wall - +state.updated > AUTH_BLOCK_TIME)
+			remove_state(path);
+	}
+}
+
+function state_directory_ready()
+{
+	let stat = fs.stat(STATE_DIR);
+
+	if (!stat)
+		stat = fs.mkdir(STATE_DIR, 0o700) ? fs.stat(STATE_DIR) : null;
+
+	if (!stat || stat.type != 'directory' || stat.uid != 0 || stat.gid != 0)
+		return false;
+
+	if (stat.mode != 0o700 && !fs.chmod(STATE_DIR, 0o700))
+		return false;
+
+	cleanup_expired_state();
+	return true;
+}
+
 function write_state(path, value)
 {
 	if (!state_directory_ready())
@@ -107,11 +157,6 @@ function write_state(path, value)
 		return false;
 
 	return !!fs.chmod(path, 0o600);
-}
-
-function remove_state(path)
-{
-	fs.unlink(path);
 }
 
 function log_once(priority, key, message)
@@ -280,13 +325,44 @@ function ipv4_mask_string(prefix)
 	return `${(mask >> 24) & 255}.${(mask >> 16) & 255}.${(mask >> 8) & 255}.${mask & 255}`;
 }
 
+function ipv6_link_local(address)
+{
+	if (type(address) != 'string' || length(address) > 39 ||
+	    !match(address, /^[0-9A-Fa-f:]+$/) ||
+	    !match(lc(address), /^fe[89ab][0-9a-f]:/))
+		return false;
+
+	let compressed = split(address, '::');
+	if (length(compressed) > 2)
+		return false;
+
+	let groups = 0;
+	for (let part in compressed) {
+		if (!length(part))
+			continue;
+
+		for (let group in split(part, ':')) {
+			if (!length(group) || length(group) > 4 ||
+			    !match(group, /^[0-9A-Fa-f]+$/))
+				return false;
+
+			groups++;
+		}
+	}
+
+	return match(address, /::/) ? groups < 8 : groups == 8;
+}
+
 function lan_source_allowed(remote)
 {
+	if (type(remote) != 'string' || !length(remote) || length(remote) > 64)
+		return false;
+
 	if (remote == '127.0.0.1' || remote == '::1')
 		return true;
 
 	/* IPv6 is deliberately limited to link-local callers in this first PR. */
-	if (match(lc(remote), /^fe[89ab][0-9a-f]/))
+	if (ipv6_link_local(remote))
 		return true;
 
 	let source = ipv4_number(remote);
@@ -369,7 +445,7 @@ function record_auth_failure(remote)
 
 	count++;
 	until = count >= AUTH_MAX_FAILURES ? now + AUTH_BLOCK_TIME : 0;
-	write_state(state_file('failure', remote), { count, until });
+	write_state(state_file('failure', remote), { count, until, updated: now });
 
 	log_once('warning', `auth-failure:${remote}`,
 		`authentication failed from ${remote}`);
@@ -1171,8 +1247,11 @@ function handle_call(request, remote)
 {
 	let id = request.id ?? null;
 	let params = request.params;
-	if (type(params) != 'array' || (length(params) != 3 && length(params) != 4))
+	if (type(params) != 'array' || (length(params) != 3 && length(params) != 4)) {
+		log_once('warning', 'request:call-params',
+			'invalid call parameters');
 		return rpc_error(id, -32602, 'invalid params');
+	}
 
 	let sid = params[0];
 	let module = params[1];
@@ -1180,14 +1259,18 @@ function handle_call(request, remote)
 	let args = length(params) == 4 ? params[3] : {};
 	if (type(sid) != 'string' || type(module) != 'string' ||
 	    type(method) != 'string' ||
+	    length(module) > 64 || length(method) > 64 ||
 	    !match(module, /^[A-Za-z0-9_-]+$/) ||
 	    !match(method, /^[A-Za-z0-9_-]+$/) ||
-	    (args != null && type(args) != 'object' && type(args) != 'array'))
+	    (args != null && type(args) != 'object' && type(args) != 'array')) {
+		log_once('warning', 'request:call-params',
+			'invalid call parameters');
 		return rpc_error(id, -32602, 'invalid params');
+	}
 
 	if (!no_auth_method(module, method) && !session_valid(sid, remote)) {
 		log_once('warning', `auth-session:${remote}`,
-			`authentication failed from ${remote}`);
+			`invalid or expired session from ${remote}`);
 		return rpc_error(id, -32000, 'authentication failed');
 	}
 
@@ -1236,6 +1319,8 @@ function handle_request(env)
 
 	let body = read_request_body(env);
 	if (!body) {
+		log_once('warning', 'request:body',
+			'malformed or oversized request body');
 		send_json('400 Bad Request', rpc_error(null, -32600, 'invalid request'));
 		return;
 	}
@@ -1244,12 +1329,14 @@ function handle_request(env)
 	try {
 		request = json(body);
 	} catch (e) {
+		log_once('warning', 'request:json', 'malformed JSON request');
 		send_json('400 Bad Request', rpc_error(null, -32700, 'parse error'));
 		return;
 	}
 
 	if (!request || type(request) != 'object' || request.jsonrpc != '2.0' ||
 	    !valid_request_id(request.id) || type(request.method) != 'string') {
+		log_once('warning', 'request:invalid', 'invalid JSON-RPC request');
 		send_json('200 OK', rpc_error(null, -32600, 'invalid request'));
 		return;
 	}

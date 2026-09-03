@@ -66,4 +66,21 @@ define Package/glinet-app-compat/postinst
 exit 0
 endef
 
+define Package/glinet-app-compat/prerm
+#!/bin/sh
+
+[ -n "$${IPKG_INSTROOT}" ] || {
+	UHTTPD_PREFIX='/rpc=/usr/share/glinet-app-compat/rpc.uc'
+	case "$$(uci -q get uhttpd.main.ucode_prefix)" in
+		*"$${UHTTPD_PREFIX}"*)
+			uci -q del_list uhttpd.main.ucode_prefix="$${UHTTPD_PREFIX}" || exit 1
+			uci -q commit uhttpd || exit 1
+			/etc/init.d/uhttpd reload
+			;;
+	esac
+}
+
+exit 0
+endef
+
 $(eval $(call BuildPackage,glinet-app-compat))

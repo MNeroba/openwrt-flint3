@@ -55,10 +55,16 @@ provides them.
   wire compatibility. The handler never stores or logs that field; the final
   response is checked against the existing root `/etc/shadow` entry.
 * Session/challenge state is kept below a root-owned `0700` runtime directory
-  with `0600` files. Failed logins are rate-limited.
+  with `0600` files. Failed logins are rate-limited, and expired sessions,
+  challenges, failure records and log-suppression records are cleaned up
+  opportunistically.
 * Diagnostic messages always carry the `glinet-app-compat:` prefix and never
-  include passwords, password hashes, nonces or session IDs. Repeated
-  unsupported/backend events are suppressed for one minute.
+  include passwords, password hashes, nonces, session IDs or cookie values.
+  Repeated unsupported/backend and request-validation events are suppressed
+  for one minute.
+
+Package removal removes this package's `/rpc` ucode prefix from the uhttpd
+configuration. Other uhttpd prefixes are left unchanged.
 
 The endpoint is not a replacement for HTTPS. A deployment that exposes the
 router beyond its trusted LAN must put it behind an authenticated TLS
