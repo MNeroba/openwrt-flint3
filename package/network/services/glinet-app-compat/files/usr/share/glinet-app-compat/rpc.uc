@@ -525,7 +525,7 @@ function challenge_for(remote)
 	};
 }
 
-function session_valid(sid, remote)
+function session_valid(sid, remote, refresh)
 {
 	if (type(sid) != 'string' || !match(sid, /^[0-9a-f]{32}$/))
 		return false;
@@ -548,6 +548,9 @@ function session_valid(sid, remote)
 	/* A foreign source must not be able to invalidate an active session. */
 	if (session.remote != remote)
 		return false;
+
+	if (refresh == false)
+		return true;
 
 	/* Rewriting the same root-owned file refreshes the inactivity timeout. */
 	session.last = now;
@@ -1202,6 +1205,49 @@ function no_auth_method(module, method)
 	return module == 'ui' && method == 'check_initialized';
 }
 
+function session_id_param(params)
+{
+	if (type(params) != 'object' || type(params.sid) != 'string' ||
+	    !match(params.sid, /^[0-9a-f]{32}$/))
+		return null;
+
+	return params.sid;
+}
+
+function handle_session_lifecycle(request, remote)
+{
+	let id = request.id ?? null;
+	let started = monotonic_millis();
+	let sid = session_id_param(request.params);
+	if (!sid) {
+		log_once('warning', `request:${request.method}-params`,
+			`invalid ${request.method} parameters`);
+		return rpc_error(id, -32602, 'invalid params');
+	}
+
+	if (request.method == 'alive') {
+		if (!session_valid(sid, remote, true)) {
+			log_once('warning', `auth-session:${remote}`,
+				`invalid or expired session from ${remote}`);
+			log_call_debug('session', request.method, request.params, remote,
+				'invalid', started, 'authentication-failed');
+			return rpc_error(id, -32000, 'authentication failed');
+		}
+
+		log_call_debug('session', request.method, request.params, remote,
+			'authenticated', started, 'success');
+		return rpc_result(id, null);
+	}
+
+	/* Logout is idempotent, but only the owning source may remove a session. */
+	if (session_valid(sid, remote, false))
+		remove_state(state_file('session', sid));
+
+	log_call_debug('session', request.method, request.params, remote,
+		'authenticated-or-unknown', started, 'success');
+	return rpc_result(id, null);
+}
+
 function read_request_body(env)
 {
 	let body_length = +env.CONTENT_LENGTH;
@@ -1396,6 +1442,8 @@ function handle_request(env)
 	let response;
 	if (request.method == 'challenge' || request.method == 'login')
 		response = handle_authentication(request, remote);
+	else if (request.method == 'alive' || request.method == 'logout')
+		response = handle_session_lifecycle(request, remote);
 	else if (request.method == 'call')
 		response = handle_call(request, remote);
 	else {

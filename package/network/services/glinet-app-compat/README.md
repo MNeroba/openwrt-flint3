@@ -9,6 +9,7 @@ not the stock GL.iNet firmware stack.
 | RPC | Result |
 | --- | --- |
 | `challenge` / `login` | Local `root` challenge-response using the existing `/etc/shadow` entry |
+| `alive` / `logout` | Source-bound session refresh and idempotent session termination |
 | `ui.check_initialized` | Pre-login initialized/model check with truthful GL-BE9300 identity |
 | `system.get_info` | OpenWrt board, release, time, MAC and hardware-info data when available |
 | `system.get_status` | Uptime/load/memory plus normalized LAN/WAN/Wi-Fi status |
@@ -37,8 +38,8 @@ provides them.
 * No setters, reboot, password, DNS, firewall, VPN, Multi-WAN or AdGuard
   methods in this core package. Unknown and not-yet-proven methods return a
   JSON-RPC `-32601` error and are logged for a later, separate PR.
-* Top-level `alive`/`logout` and the stock `/ws` event stream remain
-  unsupported until their local state and event contracts are runtime-verified.
+* The stock `/ws` event stream remains unsupported until its local state and
+  event contracts are runtime-verified.
 * No stock OTA advertisement or firmware upgrade initiation. Firmware data is
   identified as the running OpenWrt build and the package never accepts an
   unverified stock image.
@@ -50,8 +51,9 @@ provides them.
 * All state and status calls require a short-lived session, except the
   read-only `ui.check_initialized` pre-login check. Challenge data is one-use,
   source-address bound and expires after one second. Sessions expire after
-  five minutes of inactivity and are source-address bound. A request from a
-  different source cannot invalidate an active session.
+  five minutes of inactivity and are source-address bound. `alive` refreshes
+  only the requesting source's session; `logout` cannot terminate another
+  source's session and is idempotent for an unknown or already expired SID.
 * The App may include the entered password in the challenge request for SDK4
   wire compatibility. The handler never stores or logs that field; the final
   response is checked against the existing root `/etc/shadow` entry.
@@ -76,7 +78,12 @@ terminator and keep the LAN guard enabled.
 The stock `gl-session` implementation is not part of the public OpenWrt or
 GL.iNet source reviewed for this package. The authentication path therefore
 matches the documented SDK4 wire shape and the independently observed client
-calculation, but has not been runtime-tested against the stock App.
+calculation, but has not been runtime-tested against the stock App. The
+extracted GL-BE9300 stock gateway does establish the top-level lifecycle
+shape: `alive` passes its `sid` object to `gl-session.touch`, while `logout`
+passes it to `gl-session.logout` and returns a JSON `null` result. The local
+implementation keeps the stronger source-bound ownership checks used by this
+compatibility layer.
 
 ## Diagnostics
 
