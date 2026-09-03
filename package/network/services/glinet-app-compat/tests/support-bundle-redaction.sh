@@ -43,18 +43,18 @@ make_stub opkg 'printf "%s\n" "Package: glinet-app-compat" "Version: 1.0"'
 make_stub uname 'printf "%s\n" "Linux test-router 6.12-test"'
 make_stub service 'printf "%s\n" "firewall reload/status: ok"'
 
-output=$(PATH="$bin_dir:$PATH" "$support_script" -)
+output=$(PATH="$bin_dir:$PATH" sh "$support_script" -)
 
 printf '%s\n' 'do-not-overwrite' > "$existing_output"
 ln -s "$existing_output" "$symlink_output"
 escape_output='/tmp/../etc/glinet-app-compat-escape'
 
-if PATH="$bin_dir:$PATH" "$support_script" "$escape_output" >/dev/null 2>&1; then
+if PATH="$bin_dir:$PATH" sh "$support_script" "$escape_output" >/dev/null 2>&1; then
 	printf 'path traversal was accepted\n' >&2
 	exit 1
 fi
 
-if PATH="$bin_dir:$PATH" "$support_script" "$symlink_output" >/dev/null 2>&1; then
+if PATH="$bin_dir:$PATH" sh "$support_script" "$symlink_output" >/dev/null 2>&1; then
 	printf 'symlink output was accepted\n' >&2
 	exit 1
 fi
