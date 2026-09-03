@@ -98,6 +98,7 @@ struct rtk_gsw {
 	struct regmap		*map;
 	struct regmap		*map_nolock;
 	struct mutex		map_lock;
+	struct mutex		flood_lock;
 
 	struct gpio_desc *reset_pin;
 	int mdio_addr;
