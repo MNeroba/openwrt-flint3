@@ -15,12 +15,18 @@ not the stock GL.iNet firmware stack.
 | `system.get_status` | Uptime/load/memory plus normalized LAN/WAN/Wi-Fi status |
 | `system.get_load` | Standard OpenWrt load, uptime and memory fields when available |
 | `cable.get_status` | Normalized `wan` interface/link state when present |
+| `dns.get_config` | Current automatic/manual IPv4 DNS mode and runtime automatic servers |
+| `dns.set_config` | Authenticated automatic or manual IPv4 DNS through `network.wan` |
 | `lan.get_config_list` | Read-only LAN address and DHCP configuration |
 | `lan.get_static_bind_list` | Read-only UCI DHCP host reservations |
 | `wifi.get_config` | Read-only radio/BSS configuration without returning keys |
 | `wifi.get_status` | Read-only radio state, band and channel |
 | `clients.get_list` | Wi-Fi associations plus optional dnsmasq/static-host records |
 | `clients.get_status` | Wired/wireless counts, explicitly marking unavailable wired data |
+| `firewall.get_port_forward_list` | Compatibility-owned IPv4 WAN-to-LAN redirects |
+| `firewall.add_port_forward` | Authenticated firewall4/UCI IPv4 redirect creation |
+| `firewall.set_port_forward` | Full replacement of an existing compatibility-owned redirect |
+| `firewall.remove_port_forward` | Removal of an existing compatibility-owned redirect |
 
 The response uses the SDK4 JSON-RPC wrapper (`call`, `sid`, module, method,
 and optional arguments) and returns normalized OpenWrt data. Both the common
@@ -70,19 +76,87 @@ the response confirms reload acceptance, not completion of asynchronous hostapd/
 setup. A successful LAN address change can disconnect the caller; the client must reconnect
 using the new address.
 
+## DNS compatibility
+
+The stock SDK4 bytecode exposes `dns.get_config` and `dns.set_config`. The local
+Android client disassembly confirms the SDK4 field names, but this package
+intentionally implements only the two modes that have an unambiguous standard
+OpenWrt mapping:
+
+* `mode: "auto"` sets `network.wan.peerdns` to `1` and removes the
+  `network.wan.dns` list only when it was previously written by this layer;
+* `mode: "manual"` accepts `manual_list`, a non-empty list of at most five
+  valid, distinct IPv4 unicast addresses, sets `network.wan.peerdns` to `0`
+  and stores the list in `network.wan.dns`. A private UCI marker records that
+  ownership so automatic mode does not delete an unrelated pre-existing DNS
+  list.
+
+The getter reports `mode`, the manual list and the source-derived runtime
+`server_auto` value. It does not edit `/etc/resolv.conf` or any generated
+resolver file. The stock setter also accepts `rebind_protection`, `force_dns`,
+`override_vpn` and secure/proxy fields, but those writes are deliberately
+rejected here: `rebind_protection` is a security control and the other fields
+have no equivalent in this standard OpenWrt mapping. The existing dnsmasq
+rebind setting is left unchanged. A failed UCI commit or `network.reload`
+returns an error and attempts to restore the original options.
+
+## Port-forward compatibility
+
+The stock firewall bytecode exposes `get_port_forward_list`,
+`add_port_forward`, `set_port_forward`, `remove_port_forward` and
+`order_port_forward`. Its recovered validator confirms the request fields
+`name`, `src`, `dest`, `proto`, `src_dport`, `dest_ip`, `dest_port` and
+`enabled`; the accepted protocols are exactly `tcp`, `udp` and `tcp udp`, and
+ports may be a single value or one range of fewer than 100 ports. The stock
+getter calls the source-port result field `src_port`, while the setter
+validator calls its request field `src_dport`; this compatibility layer keeps
+that distinction explicit.
+
+The stock firmware currently applies these rules through its separate
+`port_forward` configuration/module path. The captured Android v4 firewall
+body proves the WAN-access methods but does not contain a direct port-forward
+call site. This package therefore implements only the server-schema subset
+that can be represented safely by this tree's standard firewall4 UCI backend;
+runtime App behavior remains to be verified.
+
+This package implements the list/add/set/remove subset using standard
+firewall4 `firewall` UCI `redirect` sections. Only IPv4 `DNAT` redirects from
+zone `wan` to zone `lan` are accepted. Destination addresses must be usable
+hosts inside the configured LAN subnet and cannot be the router address.
+Mapped fields are `family`, `target`, `src`, `dest`, `proto`, `src_dport`,
+`dest_ip`, `dest_port` and `enabled`.
+
+Created sections carry the `glinet_app_compat '1'` marker. Listing, updating
+and deleting are limited to marked sections, so an unrelated administrator-
+created redirect is neither exposed nor modified. Exact duplicates among
+compatibility-owned rules are rejected; other existing redirects remain under
+their original UCI ownership and ordering. UCI section names are returned as
+stable rule IDs; list positions are not used as IDs. The stock `all` delete
+and `order_port_forward` methods, descriptions and other fields not required
+for this narrow mapping remain unsupported.
+
+Firewall changes use `uci.cursor()` and the standard ubus `service.reload`
+operation for `firewall`. Section-aware snapshots restore the complete
+original section, including its UCI order, when commit or reload fails. A
+created section is removed on rollback, a deleted section is recreated and an
+updated section is restored before a compensating firewall reload. No raw
+nftables, iptables or stock `port_forward` kernel-module commands are used.
+
 ## Deliberate non-goals
 
 * No cloud, GoodCloud, account or telemetry integration.
 * No guessed UDP/mDNS/GL-specific discovery protocol. The official local flow
   permits adding an initialized device by IP and password; discovery remains
   unsupported until its wire format is established.
-* No DNS, firewall, VPN, Multi-WAN or AdGuard methods in this core package. Unknown and
-  not-yet-proven methods return a JSON-RPC `-32601` error and are logged for a later,
-  separate PR. Static DHCP bindings, guest-network configuration, Wi-Fi txpower/MLO/
-  environment configuration, radio-wide Wi-Fi enable/disable, reboot and password changes
-  remain outside this focused setter follow-up.
-* The stock `/ws` event stream remains unsupported until its local state and
-  event contracts are runtime-verified.
+* No secure/proxy DNS, DNS filtering, firewall ACLs, IPv6 pinholes, DMZ, UPnP,
+  port triggering, source-IP restrictions, reflection customization or arbitrary
+  nftables rules. Unknown and not-yet-proven methods return a JSON-RPC `-32601`
+  error and are logged for a later, separate PR. Static DHCP bindings,
+  guest-network configuration, Wi-Fi txpower/MLO/environment configuration,
+  radio-wide Wi-Fi enable/disable, reboot and password changes remain outside
+  this focused setter follow-up.
+* Top-level `alive`/`logout` and the stock `/ws` event stream remain
+  unsupported until their local state and event contracts are runtime-verified.
 * No stock OTA advertisement or firmware upgrade initiation. Firmware data is
   identified as the running OpenWrt build and the package never accepts an
   unverified stock image.

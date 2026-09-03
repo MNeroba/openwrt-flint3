@@ -19,6 +19,9 @@ const LOG_SUPPRESSION_TIME = 60;
 const MAX_BODY_LENGTH = 64 * 1024;
 const STATE_CLEANUP_INTERVAL = 60 * 1000;
 const LOG_STATE_TTL = 60 * 60;
+const DNS_MAX_SERVERS = 5;
+const FIREWALL_RULE_NAME_MAX = 64;
+const FIREWALL_PORT_MAX = 65535;
 
 let ubus;
 let rpc_enabled = true;
@@ -708,6 +711,147 @@ function uci_transaction(changes, packages)
 	}
 
 	return {};
+}
+
+function copy_uci_value(value)
+{
+	if (type(value) != 'array')
+		return value;
+
+	let result = [];
+	for (let item in value)
+		push(result, item);
+
+	return result;
+}
+
+function firewall_section_snapshot(cursor, section_name)
+{
+	let section;
+
+	try {
+		section = cursor.get_all('firewall', section_name);
+	} catch (e) {
+		return null;
+	}
+
+	if (!section)
+		return {
+			id: section_name,
+			exists: false,
+		};
+
+	if (section['.type'] != 'redirect')
+		return null;
+
+	let values = {};
+	for (let name, value in section) {
+		if (match(name, /^\./))
+			continue;
+
+		values[name] = copy_uci_value(value);
+	}
+
+	return {
+		id: section_name,
+		exists: true,
+		type: section['.type'],
+		index: section['.index'],
+		values,
+	};
+}
+
+function firewall_restore_section(snapshot)
+{
+	if (!snapshot || !snapshot.id)
+		return false;
+
+	let cursor;
+	try {
+		cursor = uci.cursor();
+		if (!cursor || !cursor.get_all('firewall'))
+			return false;
+
+		let current = cursor.get_all('firewall', snapshot.id);
+		if (current && cursor.delete('firewall', snapshot.id) == null)
+			return false;
+
+		if (snapshot.exists) {
+			if (cursor.set('firewall', snapshot.id, 'redirect') == null)
+				return false;
+
+			for (let name, value in snapshot.values)
+				if (cursor.set('firewall', snapshot.id, name,
+					copy_uci_value(value)) == null)
+					return false;
+
+			if (snapshot.index != null &&
+			    cursor.reorder('firewall', snapshot.id, snapshot.index) == null)
+				return false;
+		}
+
+		return cursor.commit('firewall') != null;
+	} catch (e) {
+		return false;
+	}
+}
+
+function firewall_reload()
+{
+	return backend_call_status('service', 'reload', { name: 'firewall' });
+}
+
+function firewall_rollback(snapshot)
+{
+	if (!firewall_restore_section(snapshot)) {
+		log_once('err', 'firewall:rollback',
+			'firewall configuration rollback failed');
+		return false;
+	}
+
+	if (!firewall_reload()) {
+		log_once('err', 'firewall:rollback-reload',
+			'firewall rollback reload failed');
+		return false;
+	}
+
+	return true;
+}
+
+function firewall_transaction(snapshot, mutator, result)
+{
+	let cursor;
+	let changed = false;
+
+	try {
+		cursor = uci.cursor();
+		if (!cursor || !cursor.get_all('firewall'))
+			return rpc_config_backend_error();
+
+		if (!mutator(cursor)) {
+			try { cursor.revert('firewall'); } catch (e) {}
+			return rpc_config_backend_error();
+		}
+
+		changed = true;
+		if (cursor.commit('firewall') == null) {
+			try { cursor.revert('firewall'); } catch (e) {}
+			firewall_rollback(snapshot);
+			return rpc_config_backend_error();
+		}
+	} catch (e) {
+		if (changed)
+			firewall_rollback(snapshot);
+		else if (cursor)
+			try { cursor.revert('firewall'); } catch (e) {}
+		return rpc_config_backend_error();
+	}
+
+	if (firewall_reload())
+		return result;
+
+	firewall_rollback(snapshot);
+	return rpc_config_backend_error();
 }
 
 function with_configuration_lock(callback)
@@ -1473,6 +1617,524 @@ function lan_set_config(args)
 	}
 
 	return with_configuration_lock(() => lan_set_config_locked(args));
+}
+
+function dns_ipv4_server(value)
+{
+	let server = ipv4_canonical(value);
+	if (!server)
+		return null;
+
+	let number = ipv4_number(server);
+	if (number == null || number == 0 || number == 0xffffffff ||
+	    number >= 0xe0000000)
+		return null;
+
+	return server;
+}
+
+function dns_manual_servers(value, require_nonempty)
+{
+	if (type(value) != 'array' || length(value) > DNS_MAX_SERVERS ||
+	    (require_nonempty && !length(value)))
+		return null;
+
+	let result = [];
+	for (let item in value) {
+		let server = dns_ipv4_server(item);
+		if (!server || index(result, server) >= 0)
+			return null;
+
+		push(result, server);
+	}
+
+	return result;
+}
+
+function dns_uci_servers(value)
+{
+	if (type(value) == 'string')
+		value = [value];
+
+	return dns_manual_servers(value, false);
+}
+
+function dns_runtime_servers(status)
+{
+	let result = [];
+	let servers = status?.['dns-server'];
+	if (type(servers) != 'array')
+		return result;
+
+	for (let server in servers) {
+		let address = dns_ipv4_server(server);
+		if (!address)
+			continue;
+
+		push(result, address);
+	}
+
+	return result;
+}
+
+function dns_config_result()
+{
+	let cursor;
+	try {
+		cursor = uci.cursor();
+	} catch (e) {
+		return null;
+	}
+
+	let wan = uci_section(cursor, 'network', 'wan', 'interface');
+	if (!wan || wan.proto == 'none')
+		return null;
+
+	let peerdns = wan.peerdns ?? '1';
+	if (peerdns == true)
+		peerdns = '1';
+	else if (peerdns == false)
+		peerdns = '0';
+
+	if (peerdns != '0' && peerdns != '1')
+		return null;
+
+	let mode = peerdns == '0' ? 'manual' : 'auto';
+	let manual = [];
+	if (mode == 'manual') {
+		manual = dns_uci_servers(wan.dns);
+		if (!manual || !length(manual))
+			return null;
+	}
+
+	return {
+		mode,
+		manual_list: manual,
+		server_auto: join(',', dns_runtime_servers(
+			backend_call('network.interface.wan', 'status', {}, true))),
+	};
+}
+
+function dns_set_config_locked(args)
+{
+	let cursor;
+	try {
+		cursor = uci.cursor();
+	} catch (e) {
+		return rpc_config_backend_error();
+	}
+
+	let wan = uci_section(cursor, 'network', 'wan', 'interface');
+	if (!cursor || !wan || wan.proto == 'none')
+		return rpc_invalid_params();
+
+	if (type(args.mode) != 'string')
+		return rpc_invalid_params();
+
+	let changes = [];
+	if (args.mode == 'auto') {
+		if (args.manual_list != null &&
+		    !dns_manual_servers(args.manual_list, false))
+			return rpc_invalid_params();
+
+		push(changes, {
+			package: 'network', section: 'wan', option: 'peerdns', value: '1',
+		});
+		if (wan.glinet_app_compat_dns == '1') {
+			push(changes, {
+				package: 'network', section: 'wan', option: 'dns', delete: true,
+			});
+			push(changes, {
+				package: 'network', section: 'wan',
+				option: 'glinet_app_compat_dns', delete: true,
+			});
+		}
+	} else if (args.mode == 'manual') {
+		let servers = dns_manual_servers(args.manual_list, true);
+		if (!servers)
+			return rpc_invalid_params();
+
+		push(changes, {
+			package: 'network', section: 'wan', option: 'peerdns', value: '0',
+		});
+		push(changes, {
+			package: 'network', section: 'wan', option: 'dns', value: servers,
+		});
+		push(changes, {
+			package: 'network', section: 'wan',
+			option: 'glinet_app_compat_dns', value: '1',
+		});
+	} else {
+		return rpc_invalid_params();
+	}
+
+	return uci_transaction(changes, ['network']);
+}
+
+function dns_set_config(args)
+{
+	let allowed = ['mode', 'manual_list'];
+	if (type(args) != 'object' || unsupported_config_key(args, allowed))
+		return type(args) == 'object' ? rpc_unsupported_config() : rpc_invalid_params();
+
+	return with_configuration_lock(() => dns_set_config_locked(args));
+}
+
+function firewall_rule_name(value)
+{
+	if (!safe_config_text(value, 1, FIREWALL_RULE_NAME_MAX) ||
+	    trim(value) != value ||
+	    match(value, /["%<>=;'#*\/~$]/))
+		return null;
+
+	return value;
+}
+
+function firewall_port_spec(value)
+{
+	let text;
+	if (type(value) == 'string')
+		text = value;
+	else if (type(value) == 'int' || type(value) == 'double')
+		text = `${value}`;
+	else
+		return null;
+
+	let parts = split(text, '-');
+	if (length(parts) > 2 || !length(parts))
+		return null;
+
+	let ports = [];
+	for (let part in parts) {
+		if (!match(part, /^[0-9]+$/) ||
+		    (length(part) > 1 && substr(part, 0, 1) == '0'))
+			return null;
+
+		let port = +part;
+		if (port < 1 || port > FIREWALL_PORT_MAX)
+			return null;
+
+		push(ports, port);
+	}
+
+	if (length(ports) == 2 &&
+	    (ports[0] > ports[1] || ports[1] - ports[0] + 1 >= 100))
+		return null;
+
+	return {
+		value: length(ports) == 1 ? `${ports[0]}` :
+			`${ports[0]}-${ports[1]}`,
+		start: ports[0],
+		end: ports[length(ports) - 1],
+		range: length(ports) == 2,
+	};
+}
+
+function firewall_ports_compatible(source, destination)
+{
+	return source && destination && source.range == destination.range &&
+		(!source.range || source.end - source.start ==
+			destination.end - destination.start);
+}
+
+function firewall_lan_network(cursor)
+{
+	let lan = uci_section(cursor, 'network', 'lan', 'interface');
+	if (!lan || lan.proto != 'static')
+		return null;
+
+	let address = ipv4_canonical(lan.ipaddr);
+	let netmask = ipv4_canonical(lan.netmask);
+	let prefix = ipv4_prefix_from_mask(netmask);
+	if (!address || !netmask || prefix == null || prefix < 1 || prefix > 30)
+		return null;
+
+	return ipv4_network_info(address, prefix);
+}
+
+function firewall_protocol(value)
+{
+	if (value == 'tcp' || value == 'udp' || value == 'tcp udp')
+		return value;
+
+	return null;
+}
+
+function firewall_validate_rule(cursor, args)
+{
+	let name = firewall_rule_name(args.name);
+	let source = args.src;
+	let destination = args.dest;
+	let proto = firewall_protocol(args.proto);
+	let source_port = firewall_port_spec(args.src_dport);
+	let destination_port = firewall_port_spec(args.dest_port);
+	let destination_ip = ipv4_canonical(args.dest_ip);
+	let network = firewall_lan_network(cursor);
+
+	if (!name || source != 'wan' || destination != 'lan' || !proto ||
+	    !source_port || !destination_port ||
+	    !firewall_ports_compatible(source_port, destination_port) ||
+	    !destination_ip || !network || type(args.enabled) != 'bool')
+		return null;
+
+	let number = ipv4_number(destination_ip);
+	if (number == null || number <= network.network ||
+	    number >= network.broadcast || number == network.address)
+		return null;
+
+	return {
+		name,
+		src: 'wan',
+		dest: 'lan',
+		proto,
+		src_dport: source_port.value,
+		dest_ip: destination_ip,
+		dest_port: destination_port.value,
+		enabled: args.enabled,
+	};
+}
+
+function firewall_owned_redirect(section)
+{
+	return section && (section['.type'] ?? section.type) == 'redirect' &&
+		section.glinet_app_compat == '1' && section.target == 'DNAT' &&
+		section.src == 'wan' && section.dest == 'lan' &&
+		section.family == 'ipv4';
+}
+
+function firewall_rule_id(value)
+{
+	return type(value) == 'string' && length(value) <= FIREWALL_RULE_NAME_MAX &&
+		match(value, /^[A-Za-z0-9_]+$/) ? value : null;
+}
+
+function firewall_rule_from_section(section)
+{
+	if (!firewall_owned_redirect(section) ||
+	    !firewall_rule_id(section['.name']))
+		return null;
+
+	let source_port = section.src_dport ?? section.src_port;
+	let source = firewall_port_spec(source_port);
+	let destination = firewall_port_spec(section.dest_port);
+	let destination_ip = ipv4_canonical(section.dest_ip);
+	let proto = firewall_protocol(section.proto);
+	if (!source || !destination || !firewall_ports_compatible(source, destination) ||
+	    !destination_ip || !proto)
+		return null;
+
+	let name = firewall_rule_name(section.name);
+	if (!name)
+		return null;
+
+	return {
+		id: section['.name'],
+		name,
+		src: 'wan',
+		dest: 'lan',
+		proto,
+		src_port: source.value,
+		dest_port: destination.value,
+		dest_ip: destination_ip,
+		enabled: section.enabled != '0',
+	};
+}
+
+function firewall_duplicate_owned_rule(cursor, rule, excluded_id)
+{
+	let duplicate = false;
+	try {
+		cursor.foreach('firewall', 'redirect', (section) => {
+			if (duplicate || section['.name'] == excluded_id)
+				return;
+
+			let existing = firewall_rule_from_section(section);
+			if (existing && existing.proto == rule.proto &&
+			    existing.src_port == rule.src_dport &&
+			    existing.dest_ip == rule.dest_ip &&
+			    existing.dest_port == rule.dest_port)
+				duplicate = true;
+		});
+	} catch (e) {
+		return null;
+	}
+
+	return duplicate;
+}
+
+function firewall_set_rule(cursor, section_name, rule)
+{
+	let values = {
+		name: rule.name,
+		glinet_app_compat: '1',
+		target: 'DNAT',
+		family: 'ipv4',
+		src: 'wan',
+		dest: 'lan',
+		proto: rule.proto,
+		src_dport: rule.src_dport,
+		dest_ip: rule.dest_ip,
+		dest_port: rule.dest_port,
+		enabled: rule.enabled ? '1' : '0',
+	};
+
+	for (let name, value in values)
+		if (cursor.set('firewall', section_name, name, value) == null)
+			return false;
+
+	return true;
+}
+
+function firewall_owned_snapshot(cursor, section_name)
+{
+	let snapshot = firewall_section_snapshot(cursor, section_name);
+	let section = { '.type': snapshot?.type };
+	for (let name, value in snapshot?.values ?? [])
+		section[name] = value;
+
+	if (!snapshot || !snapshot.exists || !firewall_owned_redirect(section))
+		return null;
+
+	return snapshot;
+}
+
+function firewall_port_forward_list()
+{
+	let cursor;
+	let result = [];
+	try {
+		cursor = uci.cursor();
+		if (!cursor || !cursor.get_all('firewall'))
+			return null;
+
+		cursor.foreach('firewall', 'redirect', (section) => {
+			let rule = firewall_rule_from_section(section);
+			if (rule)
+				push(result, rule);
+		});
+	} catch (e) {
+		return null;
+	}
+
+	return { res: result };
+}
+
+function firewall_add_port_forward_locked(args)
+{
+	let cursor;
+	try {
+		cursor = uci.cursor();
+		if (!cursor || !cursor.get_all('firewall'))
+			return rpc_config_backend_error();
+
+		let rule = firewall_validate_rule(cursor, args);
+		let duplicate = rule ? firewall_duplicate_owned_rule(cursor, rule, null) : false;
+		if (!rule || duplicate == null)
+			return rpc_invalid_params();
+		if (duplicate)
+			return rpc_invalid_params();
+
+		let snapshot = { id: null, exists: false, type: 'redirect', values: {} };
+		let response = { id: null };
+		return firewall_transaction(snapshot, (transaction_cursor) => {
+			let section_name = transaction_cursor.add('firewall', 'redirect');
+			if (!section_name)
+				return false;
+
+			snapshot.id = section_name;
+			response.id = section_name;
+			return firewall_set_rule(transaction_cursor, section_name, rule);
+		}, response);
+	} catch (e) {
+		return rpc_config_backend_error();
+	}
+}
+
+function firewall_add_port_forward(args)
+{
+	let allowed = [
+		'name', 'src', 'dest', 'proto', 'src_dport', 'dest_ip', 'dest_port',
+		'enabled', 'apply'
+	];
+	if (type(args) != 'object' || unsupported_config_key(args, allowed))
+		return type(args) == 'object' ? rpc_unsupported_config() : rpc_invalid_params();
+	if (args.apply != null && type(args.apply) != 'bool')
+		return rpc_invalid_params();
+
+	return with_configuration_lock(() => firewall_add_port_forward_locked(args));
+}
+
+function firewall_set_port_forward_locked(args)
+{
+	let cursor;
+	try {
+		cursor = uci.cursor();
+		if (!cursor || !cursor.get_all('firewall'))
+			return rpc_config_backend_error();
+
+		let rule = firewall_validate_rule(cursor, args);
+		let snapshot = firewall_owned_snapshot(cursor, args.id);
+		let duplicate = rule ? firewall_duplicate_owned_rule(cursor, rule, args.id) : false;
+		if (!rule || !snapshot || duplicate == null)
+			return rpc_invalid_params();
+		if (duplicate)
+			return rpc_invalid_params();
+
+		return firewall_transaction(snapshot, (transaction_cursor) => {
+			let current = firewall_owned_snapshot(transaction_cursor, args.id);
+			return !!current && firewall_set_rule(transaction_cursor, args.id, rule);
+		}, {});
+	} catch (e) {
+		return rpc_config_backend_error();
+	}
+}
+
+function firewall_set_port_forward(args)
+{
+	let allowed = [
+		'id', 'name', 'src', 'dest', 'proto', 'src_dport', 'dest_ip', 'dest_port',
+		'enabled', 'apply'
+	];
+	if (type(args) != 'object' || unsupported_config_key(args, allowed))
+		return type(args) == 'object' ? rpc_unsupported_config() : rpc_invalid_params();
+	if (!firewall_rule_id(args.id) ||
+	    (args.apply != null && type(args.apply) != 'bool'))
+		return rpc_invalid_params();
+
+	return with_configuration_lock(() => firewall_set_port_forward_locked(args));
+}
+
+function firewall_remove_port_forward_locked(args)
+{
+	let cursor;
+	try {
+		cursor = uci.cursor();
+		if (!cursor || !cursor.get_all('firewall'))
+			return rpc_config_backend_error();
+
+		let snapshot = firewall_owned_snapshot(cursor, args.id);
+		if (!snapshot)
+			return rpc_invalid_params();
+
+		return firewall_transaction(snapshot, (transaction_cursor) => {
+			let current = firewall_owned_snapshot(transaction_cursor, args.id);
+			return !!current && transaction_cursor.delete('firewall', args.id) != null;
+		}, {});
+	} catch (e) {
+		return rpc_config_backend_error();
+	}
+}
+
+function firewall_remove_port_forward(args)
+{
+	let allowed = ['id', 'apply'];
+	if (type(args) != 'object' || unsupported_config_key(args, allowed))
+		return type(args) == 'object' ? rpc_unsupported_config() : rpc_invalid_params();
+	if (!firewall_rule_id(args.id) ||
+	    (args.apply != null && type(args.apply) != 'bool'))
+		return rpc_invalid_params();
+
+	return with_configuration_lock(() => firewall_remove_port_forward_locked(args));
 }
 
 function lan_source_allowed(remote)
@@ -2429,6 +3091,10 @@ function call_method(module, method, args)
 		return lan_set_config(args);
 	case 'lan.get_static_bind_list':
 		return { static_bind_list: static_bindings() };
+	case 'dns.get_config':
+		return dns_config_result();
+	case 'dns.set_config':
+		return dns_set_config(args);
 	case 'wifi.get_config':
 		return wifi_config_result();
 	case 'wifi.set_config':
@@ -2451,6 +3117,14 @@ function call_method(module, method, args)
 			complete: false,
 		};
 	}
+	case 'firewall.get_port_forward_list':
+		return firewall_port_forward_list();
+	case 'firewall.add_port_forward':
+		return firewall_add_port_forward(args);
+	case 'firewall.set_port_forward':
+		return firewall_set_port_forward(args);
+	case 'firewall.remove_port_forward':
+		return firewall_remove_port_forward(args);
 	}
 
 	let label = `${rpc_label(module)}.${rpc_label(method)}`;
