@@ -1229,6 +1229,9 @@ function lan_set_config_locked(args)
 
 	if ((enabled || changing_pool) && !pool)
 		return rpc_invalid_params();
+	if (pool && pool.start <= network_info.address &&
+	    network_info.address <= pool.end)
+		return rpc_invalid_params();
 
 	if (args.leasetime != null && !lease_time_value(args.leasetime))
 		return rpc_invalid_params();
