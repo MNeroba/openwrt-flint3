@@ -69,7 +69,7 @@ function state_file(prefix, key)
 
 function read_state(path)
 {
-	let stat = fs.stat(path);
+	let stat = fs.lstat(path);
 
 	if (!stat || stat.type != 'file' || stat.uid != 0 || stat.gid != 0 ||
 	    stat.mode != 0o600)
@@ -135,10 +135,10 @@ function cleanup_expired_state()
 
 function state_directory_ready()
 {
-	let stat = fs.stat(STATE_DIR);
+	let stat = fs.lstat(STATE_DIR);
 
 	if (!stat)
-		stat = fs.mkdir(STATE_DIR, 0o700) ? fs.stat(STATE_DIR) : null;
+		stat = fs.mkdir(STATE_DIR, 0o700) ? fs.lstat(STATE_DIR) : null;
 
 	if (!stat || stat.type != 'directory' || stat.uid != 0 || stat.gid != 0)
 		return false;
@@ -155,10 +155,20 @@ function write_state(path, value)
 	if (!state_directory_ready())
 		return false;
 
+	let existing = fs.lstat(path);
+	if (existing && (existing.type != 'file' || existing.uid != 0 ||
+		 existing.gid != 0))
+		return false;
+
 	if (!fs.writefile(path, sprintf('%.J\n', value)))
 		return false;
 
-	return !!fs.chmod(path, 0o600);
+	if (!fs.chmod(path, 0o600))
+		return false;
+
+	let stat = fs.lstat(path);
+	return !!stat && stat.type == 'file' && stat.uid == 0 && stat.gid == 0 &&
+		stat.mode == 0o600;
 }
 
 function log_once(priority, key, message)
@@ -238,6 +248,32 @@ function backend_call(object, method, args, optional)
 	}
 
 	return result;
+}
+
+function backend_call_status(object, method, args)
+{
+	if (!ubus) {
+		log_once('err', `backend:${object}.${method}`,
+			`ubus unavailable for ${object}.${method}`);
+		return false;
+	}
+
+	try {
+		ubus.call(object, method, args ?? {});
+	} catch (e) {
+		log_once('err', `backend:${object}.${method}`,
+			`ubus ${object}.${method} raised an exception`);
+		return false;
+	}
+
+	let error = libubus.error(true);
+	if (error != null) {
+		log_once('err', `backend:${object}.${method}`,
+			`ubus ${object}.${method} failed with status ${error}`);
+		return false;
+	}
+
+	return true;
 }
 
 function random_hex(bytes)
@@ -360,6 +396,904 @@ function ipv4_mask_string(prefix)
 		return null;
 
 	return `${(mask >> 24) & 255}.${(mask >> 16) & 255}.${(mask >> 8) & 255}.${mask & 255}`;
+}
+
+function rpc_invalid_params()
+{
+	return { __rpc_error: true, code: -32602, message: 'invalid params' };
+}
+
+function rpc_unsupported_config()
+{
+	return {
+		__rpc_error: true,
+		code: -32602,
+		message: 'unsupported configuration parameter',
+	};
+}
+
+function rpc_config_backend_error()
+{
+	return {
+		__rpc_error: true,
+		code: -32001,
+		message: 'configuration apply failed',
+	};
+}
+
+function rpc_config_busy()
+{
+	return {
+		__rpc_error: true,
+		code: -32002,
+		message: 'configuration busy',
+	};
+}
+
+function unsupported_config_key(args, allowed)
+{
+	for (let name in keys(args)) {
+		if (index(allowed, name) >= 0)
+			continue;
+
+		log_once('warning', `config-key:${rpc_label(name)}`,
+			`unsupported configuration parameter: ${rpc_label(name)}`);
+		return true;
+	}
+
+	return false;
+}
+
+function strict_config_bool(value)
+{
+	if (type(value) == 'bool')
+		return value;
+
+	if (type(value) == 'int' && (value == 0 || value == 1))
+		return !!value;
+
+	return null;
+}
+
+function safe_config_text(value, minimum, maximum)
+{
+	if (type(value) != 'string' || length(value) < minimum ||
+	    length(value) > maximum)
+		return null;
+
+	for (let character in split(value, '')) {
+		let code = ord(character);
+		if (code < 32 || code == 127)
+			return null;
+	}
+
+	return value;
+}
+
+function config_token(value, maximum, allow_slash)
+{
+	if (type(value) != 'string' || !length(value) || length(value) > maximum)
+		return null;
+
+	let pattern = allow_slash ?
+		/^[A-Za-z0-9_][A-Za-z0-9_/-]*$/ :
+		/^[A-Za-z0-9_][A-Za-z0-9_]*$/;
+	return match(value, pattern) ? value : null;
+}
+
+function decimal_config_value(value, minimum, maximum)
+{
+	let number;
+
+	if (type(value) == 'int')
+		number = value;
+	else if (type(value) == 'string' && match(value, /^[0-9]{1,10}$/))
+		number = +value;
+	else
+		return null;
+
+	if (number < minimum || number > maximum)
+		return null;
+
+	return `${number}`;
+}
+
+function ipv4_canonical(address)
+{
+	if (type(address) != 'string' || length(address) > 15)
+		return null;
+
+	let parts = split(address, '.');
+	if (length(parts) != 4)
+		return null;
+
+	let result = [];
+	for (let part in parts) {
+		if (!match(part, /^[0-9]{1,3}$/) || +part > 255)
+			return null;
+
+		push(result, `${+part}`);
+	}
+
+	return join('.', result);
+}
+
+function ipv4_prefix_value(prefix)
+{
+	if (type(prefix) != 'int' || prefix < 0 || prefix > 32)
+		return null;
+
+	let value = 0;
+	for (let i = 0; i < prefix; i++)
+		value = value * 2 + 1;
+	for (let i = prefix; i < 32; i++)
+		value *= 2;
+
+	return value;
+}
+
+function ipv4_prefix_from_mask(mask)
+{
+	let number = ipv4_number(mask);
+	if (number == null)
+		return null;
+
+	for (let prefix = 0; prefix <= 32; prefix++)
+		if (ipv4_prefix_value(prefix) == number)
+			return prefix;
+
+	return null;
+}
+
+function ipv4_network_info(address, prefix)
+{
+	let number = ipv4_number(address);
+	if (number == null || ipv4_prefix_value(prefix) == null)
+		return null;
+
+	let host_size = 1;
+	for (let i = prefix; i < 32; i++)
+		host_size *= 2;
+
+	let network = int(number / host_size) * host_size;
+	return {
+		address: number,
+		prefix,
+		network,
+		broadcast: network + host_size - 1,
+		host_size,
+	};
+}
+
+function lease_time_value(value)
+{
+	if (type(value) != 'string' || length(value) > 32 ||
+	    !match(value, /^(infinite|[0-9]+[smhdw]?)$/))
+		return null;
+
+	return value;
+}
+
+function uci_section(cursor, package_name, section_name, section_type)
+{
+	let section;
+	try {
+		if (cursor.get(package_name, section_name) != section_type)
+			return null;
+
+		section = cursor.get_all(package_name, section_name);
+	} catch (e) {
+		return null;
+	}
+
+	return section && type(section) == 'object' ? section : null;
+}
+
+function uci_restore(snapshots, packages)
+{
+	let cursor;
+	try {
+		cursor = uci.cursor();
+		if (!cursor)
+			return false;
+
+		for (let snapshot in snapshots) {
+			let result;
+			if (snapshot.exists)
+				result = cursor.set(snapshot.package, snapshot.section,
+					snapshot.option, snapshot.value);
+			else if (cursor.get(snapshot.package, snapshot.section,
+					snapshot.option) != null)
+				result = cursor.delete(snapshot.package, snapshot.section,
+					snapshot.option);
+			else
+				result = true;
+
+			if (result == null)
+				return false;
+		}
+
+		for (let package_name in packages)
+			if (cursor.commit(package_name) == null)
+				return false;
+	} catch (e) {
+		return false;
+	}
+
+	return true;
+}
+
+function rollback_configuration(snapshots, packages)
+{
+	if (!uci_restore(snapshots, packages)) {
+		log_once('err', 'config:rollback', 'configuration rollback failed');
+		return false;
+	}
+
+	if (!backend_call_status('network', 'reload', {})) {
+		log_once('err', 'config:rollback-reload',
+			'configuration rollback reload failed');
+		return false;
+	}
+
+	return true;
+}
+
+function uci_transaction(changes, packages)
+{
+	let cursor;
+	let snapshots = [];
+
+	try {
+		cursor = uci.cursor();
+		if (!cursor)
+			return rpc_config_backend_error();
+
+		for (let change in changes) {
+			let section = cursor.get_all(change.package, change.section);
+			if (!section || !section['.type'])
+				return rpc_config_backend_error();
+
+			push(snapshots, {
+				package: change.package,
+				section: change.section,
+				option: change.option,
+				exists: section[change.option] != null,
+				value: section[change.option],
+			});
+		}
+
+		for (let change in changes) {
+			let result;
+			if (change.delete) {
+				result = cursor.get(change.package, change.section, change.option) == null ?
+					true : cursor.delete(change.package, change.section, change.option);
+			} else {
+				result = cursor.set(change.package, change.section,
+					change.option, change.value);
+			}
+
+			if (result == null) {
+				try { cursor.revert(); } catch (e) {}
+				return rpc_config_backend_error();
+			}
+		}
+
+		for (let package_name in packages) {
+			if (cursor.commit(package_name) != null)
+				continue;
+
+			rollback_configuration(snapshots, packages);
+			return rpc_config_backend_error();
+		}
+	} catch (e) {
+		if (length(snapshots))
+			rollback_configuration(snapshots, packages);
+		return rpc_config_backend_error();
+	}
+
+	if (!backend_call_status('network', 'reload', {})) {
+		rollback_configuration(snapshots, packages);
+		return rpc_config_backend_error();
+	}
+
+	return {};
+}
+
+function with_configuration_lock(callback)
+{
+	if (!state_directory_ready())
+		return rpc_config_backend_error();
+
+	let file;
+	try {
+		file = fs.open(`${STATE_DIR}/config.lock`, 'a+e', 0o600);
+		if (!file) {
+			log_once('err', 'config:lock',
+				'could not open configuration lock');
+			return rpc_config_backend_error();
+		}
+
+		if (!fs.chmod(`${STATE_DIR}/config.lock`, 0o600)) {
+			file.close();
+			log_once('err', 'config:lock',
+				'could not set configuration lock permissions');
+			return rpc_config_backend_error();
+		}
+
+		let stat = fs.lstat(`${STATE_DIR}/config.lock`);
+		if (!stat || stat.type != 'file' || stat.uid != 0 || stat.gid != 0 ||
+		    stat.mode != 0o600) {
+			file.close();
+			log_once('err', 'config:lock',
+				'configuration lock permissions are unsafe');
+			return rpc_config_backend_error();
+		}
+
+		if (!file.lock('xn')) {
+			file.close();
+			log_once('info', 'config:busy',
+				'configuration update already in progress');
+			return rpc_config_busy();
+		}
+	} catch (e) {
+		if (file)
+			file.close();
+		log_once('err', 'config:lock', 'could not acquire configuration lock');
+		return rpc_config_backend_error();
+	}
+
+	let result;
+	try {
+		result = callback();
+	} catch (e) {
+		log_once('err', 'config:exception', 'configuration update failed');
+		result = rpc_config_backend_error();
+	}
+
+	try { file.lock('u'); } catch (e) {}
+	try { file.close(); } catch (e) {}
+	return result;
+}
+
+function find_wifi_target(cursor, iface_name)
+{
+	let matches = [];
+
+	try {
+		cursor.foreach('wireless', 'wifi-iface', (config) => {
+			let section = config['.name'];
+			let names = [section, config.ifname, config.name];
+
+			for (let name in names) {
+				if (name != iface_name || index(matches, section) >= 0)
+					continue;
+
+				push(matches, section);
+				break;
+			}
+		});
+	} catch (e) {
+		return null;
+	}
+
+	if (length(matches) > 1)
+		return { invalid: true };
+	if (!length(matches))
+		return null;
+
+	let iface = uci_section(cursor, 'wireless', matches[0], 'wifi-iface');
+	let radio = iface?.device;
+	let radio_config = radio ?
+		uci_section(cursor, 'wireless', radio, 'wifi-device') : null;
+	if (!iface || !radio_config)
+		return null;
+
+	return { section: matches[0], iface, radio, radio_config };
+}
+
+function find_wifi_target_from_status(cursor, iface_name)
+{
+	let status = backend_call('network.wireless', 'status', {}, true);
+	if (!status || type(status) != 'object')
+		return null;
+
+	let matches = [];
+	try {
+		for (let radio, radio_data in status) {
+			if (!radio_data || type(radio_data) != 'object')
+				continue;
+
+			for (let iface in radio_data.interfaces ?? []) {
+				if (!iface || type(iface) != 'object')
+					continue;
+
+				let config = iface.config ?? {};
+				let section = iface.section ?? config['.name'] ?? config.section;
+				let ifname = iface.ifname ?? config.ifname;
+				if ((ifname != iface_name && section != iface_name) || !section)
+					continue;
+
+				let uci_iface = uci_section(cursor, 'wireless', section, 'wifi-iface');
+				let device = uci_iface?.device ?? radio;
+				let radio_config = uci_section(cursor, 'wireless', device,
+					'wifi-device');
+				if (!uci_iface || !radio_config)
+					continue;
+
+				push(matches, {
+					section,
+					iface: uci_iface,
+					radio: device,
+					radio_config,
+				});
+			}
+		}
+	} catch (e) {
+		return null;
+	}
+
+	return length(matches) == 1 ? matches[0] : null;
+}
+
+function wifi_channel_value(value, band)
+{
+	if (value == 'auto')
+		return value;
+
+	let channel = decimal_config_value(value, 1, 233);
+	if (!channel)
+		return null;
+
+	band = `${band ?? ''}`;
+	if ((band == '2.4' || band == '2g' || band == '2GHz') && +channel > 14)
+		return null;
+	if ((band == '5' || band == '5g' || band == '5GHz') && +channel > 196)
+		return null;
+
+	return channel;
+}
+
+function wifi_encryption_value(value)
+{
+	let supported = [
+		'none', 'psk2', 'psk-mixed', 'sae-mixed', 'psk2+ccmp',
+		'psk-mixed+ccmp', 'psk+ccmp', 'ccmp'
+	];
+
+	return type(value) == 'string' && index(supported, value) >= 0 ? value : null;
+}
+
+function wifi_set_config_locked(args)
+{
+	let cursor;
+	try {
+		cursor = uci.cursor();
+	} catch (e) {
+		return rpc_config_backend_error();
+	}
+
+	if (!cursor)
+		return rpc_config_backend_error();
+
+	let iface_name = safe_ifname(args.iface_name);
+	if (type(args.iface_name) != 'string' || !iface_name)
+		return rpc_invalid_params();
+
+	let target = find_wifi_target(cursor, iface_name);
+	if (target?.invalid)
+		return rpc_invalid_params();
+	if (!target)
+		target = find_wifi_target_from_status(cursor, iface_name);
+	if (!target)
+		return rpc_invalid_params();
+
+	if (args.device != null &&
+	    (type(args.device) != 'string' || safe_ifname(args.device) != target.radio))
+		return rpc_invalid_params();
+
+	for (let name in ['init', 'auto_portal', 'disguise', 'macaddr',
+		'random_bssid', 'chan_6g_only_psc', 'usemode', 'txpower']) {
+		if (args[name] != null) {
+			log_once('warning', `config-key:${name}`,
+				`unsupported configuration parameter: ${name}`);
+			return rpc_unsupported_config();
+		}
+	}
+
+	let changes = [];
+	let current_encryption = target.iface.encryption ?? 'none';
+	let encryption = current_encryption;
+	if (args.encryption != null) {
+		encryption = wifi_encryption_value(args.encryption);
+		if (!encryption)
+			return rpc_invalid_params();
+
+		push(changes, {
+			package: 'wireless', section: target.section,
+			option: 'encryption', value: encryption,
+		});
+	}
+
+	if (args.enabled != null) {
+		let enabled = strict_config_bool(args.enabled);
+		if (enabled == null)
+			return rpc_invalid_params();
+
+		/* Keep this scoped to the selected BSS until radio-wide SDK4 writes
+		 * are established. */
+		push(changes, {
+			package: 'wireless', section: target.section,
+			option: 'disabled', value: enabled ? '0' : '1',
+		});
+	}
+
+	if (args.ssid != null) {
+		let ssid = safe_config_text(args.ssid, 1, 32);
+		if (!ssid)
+			return rpc_invalid_params();
+
+		push(changes, {
+			package: 'wireless', section: target.section,
+			option: 'ssid', value: ssid,
+		});
+	}
+
+	if (args.key != null) {
+		let key = safe_config_text(args.key, 8, 63);
+		if (!key || encryption == 'none')
+			return rpc_invalid_params();
+
+		push(changes, {
+			package: 'wireless', section: target.section,
+			option: 'key', value: key,
+		});
+	}
+
+	if (args.hidden != null) {
+		let hidden = strict_config_bool(args.hidden);
+		if (hidden == null)
+			return rpc_invalid_params();
+
+		push(changes, {
+			package: 'wireless', section: target.section,
+			option: 'hidden', value: hidden ? '1' : '0',
+		});
+	}
+
+	if (args.channel != null) {
+		let channel = wifi_channel_value(args.channel,
+			radio_band(target.radio_config));
+		if (!channel)
+			return rpc_invalid_params();
+
+		push(changes, {
+			package: 'wireless', section: target.radio,
+			option: 'channel', value: channel,
+		});
+	}
+
+	if (args.hwmode != null) {
+		let hwmode = config_token(args.hwmode, 32, true);
+		if (!hwmode)
+			return rpc_invalid_params();
+
+		push(changes, {
+			package: 'wireless', section: target.radio,
+			option: 'hwmode', value: hwmode,
+		});
+	}
+
+	if (args.htmode != null) {
+		let htmode = config_token(args.htmode, 32, true);
+		if (!htmode)
+			return rpc_invalid_params();
+
+		push(changes, {
+			package: 'wireless', section: target.radio,
+			option: 'htmode', value: htmode,
+		});
+	}
+
+	if (encryption != 'none') {
+		let key = args.key ?? target.iface.key;
+		if (type(key) != 'string' || length(key) < 8 || length(key) > 64 ||
+		    !safe_config_text(key, 8, 64))
+			return rpc_invalid_params();
+	}
+
+	if (args.encryption == 'none' && target.iface.key != null && args.key == null)
+		push(changes, {
+			package: 'wireless', section: target.section,
+			option: 'key', delete: true,
+		});
+
+	if (!length(changes))
+		return rpc_invalid_params();
+
+	return uci_transaction(changes, ['wireless']);
+}
+
+function wifi_set_config(args)
+{
+	let allowed = [
+		'device', 'hwmode', 'htmode', 'iface_name', 'ssid', 'encryption',
+		'key', 'enabled', 'hidden', 'channel', 'auto_portal', 'disguise',
+		'macaddr', 'random_bssid', 'chan_6g_only_psc', 'usemode', 'init',
+		'txpower'
+	];
+
+	if (type(args) != 'object' || unsupported_config_key(args, allowed))
+		return type(args) == 'object' ? rpc_unsupported_config() : rpc_invalid_params();
+
+	if (type(args.iface_name) != 'string' || !safe_ifname(args.iface_name))
+		return rpc_invalid_params();
+
+	return with_configuration_lock(() => wifi_set_config_locked(args));
+}
+
+function find_lan_dhcp(cursor)
+{
+	let named = uci_section(cursor, 'dhcp', 'lan', 'dhcp');
+	if (named && (named.interface == null || named.interface == 'lan'))
+		return { section: 'lan', config: named };
+
+	let matches = [];
+	try {
+		cursor.foreach('dhcp', 'dhcp', (config) => {
+			if (config.interface == 'lan')
+				push(matches, { section: config['.name'], config });
+		});
+	} catch (e) {
+		return { invalid: true };
+	}
+
+	return length(matches) == 1 ? matches[0] :
+		length(matches) ? { invalid: true } : null;
+}
+
+function lan_pool_from_offsets(network, start, limit)
+{
+	start = decimal_config_value(start, 1, network.host_size - 2);
+	limit = decimal_config_value(limit, 1, network.host_size - 2);
+	if (!start || !limit || +start + +limit - 1 > network.host_size - 2)
+		return null;
+
+	return {
+		start_offset: +start,
+		end_offset: +start + +limit - 1,
+		start: network.network + +start,
+		end: network.network + +start + +limit - 1,
+	};
+}
+
+function lan_pool_from_addresses(network, start, end)
+{
+	let start_address = ipv4_canonical(start);
+	let end_address = ipv4_canonical(end);
+	if (!start_address || !end_address)
+		return null;
+
+	let start_number = ipv4_number(start_address);
+	let end_number = ipv4_number(end_address);
+	let start_offset = start_number - network.network;
+	let end_offset = end_number - network.network;
+	if (start_offset < 1 || end_offset <= start_offset ||
+	    end_offset > network.host_size - 2)
+		return null;
+
+	return {
+		start_offset,
+		end_offset,
+		start: start_number,
+		end: end_number,
+	};
+}
+
+function ipv4_networks_overlap(first, second)
+{
+	return first.network <= second.broadcast &&
+		second.network <= first.broadcast;
+}
+
+function lan_static_network_conflict(cursor, candidate)
+{
+	let conflict = false;
+	let invalid = false;
+
+	try {
+		cursor.foreach('network', 'interface', (section) => {
+			if (conflict || invalid || section['.name'] == 'lan' ||
+			    section.proto != 'static')
+				return;
+
+			let has_ip = section.ipaddr != null;
+			let has_mask = section.netmask != null;
+			if (!has_ip && !has_mask)
+				return;
+			if (!has_ip || !has_mask) {
+				invalid = true;
+				return;
+			}
+
+			let ip = ipv4_canonical(section.ipaddr);
+			let netmask = ipv4_canonical(section.netmask);
+			let prefix = ipv4_prefix_from_mask(netmask);
+			let network = prefix == null ? null :
+				ipv4_network_info(ip, prefix);
+			if (!network || prefix < 1 || prefix > 30) {
+				invalid = true;
+				return;
+			}
+
+			if (ipv4_networks_overlap(candidate, network))
+				conflict = true;
+		});
+	} catch (e) {
+		return null;
+	}
+
+	return invalid ? null : conflict;
+}
+
+function lan_active_network_conflict(cursor, candidate)
+{
+	let conflict = false;
+
+	try {
+		cursor.foreach('network', 'interface', (section) => {
+			let name = section['.name'];
+			if (conflict || name == 'lan' || section.proto == 'static' ||
+			    !safe_ifname(name))
+				return;
+
+			let status = backend_call(`network.interface.${name}`, 'status', {}, true);
+			for (let address in status?.['ipv4-address'] ?? []) {
+				let prefix = address.mask == null ? null : +address.mask;
+				let network = prefix == null ? null :
+					ipv4_network_info(address.address, prefix);
+				if (network && ipv4_networks_overlap(candidate, network)) {
+					conflict = true;
+					return;
+				}
+			}
+		});
+	} catch (e) {}
+
+	return conflict;
+}
+
+function lan_set_config_locked(args)
+{
+	let cursor;
+	try {
+		cursor = uci.cursor();
+	} catch (e) {
+		return rpc_config_backend_error();
+	}
+
+	if (!cursor || args.interface != 'lan')
+		return rpc_invalid_params();
+
+	let network = uci_section(cursor, 'network', 'lan', 'interface');
+	let dhcp = find_lan_dhcp(cursor);
+	if (!network || !dhcp || dhcp.invalid ||
+	    network.proto != 'static')
+		return rpc_invalid_params();
+
+	let current_ip = ipv4_canonical(network.ipaddr);
+	let current_mask = ipv4_canonical(network.netmask);
+	let changing_address = args.ip != null || args.netmask != null;
+	if (!current_ip || !current_mask ||
+	    (changing_address && (args.ip == null || args.netmask == null)))
+		return rpc_invalid_params();
+
+	let ip = changing_address ? ipv4_canonical(args.ip) : current_ip;
+	let netmask = changing_address ? ipv4_canonical(args.netmask) : current_mask;
+	let prefix = ipv4_prefix_from_mask(netmask);
+	if (!ip || !netmask || prefix == null || prefix < 1 || prefix > 30)
+		return rpc_invalid_params();
+
+	let network_info = ipv4_network_info(ip, prefix);
+	let ip_number = ipv4_number(ip);
+	if (!network_info || ip_number == network_info.network ||
+	    ip_number == network_info.broadcast)
+		return rpc_invalid_params();
+
+	let conflict = lan_static_network_conflict(cursor, network_info);
+	if (conflict == null || conflict ||
+	    lan_active_network_conflict(cursor, network_info))
+		return rpc_invalid_params();
+
+	let changing_pool = args.start != null || args.end != null;
+	if (changing_pool && (args.start == null || args.end == null))
+		return rpc_invalid_params();
+
+	let ignore = dhcp.config.ignore;
+	if (ignore != null && ignore != '0' && ignore != '1')
+		return rpc_invalid_params();
+
+	let enabled = ignore != '1';
+	if (args.enable != null) {
+		enabled = strict_config_bool(args.enable);
+		if (enabled == null)
+			return rpc_invalid_params();
+	}
+
+	let pool = null;
+	if (changing_pool)
+		pool = lan_pool_from_addresses(network_info, args.start, args.end);
+	else if (dhcp.config.start != null && dhcp.config.limit != null)
+		pool = lan_pool_from_offsets(network_info,
+			dhcp.config.start, dhcp.config.limit);
+
+	if ((enabled || changing_pool) && !pool)
+		return rpc_invalid_params();
+
+	if (args.leasetime != null && !lease_time_value(args.leasetime))
+		return rpc_invalid_params();
+
+	let changes = [];
+	if (changing_address) {
+		push(changes, {
+			package: 'network', section: 'lan', option: 'ipaddr', value: ip,
+		});
+		push(changes, {
+			package: 'network', section: 'lan', option: 'netmask', value: netmask,
+		});
+	}
+
+	if (changing_pool) {
+		push(changes, {
+			package: 'dhcp', section: dhcp.section, option: 'start',
+			value: `${pool.start_offset}`,
+		});
+		push(changes, {
+			package: 'dhcp', section: dhcp.section, option: 'limit',
+			value: `${pool.end_offset - pool.start_offset + 1}`,
+		});
+	}
+
+	if (args.enable != null)
+		push(changes, {
+			package: 'dhcp', section: dhcp.section, option: 'ignore',
+			value: enabled ? '0' : '1',
+		});
+
+	if (args.leasetime != null)
+		push(changes, {
+			package: 'dhcp', section: dhcp.section, option: 'leasetime',
+			value: args.leasetime,
+		});
+
+	if (!length(changes))
+		return rpc_invalid_params();
+
+	return uci_transaction(changes, ['network', 'dhcp']);
+}
+
+function lan_set_config(args)
+{
+	let allowed = [
+		'interface', 'ip', 'start', 'end', 'netmask', 'enable', 'leasetime',
+		'lpr', 'dns', 'ap_isolate', 'transfer_enable', 'wan_isolate'
+	];
+
+	if (type(args) != 'object' || unsupported_config_key(args, allowed))
+		return type(args) == 'object' ? rpc_unsupported_config() : rpc_invalid_params();
+
+	if (args.interface != 'lan')
+		return rpc_invalid_params();
+
+	for (let name in ['lpr', 'dns', 'ap_isolate', 'transfer_enable', 'wan_isolate']) {
+		if (args[name] != null) {
+			log_once('warning', `config-key:${name}`,
+				`unsupported configuration parameter: ${name}`);
+			return rpc_unsupported_config();
+		}
+	}
+
+	return with_configuration_lock(() => lan_set_config_locked(args));
 }
 
 function ipv6_link_local(address)
@@ -1252,39 +2186,12 @@ function timezone_config_result(args)
 	return { updated: true };
 }
 
-function backend_call_status(object, method, args, optional)
-{
-	if (!ubus) {
-		log_once(optional ? 'info' : 'err', `backend:${object}.${method}`,
-			`ubus unavailable for ${object}.${method}`);
-		return false;
-	}
-
-	try {
-		/* Some successful ubus methods, including system.reboot, send no body. */
-		ubus.call(object, method, args ?? {});
-	} catch (e) {
-		log_once(optional ? 'info' : 'err', `backend:${object}.${method}`,
-			`ubus ${object}.${method} raised an exception`);
-		return false;
-	}
-
-	let error = libubus.error(true);
-	if (error != null) {
-		log_once(optional ? 'info' : 'err', `backend:${object}.${method}`,
-			`ubus ${object}.${method} failed with status ${error}`);
-		return false;
-	}
-
-	return true;
-}
-
 function reboot_result(args)
 {
 	if (type(args) != 'object' || length(keys(args)))
 		return { __invalid: true };
 
-	if (!backend_call_status('system', 'reboot', {}, false))
+	if (!backend_call_status('system', 'reboot', {}))
 		return { __backend_error: true };
 
 	return { reboot: true };
@@ -1309,10 +2216,14 @@ function call_method(module, method, args)
 		return wan_status_result();
 	case 'lan.get_config_list':
 		return lan_config_result();
+	case 'lan.set_config':
+		return lan_set_config(args);
 	case 'lan.get_static_bind_list':
 		return { static_bind_list: static_bindings() };
 	case 'wifi.get_config':
 		return wifi_config_result();
+	case 'wifi.set_config':
+		return wifi_set_config(args);
 	case 'wifi.get_status':
 		return wifi_status_result();
 	case 'clients.get_list':
@@ -1512,6 +2423,12 @@ function handle_call(request, remote)
 		log_call_debug(module, method, args, remote, auth, started,
 			'method-not-found');
 		return rpc_error(id, -32601, 'method not found');
+	}
+	if (result?.__rpc_error) {
+		let error_class = result.code == -32602 ? 'invalid-params' :
+			'configuration-failed';
+		log_call_debug(module, method, args, remote, auth, started, error_class);
+		return rpc_error(id, result.code, result.message);
 	}
 	if (result == null) {
 		log_call_debug(module, method, args, remote, auth, started,

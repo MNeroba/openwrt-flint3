@@ -29,15 +29,58 @@ form are accepted. The exact stock response fields are not part of the public
 OpenWrt interface, so fields are only reported when their local backend
 provides them.
 
+The two setters are deliberately narrower than the stock SDK4 schema. `wifi.set_config`
+accepts an existing BSS selected by its unique `iface_name` and supports that BSS's
+`enabled`, `ssid`, `encryption`, `key` and `hidden` options, plus the owning radio's
+`channel`, `hwmode` and `htmode`. The optional `device` is checked against the selected
+BSS rather than used to select an arbitrary section. The implementation resolves both
+configured and runtime-generated interface names, while preserving unrelated BSSes and
+radios; radio-level fields are applied only to the selected BSS's owning radio. Radio-wide
+enable/disable is not exposed because the SDK4 write target for that operation is not
+established; callers must use the selected BSS's `enabled` field. `hidden` is written using
+OpenWrt's canonical `ignore_broadcast_ssid` option, and `hwmode`/`htmode` are restricted to
+the values accepted by this tree's wireless schema. The encryption allowlist includes the
+source-supported `psk3`/`psk3-mixed`/`sae-compat` aliases as well as the stock-compatible
+PSK/SAE modes. A 64-character key is accepted only when it is hexadecimal, matching
+OpenWrt's raw-PSK handling; shorter keys use the normal 8--63 character passphrase range.
+When available, `iwinfo.freqlist` is also consulted for the selected radio's source-derived
+channel list; regulatory availability remains a runtime property when that list is
+unavailable. The stock bytecode also mentions a bare `ccmp` value, but this tree has no
+source-backed local authentication mode for that value; it is rejected rather than being
+treated as an open or downgraded network. Stock-specific portal, MAC, random-BSSID, 6 GHz
+PSC, use-mode, txpower, environment and MLO fields are rejected until their OpenWrt
+semantics are established. `init` is also rejected because its SDK4 lifecycle meaning is
+not established here.
+
+`lan.set_config` accepts only `interface: "lan"`, `ip`, `netmask`, `start`, `end`, `enable`
+and `leasetime`. The LAN address and netmask must be supplied together when changed. `start`
+and `end` are absolute IPv4 addresses; they are validated against the resulting subnet,
+must identify at least two usable addresses (matching the stock validator), and are
+converted to the standard OpenWrt dnsmasq `start`/`limit` offsets. The getter converts those
+offsets back to absolute `start`/`end` addresses and uses the same unique LAN DHCP section
+discovery as the setter. Static IPv4 subnets and dynamically configured active interfaces
+are checked for overlap before a change is accepted; an unavailable or malformed active
+interface status fails closed. Other SDK4 LAN fields, including DNS, guest/isolation and
+transfer settings, are rejected rather than ignored. Existing UCI values and the target
+sections are validated before either setter commits. A root-owned runtime lock serializes
+setters, and changes to `network`/`dhcp` or `wireless` are committed as one transaction with
+restoration attempted if commit or the standard ubus `network.reload` operation fails. In
+this OpenWrt tree `/sbin/wifi reload` delegates to the same `ubus call network reload` path;
+the response confirms reload acceptance, not completion of asynchronous hostapd/netifd
+setup. A successful LAN address change can disconnect the caller; the client must reconnect
+using the new address.
+
 ## Deliberate non-goals
 
 * No cloud, GoodCloud, account or telemetry integration.
 * No guessed UDP/mDNS/GL-specific discovery protocol. The official local flow
   permits adding an initialized device by IP and password; discovery remains
   unsupported until its wire format is established.
-* No setters, reboot, password, DNS, firewall, VPN, Multi-WAN or AdGuard
-  methods in this core package. Unknown and not-yet-proven methods return a
-  JSON-RPC `-32601` error and are logged for a later, separate PR.
+* No DNS, firewall, VPN, Multi-WAN or AdGuard methods in this core package. Unknown and
+  not-yet-proven methods return a JSON-RPC `-32601` error and are logged for a later,
+  separate PR. Static DHCP bindings, guest-network configuration, Wi-Fi txpower/MLO/
+  environment configuration, radio-wide Wi-Fi enable/disable, reboot and password changes
+  remain outside this focused setter follow-up.
 * The stock `/ws` event stream remains unsupported until its local state and
   event contracts are runtime-verified.
 * No stock OTA advertisement or firmware upgrade initiation. Firmware data is
