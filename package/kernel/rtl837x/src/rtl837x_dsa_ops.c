@@ -779,6 +779,25 @@ static void rtl837x_port_fast_age(struct dsa_switch *ds, int port)
 			ret);
 }
 
+static int rtl837x_fdb_vid(u16 vid, struct dsa_db db, u16 *fdb_vid)
+{
+	if (vid) {
+		*fdb_vid = vid;
+		return 0;
+	}
+
+	switch (db.type) {
+	case DSA_DB_PORT:
+		*fdb_vid = dsa_tag_8021q_standalone_vid(db.dp);
+		return 0;
+	case DSA_DB_BRIDGE:
+		*fdb_vid = dsa_tag_8021q_bridge_vid(db.bridge.num);
+		return 0;
+	default:
+		return -EOPNOTSUPP;
+	}
+}
+
 static int rtl837x_port_vlan_filtering(struct dsa_switch *ds, int port,
 				       bool vlan_filtering,
 				       struct netlink_ext_ack *extack)
@@ -930,6 +949,7 @@ static int rtl837x_port_fdb_add(struct dsa_switch *ds, int port,
 	struct rtk_gsw *gsw = ds->priv;
 	rtk_l2_ucastAddr_t l2 = { 0 };
 	rtk_mac_t mac = { 0 };
+	u16 fdb_vid;
 	int ret;
 
 	if (!rtl837x_valid_port(gsw, port))
@@ -939,10 +959,14 @@ static int rtl837x_port_fdb_add(struct dsa_switch *ds, int port,
 	if (gsw->chip_id == CHIP_RTL8372N && port == gsw->cpu_port)
 		return 0;
 
+	ret = rtl837x_fdb_vid(vid, db, &fdb_vid);
+	if (ret)
+		return ret;
+
 	memcpy(mac.octet, addr, ETH_ALEN);
 	memcpy(l2.mac.octet, addr, ETH_ALEN);
-	l2.ivl = vid ? 1 : 0;
-	l2.vid_fid = vid;
+	l2.ivl = fdb_vid ? 1 : 0;
+	l2.vid_fid = fdb_vid;
 	l2.port = port;
 	l2.auth = 1;
 	l2.is_static = 1;
@@ -958,6 +982,7 @@ static int rtl837x_port_fdb_del(struct dsa_switch *ds, int port,
 	struct rtk_gsw *gsw = ds->priv;
 	rtk_l2_ucastAddr_t l2 = { 0 };
 	rtk_mac_t mac = { 0 };
+	u16 fdb_vid;
 	int ret;
 
 	if (!rtl837x_valid_port(gsw, port))
@@ -966,10 +991,14 @@ static int rtl837x_port_fdb_del(struct dsa_switch *ds, int port,
 	if (gsw->chip_id == CHIP_RTL8372N && port == gsw->cpu_port)
 		return 0;
 
+	ret = rtl837x_fdb_vid(vid, db, &fdb_vid);
+	if (ret)
+		return ret;
+
 	memcpy(mac.octet, addr, ETH_ALEN);
 	memcpy(l2.mac.octet, addr, ETH_ALEN);
-	l2.ivl = vid ? 1 : 0;
-	l2.vid_fid = vid;
+	l2.ivl = fdb_vid ? 1 : 0;
+	l2.vid_fid = fdb_vid;
 	l2.port = port;
 	l2.is_static = 1;
 
