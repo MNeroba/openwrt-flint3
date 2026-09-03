@@ -129,14 +129,14 @@ static int rtl837x_open_isolation(struct rtk_gsw *gsw)
 	return 0;
 }
 
-static int rtl837x_commit_pvid(struct rtk_gsw *gsw, int port)
+static int rtl837x_commit_pvid_for_mode(struct rtk_gsw *gsw, int port,
+					bool vlan_filtering)
 {
-	struct dsa_port *dp = dsa_to_port(&gsw->ds, port);
 	bool valid = gsw->tag8021q_pvid_valid[port];
 	u16 vid = gsw->tag8021q_pvid[port];
 	int ret;
 
-	if (dsa_port_is_vlan_filtering(dp)) {
+	if (vlan_filtering) {
 		vid = gsw->bridge_pvid[port];
 		valid = gsw->bridge_pvid_valid[port];
 	}
@@ -147,6 +147,14 @@ static int rtl837x_commit_pvid(struct rtk_gsw *gsw, int port)
 
 	gsw->port_pvid[port] = valid ? vid : 0;
 	return 0;
+}
+
+static int rtl837x_commit_pvid(struct rtk_gsw *gsw, int port)
+{
+	struct dsa_port *dp = dsa_to_port(&gsw->ds, port);
+
+	return rtl837x_commit_pvid_for_mode(gsw, port,
+					    dsa_port_is_vlan_filtering(dp));
 }
 
 static int rtl837x_set_stp_state(struct rtk_gsw *gsw, int port, u8 state)
@@ -776,17 +784,32 @@ static int rtl837x_port_vlan_filtering(struct dsa_switch *ds, int port,
 				       struct netlink_ext_ack *extack)
 {
 	struct rtk_gsw *gsw = ds->priv;
-	int ret;
+	struct dsa_port *dp;
+	bool old_vlan_filtering;
+	int ret, rollback_ret;
 
 	if (!rtl837x_user_port(gsw, port))
 		return 0;
+
+	dp = dsa_to_port(ds, port);
+	old_vlan_filtering = dsa_port_is_vlan_filtering(dp);
 
 	ret = rtk_vlan_portIgrFilterEnable_set(port,
 					       vlan_filtering ? ENABLED : DISABLED);
 	if (ret)
 		return rtl837x_to_errno(ret);
 
-	return rtl837x_commit_pvid(gsw, port);
+	ret = rtl837x_commit_pvid_for_mode(gsw, port, vlan_filtering);
+	if (ret) {
+		rollback_ret = rtk_vlan_portIgrFilterEnable_set(
+				port, old_vlan_filtering ? ENABLED : DISABLED);
+		if (rollback_ret)
+			dev_err(gsw->dev,
+				"failed to restore VLAN ingress filtering on port %d: %d\n",
+				port, rtl837x_to_errno(rollback_ret));
+	}
+
+	return ret;
 }
 
 static int rtl837x_port_vlan_add(struct dsa_switch *ds, int port,
