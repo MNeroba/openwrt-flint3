@@ -368,7 +368,22 @@ static int rtl837x_sdsmode(const char *name, rtk_sds_mode_t *mode)
 		}
 	}
 
-	return -1;
+	return -EINVAL;
+}
+
+static int rtl837x_parse_sdsmode(struct device_node *np, const char *propname,
+				 rtk_sds_mode_t *mode)
+{
+	const char *name;
+	int ret;
+
+	ret = of_property_read_string(np, propname, &name);
+	if (ret == -EINVAL)
+		return 0;
+	if (ret)
+		return ret;
+
+	return rtl837x_sdsmode(name, mode);
 }
 
 static int rtl8372n_igmp_init(struct rtk_gsw *gsw)
@@ -817,8 +832,6 @@ static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 	struct rtk_gsw *gsw;
 	struct device_node *ethernet;
 	struct net_device *master;
-	const char *sdsmode_name;
-	rtk_sds_mode_t sdsmode;
 	struct regmap_config rc;
 	u32 cpu_port;
 	bool cpu_port_from_dsa = false;
@@ -900,13 +913,19 @@ static int rtl837x_dsa_probe(struct mdio_device *mdiodev)
 		dev_warn(dev, "failed to get RESET GPIO!!!\n");
 	}
 
-	if (!of_property_read_string(np, "rtl837x,sds0mode", &sdsmode_name) &&
-			!rtl837x_sdsmode(sdsmode_name, &sdsmode))
-		gsw->sds0mode = sdsmode;
+	ret = rtl837x_parse_sdsmode(np, "rtl837x,sds0mode", &gsw->sds0mode);
+	if (ret) {
+		dev_warn(dev,
+			 "invalid rtl837x,sds0mode property: %d; "
+			 "leaving SerDes disabled\n", ret);
+	}
 
-	if (!of_property_read_string(np, "rtl837x,sds1mode", &sdsmode_name) &&
-			!rtl837x_sdsmode(sdsmode_name, &sdsmode))
-		gsw->sds1mode = sdsmode;
+	ret = rtl837x_parse_sdsmode(np, "rtl837x,sds1mode", &gsw->sds1mode);
+	if (ret) {
+		dev_warn(dev,
+			 "invalid rtl837x,sds1mode property: %d; "
+			 "leaving SerDes disabled\n", ret);
+	}
 
 	memset(&(gsw->swap_cfg),0,sizeof(rtl837x_pnswap_cfg_t));
 	if (of_property_read_bool(np, "sds0-rx-swap"))
