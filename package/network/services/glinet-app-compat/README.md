@@ -157,8 +157,8 @@ nftables, iptables or stock `port_forward` kernel-module commands are used.
   nftables rules. Unknown and not-yet-proven methods return a JSON-RPC `-32601`
   error and are logged for a later, separate PR. Static DHCP bindings,
   guest-network configuration, Wi-Fi txpower/MLO/environment configuration,
-  radio-wide Wi-Fi enable/disable and password changes remain outside this
-  focused setter follow-up.
+  and radio-wide Wi-Fi enable/disable remain outside this focused setter
+  follow-up.
 * The stock `/ws` event stream remains unsupported until its local state and
   event contract are runtime-verified.
 * No stock OTA advertisement or firmware upgrade initiation. Firmware data is
@@ -207,22 +207,24 @@ passes it to `gl-session.logout` and returns a JSON `null` result. The local
 implementation keeps the stronger source-bound ownership checks used by this
 compatibility layer.
 
-## Local-management follow-up
+## Local-management layers
 
-This local-management follow-up adds only two authenticated methods
-whose wire names and local behavior are source-proven by the stock SDK4
-system RPC and standard OpenWrt configuration lifecycle:
+The local-management stack provides authenticated, validated setters for:
 
-| RPC | Result |
-| --- | --- |
-| `system.set_timezone_config` | Validates and commits `timezone`, `zonename` and optional `autotimezone` in the existing `system` section, then reloads system configuration |
-| `system.reboot` | Requests the standard OpenWrt ubus `system.reboot` action |
+* system timezone and reboot (`system.set_timezone_config`,
+  `system.reboot`);
+* Wi-Fi BSS configuration (`wifi.set_config`);
+* LAN/DHCP configuration (`lan.set_config`);
+* WAN DNS mode and manual IPv4 resolvers (`dns.set_config`);
+* owned IPv4 WAN-to-LAN port forwards (`firewall.add_port_forward`,
+  `firewall.set_port_forward`, and `firewall.remove_port_forward`).
 
-The follow-up rejects unknown fields, invalid zone names and malformed boolean
-values. It does not add a hostname setter because no exact SDK4 setter schema
-was established in the source audit. Wi-Fi, LAN/DHCP, DNS and firewall setters
-remain separate future work until their complete argument and rollback
-semantics are source-proven.
+The corresponding getters expose the resulting OpenWrt configuration. The
+system setter rejects unknown fields, invalid zone names and malformed boolean
+values; no hostname setter is included because no exact SDK4 setter schema was
+established in the source audit. The package does not claim full GL.iNet App
+support; VPN, cloud, discovery, firmware-update and other unsupported methods
+remain outside this stack.
 
 ## Diagnostics
 

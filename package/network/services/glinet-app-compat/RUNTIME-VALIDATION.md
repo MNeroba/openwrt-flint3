@@ -278,22 +278,22 @@ not marked PASS here.
 
 | Feature | Host tests | OpenWrt build | Router runtime | Official App | Hardware-dependent |
 | --- | --- | --- | --- | --- | --- |
-| challenge/login | PASS (fixture harness) | package required | NOT PERFORMED | NOT PERFORMED | No |
-| alive/logout | PASS (fixture harness) | package required | NOT PERFORMED | NOT PERFORMED | No |
+| challenge/login | NOT RUN (no protocol/configuration fixture harness in tree) | package required | NOT PERFORMED | NOT PERFORMED | No |
+| alive/logout | NOT RUN (no protocol/configuration fixture harness in tree) | package required | NOT PERFORMED | NOT PERFORMED | No |
 | system info/status/load | source/fixture checks | package required | NOT PERFORMED | NOT PERFORMED | Yes |
 | WAN status | fixture checks | package required | NOT PERFORMED | NOT PERFORMED | Yes |
 | LAN getter | fixture checks | package required | NOT PERFORMED | NOT PERFORMED | Yes |
-| LAN setter/DHCP | PASS (fixture harness) | package required | NOT PERFORMED | NOT PERFORMED | Yes |
+| LAN setter/DHCP | NOT RUN (no protocol/configuration fixture harness in tree) | package required | NOT PERFORMED | NOT PERFORMED | Yes |
 | Wi-Fi getter | fixture checks | package required | NOT PERFORMED | NOT PERFORMED | Yes |
-| Wi-Fi setter | PASS (fixture harness) | package required | NOT PERFORMED | NOT PERFORMED | Yes |
+| Wi-Fi setter | NOT RUN (no protocol/configuration fixture harness in tree) | package required | NOT PERFORMED | NOT PERFORMED | Yes |
 | clients | fixture checks | package required | NOT PERFORMED | NOT PERFORMED | Yes |
-| timezone | source/fixture checks | package required | NOT PERFORMED | NOT PERFORMED | No |
+| timezone | source check only | package required | NOT PERFORMED | NOT PERFORMED | No |
 | reboot | source check only | package required | NOT PERFORMED | NOT PERFORMED | No |
-| DNS automatic | PASS (fixture harness) | package required | NOT PERFORMED | NOT PERFORMED | Yes |
-| DNS manual | PASS (fixture harness) | package required | NOT PERFORMED | NOT PERFORMED | Yes |
-| port-forward list | PASS (fixture harness) | package required | NOT PERFORMED | NOT PERFORMED | Yes |
-| port-forward add/update | PASS (fixture harness) | package required | NOT PERFORMED | NOT PERFORMED | Yes |
-| port-forward delete | PASS (fixture harness) | package required | NOT PERFORMED | NOT PERFORMED | Yes |
+| DNS automatic | NOT RUN (no protocol/configuration fixture harness in tree) | package required | NOT PERFORMED | NOT PERFORMED | Yes |
+| DNS manual | NOT RUN (no protocol/configuration fixture harness in tree) | package required | NOT PERFORMED | NOT PERFORMED | Yes |
+| port-forward list | NOT RUN (no protocol/configuration fixture harness in tree) | package required | NOT PERFORMED | NOT PERFORMED | Yes |
+| port-forward add/update | NOT RUN (no protocol/configuration fixture harness in tree) | package required | NOT PERFORMED | NOT PERFORMED | Yes |
+| port-forward delete | NOT RUN (no protocol/configuration fixture harness in tree) | package required | NOT PERFORMED | NOT PERFORMED | Yes |
 
 ## Build authority and stopping point
 
