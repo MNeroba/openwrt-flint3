@@ -667,14 +667,20 @@ function uci_restore(snapshots, packages)
 	return true;
 }
 
-function rollback_configuration(snapshots, packages)
+function reload_configuration(reload)
+{
+	return reload ? reload() :
+		backend_call_status('network', 'reload', {});
+}
+
+function rollback_configuration(snapshots, packages, reload)
 {
 	if (!uci_restore(snapshots, packages)) {
 		log_once('err', 'config:rollback', 'configuration rollback failed');
 		return false;
 	}
 
-	if (!backend_call_status('network', 'reload', {})) {
+	if (!reload_configuration(reload)) {
 		log_once('err', 'config:rollback-reload',
 			'configuration rollback reload failed');
 		return false;
@@ -686,7 +692,7 @@ function rollback_configuration(snapshots, packages)
 	return true;
 }
 
-function uci_transaction(changes, packages)
+function uci_transaction(changes, packages, reload)
 {
 	let cursor;
 	let snapshots = [];
@@ -730,17 +736,17 @@ function uci_transaction(changes, packages)
 			if (cursor.commit(package_name) != null)
 				continue;
 
-			rollback_configuration(snapshots, packages);
+			rollback_configuration(snapshots, packages, reload);
 			return rpc_config_backend_error();
 		}
 	} catch (e) {
 		if (length(snapshots))
-			rollback_configuration(snapshots, packages);
+			rollback_configuration(snapshots, packages, reload);
 		return rpc_config_backend_error();
 	}
 
-	if (!backend_call_status('network', 'reload', {})) {
-		rollback_configuration(snapshots, packages);
+	if (!reload_configuration(reload)) {
+		rollback_configuration(snapshots, packages, reload);
 		return rpc_config_backend_error();
 	}
 
@@ -3068,31 +3074,41 @@ function timezone_config_result(args)
 	if (!system_sections()['.name'])
 		return { __backend_error: true };
 
-	let cursor = uci.cursor();
-	if (!cursor)
-		return { __backend_error: true };
+	let changes = [];
+	if (args.timezone != null)
+		push(changes, {
+			package: 'system', section: '@system[0]', option: 'timezone',
+			value: args.timezone,
+		});
+	if (args.zonename != null)
+		push(changes, {
+			package: 'system', section: '@system[0]', option: 'zonename',
+			value: args.zonename,
+		});
+	if (args.autotimezone != null)
+		push(changes, {
+			package: 'system', section: '@system[0]', option: 'autotimezone',
+			value: bool_config_value(args.autotimezone) ? '1' : '0',
+		});
 
-	if (args.timezone != null &&
-	    cursor.set('system', '@system[0]', 'timezone', args.timezone) != true)
-		return { __backend_error: true };
-	if (args.zonename != null &&
-	    cursor.set('system', '@system[0]', 'zonename', args.zonename) != true)
-		return { __backend_error: true };
-	if (args.autotimezone != null &&
-	    cursor.set('system', '@system[0]', 'autotimezone',
-		bool_config_value(args.autotimezone) ? '1' : '0') != true)
-		return { __backend_error: true };
+	return with_configuration_lock(() => {
+		let result = uci_transaction(changes, ['system'],
+			system_configuration_reload);
+		if (result?.__rpc_error)
+			return result;
 
-	if (cursor.commit('system') != true)
-		return { __backend_error: true };
+		return { updated: true };
+	});
+}
 
-	if (system('/sbin/reload_config') != 0) {
-		log_once('err', 'config:system-reload',
-			'failed to reload system configuration');
-		return { __backend_error: true };
-	}
+function system_configuration_reload()
+{
+	if (system('/sbin/reload_config') == 0)
+		return true;
 
-	return { updated: true };
+	log_once('err', 'config:system-reload',
+		'failed to reload system configuration');
+	return false;
 }
 
 function reboot_result(args)
