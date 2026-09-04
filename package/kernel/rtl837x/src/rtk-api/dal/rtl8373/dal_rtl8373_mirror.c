@@ -614,11 +614,11 @@ rtk_api_ret_t dal_rtl8373_mirror_sampeRate_set(rtk_uint32 rateVal)
     if(rateVal > MIR_SAMPLE_RATE_MAX)
         return RT_ERR_INPUT;
     
-	retVal = rtl8373_setAsicRegBits(RTL8373_MIR_SAMPLE_CRTL_ADDR,
-					 RTL8373_MIR_SAMPLE_CRTL_RATE_MASK,
-					 rateVal);
-	if (retVal != RT_ERR_OK)
-		return retVal;
+    retVal = rtl8373_setAsicRegBits(RTL8373_MIR_SAMPLE_CRTL_ADDR,
+                     RTL8373_MIR_SAMPLE_CRTL_RATE_MASK,
+                     rateVal);
+    if (retVal != RT_ERR_OK)
+        return retVal;
     
     return RT_ERR_OK;
 }
@@ -649,11 +649,11 @@ rtk_api_ret_t dal_rtl8373_mirror_sampeRate_get(rtk_uint32 *pRateVal)
     if( pRateVal == NULL)
         return RT_ERR_NULL_POINTER;
     
-	retVal = rtl8373_getAsicRegBits(RTL8373_MIR_SAMPLE_CRTL_ADDR,
-					 RTL8373_MIR_SAMPLE_CRTL_RATE_MASK,
-					 pRateVal);
-	if (retVal != RT_ERR_OK)
-		return retVal;
+    retVal = rtl8373_getAsicRegBits(RTL8373_MIR_SAMPLE_CRTL_ADDR,
+                     RTL8373_MIR_SAMPLE_CRTL_RATE_MASK,
+                     pRateVal);
+    if (retVal != RT_ERR_OK)
+        return retVal;
     
     return RT_ERR_OK;
 }
@@ -684,11 +684,11 @@ rtk_api_ret_t dal_rtl8373_mirror_pktCnt_get(rtk_uint32 *pCntr)
     if( pCntr == NULL)
         return RT_ERR_NULL_POINTER;
     
-	retVal = rtl8373_getAsicRegBits(RTL8373_MIR_MATCHED_ADDR,
-					 RTL8373_MIR_MATCHED_PKT_CNT_MASK,
-					 pCntr);
-	if (retVal != RT_ERR_OK)
-		return retVal;
+    retVal = rtl8373_getAsicRegBits(RTL8373_MIR_MATCHED_ADDR,
+                     RTL8373_MIR_MATCHED_PKT_CNT_MASK,
+                     pCntr);
+    if (retVal != RT_ERR_OK)
+        return retVal;
     
     return RT_ERR_OK;
 }
@@ -719,11 +719,11 @@ rtk_api_ret_t dal_rtl8373_mirror_samplePktCnt_get(rtk_uint32 *pCntr)
     if( pCntr == NULL)
         return RT_ERR_NULL_POINTER;
     
-	retVal = rtl8373_getAsicRegBits(RTL8373_MIR_MATCHED_ADDR,
-					 RTL8373_MIR_MATCHED_SAMPLE_PKT_CNT_MASK,
-					 pCntr);
-	if (retVal != RT_ERR_OK)
-		return retVal;
+    retVal = rtl8373_getAsicRegBits(RTL8373_MIR_MATCHED_ADDR,
+                     RTL8373_MIR_MATCHED_SAMPLE_PKT_CNT_MASK,
+                     pCntr);
+    if (retVal != RT_ERR_OK)
+        return retVal;
     
     return RT_ERR_OK;
 }
