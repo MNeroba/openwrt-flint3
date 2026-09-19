@@ -1,32 +1,47 @@
 #!/bin/sh
 # ath12k takes its MAC from firmware board data and has no DT/nvmem support,
 # so without this every boot invents a new base address and all BSSIDs move.
-# Pin each BSS to an address derived from the factory ART value (offset 0x04,
-# what stock uses for wlan0). Sections that already set macaddr are left alone.
+# Pin each BSS to the factory ART address assigned to its radio. Sections that
+# already set macaddr are left alone; extra BSSs get a locally administered MAC.
 . /lib/functions.sh
 . /lib/functions/system.sh
 
 [ "$(board_name)" = "gl.inet,gl-be9300" ] || exit 0
 
-base=$(mmc_get_mac_binary 0:ART 0x4)
+base=$(macaddr_canonicalize "$(mmc_get_mac_binary 0:ART 0x0a)")
 [ -n "$base" ] || exit 0
+case "$base" in
+	00:00:00:00:00:00|ff:ff:ff:ff:ff:ff) exit 0 ;;
+esac
 
-n=0
+n_2g=0
+n_5g=0
+n_6g=0
+n_extra=6
 set_wifi_mac() {
-	local section="$1"
-	config_get mac "$section" macaddr
-	[ -n "$mac" ] && return 0		# explicitly pinned already
+	local section="$1" device band mac offset index radio_mac addr
 	config_get mode "$section" mode
 	[ "$mode" = "ap" ] || return 0		# leave sta/mesh alone
-
-	local addr
-	if [ "$n" = 0 ]; then
-		addr="$base"
+	config_get device "$section" device
+	[ -n "$device" ] || return 0
+	config_get band "$device" band
+	# ART assigns 2.4/5/6 GHz radio MACs at device_mac + 3/+4/+5.
+	case "$band" in
+		2g) offset=3; index=$n_2g; n_2g=$((n_2g + 1)) ;;
+		5g) offset=4; index=$n_5g; n_5g=$((n_5g + 1)) ;;
+		6g) offset=5; index=$n_6g; n_6g=$((n_6g + 1)) ;;
+		*) return 0 ;;
+	esac
+	radio_mac=$(macaddr_add "$base" "$offset")
+	if [ "$index" = 0 ]; then
+		addr="$radio_mac"
 	else
-		addr=$(macaddr_setbit_la "$(macaddr_add "$base" $n)")
+		addr=$(macaddr_setbit_la "$(macaddr_add "$base" "$n_extra")")
+		n_extra=$((n_extra + 1))
 	fi
+	config_get mac "$section" macaddr
+	[ -n "$mac" ] && return 0		# explicitly pinned already
 	uci set "wireless.$section.macaddr=$addr"
-	n=$((n + 1))
 }
 
 config_load wireless
