@@ -28,9 +28,10 @@ stdout; this example writes only below `/tmp` and performs no upload:
     /usr/libexec/glinet-app-compat-support /tmp/glinet-app-compat-support.txt
 
 The bundle does not read `/etc/shadow` or session/challenge state. It redacts
-passwords, hashes, nonces, SIDs, cookies, Admin-Token values, wireless keys
-and private-key fields. Treat addresses, hostnames and logs as device data
-nevertheless.
+passwords, hashes, nonces, SIDs, cookies, Admin-Token values, wireless keys,
+private-key fields, factory MAC/serial/DDNS/certificate fields, and colon-
+separated MAC addresses in collected output. Treat other addresses, hostnames
+and logs as device data nevertheless.
 
 ## RPC request format
 
