@@ -251,4 +251,5 @@ For a read-only runtime preflight and a sanitized post-test bundle:
 The complete manual sequence, expected UCI/ubus/runtime observations, source
 guard checks and official-App evidence checklist is in
 `RUNTIME-VALIDATION.md`. The support script never uploads data and never reads
-`/etc/shadow` or session/challenge state.
+`/etc/shadow` or session/challenge state. It redacts secrets and factory
+identity fields in collected output.
