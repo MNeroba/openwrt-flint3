@@ -165,6 +165,34 @@ nftables, iptables or stock `port_forward` kernel-module commands are used.
   identified as the running OpenWrt build and the package never accepts an
   unverified stock image.
 
+## Flint 3 stock firmware v4.10 compatibility boundary
+
+GL.iNet's v4.10 documentation shows the Flint 3 (GL-BE9300) with Mesh,
+GL.iNet Account/Cloud Services, a consolidated Subnet page for LAN/Guest/IoT/
+custom VLAN networks, and Ethernet-port role and VLAN assignment. Its Ethernet
+guide also lists the Flint 3 for dual-Ethernet WAN. These are stock-firmware
+features; their presence in the vendor guide does not mean this OpenWrt build
+or this compatibility endpoint implements them. See the [v4.10 release
+notes](https://docs.gl-inet.com/router/en/4/features_update/firmware_v4.10/),
+[Subnet guide](https://docs.gl-inet.com/router/en/4/interface_guide/subnet/),
+and [v4.10 Ethernet-port guide](https://docs.gl-inet.com/router/en/4/interface_guide/ethernet_port_v4.10/).
+
+This endpoint currently operates on the standard OpenWrt `lan` and `wan`
+sections, existing Wi-Fi BSS sections, and compatibility-owned IPv4 redirects
+from zone `wan` to zone `lan`. It does not create or manage VLANs, guest/IoT
+or other subnets, physical Ethernet port roles, dual-WAN, Mesh, or cloud
+accounts/services. It also rejects stock-only randomized BSSID and MLO options
+until their OpenWrt behavior is established.
+
+The LAN setter checks the requested primary LAN range against other static
+and active IPv4 interfaces before changing it. Port-forward targets must stay
+inside the configured primary `lan` subnet. These checks do not configure or
+prove isolation between VLANs or subnets. If an installation depends on
+v4.10 VLAN/guest/IoT isolation, Mesh, cloud management, or a reassigned WAN/LAN
+port, this build must first be validated for that topology using OpenWrt
+configuration and runtime checks; the stock firmware UI is not evidence that
+the feature exists here.
+
 ## Security properties
 
 * `/rpc` accepts only HTTP POST and is restricted to loopback and the configured
