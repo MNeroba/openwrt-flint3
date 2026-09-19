@@ -5,6 +5,29 @@ This is the controlled test plan for a GL-BE9300/Flint 3 with
 prove router, hardware, or official-App compatibility. Those columns remain
 `NOT PERFORMED` until a real router and the official App are available.
 
+## Stock Flint 3 firmware v4.10 feature boundary
+
+GL.iNet's v4.10 release notes show Mesh, cloud services, and native VLAN
+support. The Flint 3 Subnet guide includes LAN, Guest, IoT, and custom VLAN
+networks; the Ethernet guide describes assigning physical ports to subnets,
+port-role changes, tagged VLANs, and lists GL-BE9300 for dual-Ethernet WAN.
+See the [release notes](https://docs.gl-inet.com/router/en/4/features_update/firmware_v4.10/),
+[Subnet guide](https://docs.gl-inet.com/router/en/4/interface_guide/subnet/),
+and [Ethernet-port guide](https://docs.gl-inet.com/router/en/4/interface_guide/ethernet_port_v4.10/).
+These are stock-firmware capabilities, not proof that this OpenWrt build has
+the same configuration or isolation behavior.
+
+Before using a setter on a target that has multiple networks, record the
+running build and inspect the complete `network`, `dhcp`, `wireless`, and
+`firewall` configuration. Verify every subnet, VLAN/bridge membership, DHCP
+scope, firewall-zone membership, and physical port mapping independently.
+This compatibility layer only changes the standard `lan` and `wan` UCI
+sections, existing Wi-Fi BSSes, and its own IPv4 redirects from `wan` to
+`lan`. The LAN setter checks IPv4 overlap; the redirect setter restricts its
+destination to the configured primary LAN subnet. Neither check creates or
+proves guest/IoT/VLAN isolation. Do not rely on the stock v4.10 UI or App to
+configure or verify these functions on this build.
+
 ## Safety and evidence collection
 
 Use a dedicated LAN client and a reversible test configuration. Keep a second
