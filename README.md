@@ -40,7 +40,7 @@ Target: **`qualcommbe/ipq53xx`**, kernel **6.18**.
 | VLANs (bridge-vlan on DSA) | working |
 | Wi-Fi 7, all three bands | working |
 | MLO (AP MLD across 2.4/5/6 GHz) | working |
-| DFS | working (needs the cfg80211 secondary-AP-after-CAC patch, included) |
+| DFS | working with one BSS per DFS radio; multi-BSS startup can loop the CAC (see Known issues) |
 | 802.11k / 802.11v | working |
 | eMMC sysupgrade + return to stock | working |
 
@@ -49,8 +49,22 @@ Throughput measured between two units over a 2.5G trunk: **~1.8–1.9 Gbit/s**.
 ## Known issues
 
 - **ath12k firmware hang under sustained load.** After hours with many clients
-  the Q6 can take a fatal error; radios stay down until reboot. Reported
-  upstream.
+  the Q6 can take a fatal error. Since 2026-09-28 the firmware coredump is
+  released automatically and the radios recover in seconds instead of staying
+  down; the cause of the crash itself is still open. Reported upstream.
+- **DFS CAC restarts forever when several BSSes start together on the 5 GHz
+  radio** (issue #84): the secondary-BSS check in our cfg80211 patch uses the
+  beacon interval as a proxy for "CAC covered" and races the primary at
+  startup. Workarounds: a non-DFS channel, or start the radio with one BSS and
+  add the others with `wifi reload`. Fix in progress.
+- **Kernel panic in netlink socket release**, seen six times since August on
+  both APs after hours of uptime (sockets of a bridge notification, hostapd
+  or wsdd2). The AP reboots itself in ~90 s. wsdd2 is kept disabled as one
+  trigger; root cause under investigation with a KASAN kernel.
+- **Client kicks for "excessive missing ACKs"**: the driver's packet-loss
+  events are unreliable for multi-link stations, so hostapd's
+  `disassoc_low_ack` now defaults to 0 in these images (set it to 1 on a
+  wifi-iface to restore the old behaviour).
 - **PPE WAN RX FIFO overruns.** Roughly 0.07–0.09 % of packets at ~1.9 Gbit/s.
   No longer the hard ~600 Mbit/s cap earlier builds had, but not zero.
 - **802.11r is incompatible with MLO.** hostapd's FT code has no MLD
