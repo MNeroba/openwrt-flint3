@@ -1995,7 +1995,6 @@ static int rtl837x_setup(struct dsa_switch *ds)
 
 	memset(gsw->bridge_dev, 0, sizeof(gsw->bridge_dev));
 	gsw->isolated_port_mask = 0;
-	memset(gsw->port_enabled, 0, sizeof(gsw->port_enabled));
 	memset(gsw->lag_members, 0, sizeof(gsw->lag_members));
 	memset(gsw->lag_active_members, 0, sizeof(gsw->lag_active_members));
 	memset(gsw->lag_hash_mask, 0, sizeof(gsw->lag_hash_mask));
