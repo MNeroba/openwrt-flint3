@@ -7,6 +7,7 @@
 #include <linux/etherdevice.h>
 #include <linux/if_bridge.h>
 #include <linux/if_ether.h>
+#include <linux/if_vlan.h>
 #include <linux/kernel.h>
 #include <linux/phylink.h>
 #include <linux/phy.h>
@@ -415,13 +416,14 @@ rtl837x_egress_rate_policy_validate(const struct flow_action_entry *act)
 		return false;
 
 	/* The RTL8373 egress port meter is a byte-rate policer with a byte
-	 * bucket. Packet-rate, peak-rate, alternate actions, MTU enforcement,
-	 * and non-drop actions cannot be represented by the switch API.
+	 * bucket. Packet-rate, peak-rate, alternate actions, MTU limits below a
+	 * VLAN Ethernet frame, and non-drop actions cannot be represented by the
+	 * switch API.
 	 */
 	return act->police.rate_bytes_ps && !act->police.rate_pkt_ps &&
 	       !act->police.peakrate_bytes_ps && !act->police.avrate &&
 	       !act->police.overhead && !act->police.burst_pkt &&
-	       !act->police.mtu && act->police.burst &&
+	       act->police.mtu >= VLAN_ETH_FRAME_LEN && act->police.burst &&
 	       act->police.exceed.act_id == FLOW_ACTION_DROP &&
 	       act->police.notexceed.act_id == FLOW_ACTION_ACCEPT;
 }
