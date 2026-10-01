@@ -2025,7 +2025,6 @@ static int rtl837x_setup(struct dsa_switch *ds)
 	memset(gsw->bridge_pvid, 0, sizeof(gsw->bridge_pvid));
 	memset(gsw->bridge_pvid_valid, 0, sizeof(gsw->bridge_pvid_valid));
 	rtl837x_mirror_clear_shadow(gsw);
-	gsw->rate_ingress_mask = 0;
 	gsw->rate_egress_mask = 0;
 	memset(gsw->rate_egress_cookie, 0, sizeof(gsw->rate_egress_cookie));
 	memset(gsw->rate_egress_rate, 0, sizeof(gsw->rate_egress_rate));
