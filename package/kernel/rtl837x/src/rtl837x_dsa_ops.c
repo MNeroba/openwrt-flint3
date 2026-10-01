@@ -429,6 +429,11 @@ static int rtl837x_lag_set_active_members(struct rtk_gsw *gsw, int group)
 	 * driver's transmit permission.  The RTL837x trunk API only accepts
 	 * one member mask, so use it as the active candidate set while keeping
 	 * lag_members as the configured DSA membership.
+	 *
+	 * This has no receive-only representation: a link-up LACP standby with
+	 * lag_tx_enabled clear is outside the hardware trunk and behaves as a
+	 * standalone switch port. Such standby forwarding is not covered by this
+	 * offload.
 	 */
 	ret = rtl837x_lag_set_members(gsw, group, active_members);
 	if (!ret)
@@ -606,7 +611,7 @@ static int rtl837x_port_lag_leave(struct dsa_switch *ds, int port,
 				  struct dsa_lag lag)
 {
 	struct rtk_gsw *gsw = ds->priv;
-	u32 members, old_members, old_active_members, old_hash_mask;
+	u32 members;
 	int group, ret;
 
 	if (!rtl837x_valid_port(gsw, port))
@@ -625,26 +630,23 @@ static int rtl837x_port_lag_leave(struct dsa_switch *ds, int port,
 		goto out_unlock;
 	}
 
-	old_members = gsw->lag_members[group];
-	old_active_members = gsw->lag_active_members[group];
-	old_hash_mask = gsw->lag_hash_mask[group];
-	members = old_members & ~BIT(port);
+	members = gsw->lag_members[group] & ~BIT(port);
 	gsw->lag_members[group] = members;
 	if (!members)
 		gsw->lag_hash_mask[group] = 0;
 	ret = rtl837x_lag_set_active_members(gsw, group);
 	if (ret) {
-		gsw->lag_members[group] = old_members;
-		gsw->lag_hash_mask[group] = old_hash_mask;
-		if (rtl837x_lag_set_members(gsw, group, old_active_members))
-			dev_err(gsw->dev,
-				"failed to restore active members of LAG %d after leave failure\n",
-				group);
-		else
-			gsw->lag_active_members[group] = old_active_members;
-		goto out_unlock;
+		/* DSA has already removed this port from the LAG. Keep the
+		 * shadow aligned and let a later change retry programming it.
+		 */
+		gsw->lag_active_members[group] =
+			rtl837x_lag_get_active_members(gsw, group);
+		dev_warn(gsw->dev,
+			 "failed to update RTL837x LAG %d after port %d left: %d\n",
+			 group, port, ret);
+	} else {
+		ret = 0;
 	}
-	ret = 0;
 
 out_unlock:
 	mutex_unlock(&gsw->feature_lock);
@@ -1953,10 +1955,11 @@ static int rtl837x_setup(struct dsa_switch *ds)
 	if (ret)
 		return rtl837x_to_errno(ret);
 
-	/* Do not inherit trunk members or hash masks left by a prior instance. */
+	/* A stale optional LAG configuration should not prevent DSA startup. */
 	ret = rtl837x_lag_clear_hardware(gsw);
 	if (ret)
-		return ret;
+		dev_warn(gsw->dev,
+			 "failed to reset RTL837x LAG state; continuing: %d\n", ret);
 
 	ret = rtk_l2_table_clear();
 	if (ret)
