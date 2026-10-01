@@ -2013,7 +2013,9 @@ static int rtl837x_setup(struct dsa_switch *ds)
 
 	ret = rtl837x_rate_disable_all(gsw);
 	if (ret)
-		return ret;
+		dev_warn(gsw->dev,
+			 "failed to reset optional egress rate limiters; continuing: %d\n",
+			 ret);
 
 	/* Mirror enable and source masks may survive bootloader or module state. */
 	rtl837x_mirror_disable_and_clear(gsw, gsw->cpu_port, true, "setup");
