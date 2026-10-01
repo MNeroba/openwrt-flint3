@@ -493,7 +493,7 @@ static int rtl837x_port_lag_change(struct dsa_switch *ds, int port)
 	if (port == gsw->cpu_port)
 		return -EOPNOTSUPP;
 
-	mutex_lock(&gsw->feature_lock);
+	mutex_lock(&gsw->lag_lock);
 
 	for (group = 0; group < TRUNK_GROUP_END; group++) {
 		if (gsw->lag_members[group] & BIT(port))
@@ -503,7 +503,7 @@ static int rtl837x_port_lag_change(struct dsa_switch *ds, int port)
 	if (group < TRUNK_GROUP_END)
 		ret = rtl837x_lag_set_active_members(gsw, group);
 
-	mutex_unlock(&gsw->feature_lock);
+	mutex_unlock(&gsw->lag_lock);
 	return ret;
 }
 
@@ -537,7 +537,7 @@ static int rtl837x_port_lag_join(struct dsa_switch *ds, int port,
 		return ret;
 	}
 
-	mutex_lock(&gsw->feature_lock);
+	mutex_lock(&gsw->lag_lock);
 
 	for (other_group = 0; other_group < TRUNK_GROUP_END; other_group++) {
 		if (other_group != group &&
@@ -556,7 +556,7 @@ static int rtl837x_port_lag_join(struct dsa_switch *ds, int port,
 
 	if (hweight32(gsw->lag_members[group]) >= 4) {
 		NL_SET_ERR_MSG_MOD(extack,
-					   "RTL837x hardware LAGs support at most four ports");
+				   "RTL837x hardware LAGs support at most four ports");
 		ret = -EOPNOTSUPP;
 		goto out_unlock;
 	}
@@ -574,7 +574,7 @@ static int rtl837x_port_lag_join(struct dsa_switch *ds, int port,
 	old_hash_mask = gsw->lag_hash_mask[group];
 	if (!old_hash_mask) {
 		ret = rtl837x_to_errno(rtk_trunk_distributionAlgorithm_set(group,
-									       hash_mask));
+								       hash_mask));
 		if (ret)
 			goto out_unlock;
 	}
@@ -603,7 +603,7 @@ static int rtl837x_port_lag_join(struct dsa_switch *ds, int port,
 	ret = 0;
 
 out_unlock:
-	mutex_unlock(&gsw->feature_lock);
+	mutex_unlock(&gsw->lag_lock);
 	return ret;
 }
 
@@ -623,7 +623,7 @@ static int rtl837x_port_lag_leave(struct dsa_switch *ds, int port,
 	if (group < 0)
 		return group;
 
-	mutex_lock(&gsw->feature_lock);
+	mutex_lock(&gsw->lag_lock);
 
 	if (!(gsw->lag_members[group] & BIT(port))) {
 		ret = -ENOENT;
@@ -637,10 +637,9 @@ static int rtl837x_port_lag_leave(struct dsa_switch *ds, int port,
 	ret = rtl837x_lag_set_active_members(gsw, group);
 	if (ret) {
 		/* DSA has already removed this port from the LAG. Keep the
-		 * shadow aligned and let a later change retry programming it.
+		 * configured-member shadow aligned, but retain the last
+		 * successfully programmed active mask for later rollback.
 		 */
-		gsw->lag_active_members[group] =
-			rtl837x_lag_get_active_members(gsw, group);
 		dev_warn(gsw->dev,
 			 "failed to update RTL837x LAG %d after port %d left: %d\n",
 			 group, port, ret);
@@ -649,7 +648,7 @@ static int rtl837x_port_lag_leave(struct dsa_switch *ds, int port,
 	}
 
 out_unlock:
-	mutex_unlock(&gsw->feature_lock);
+	mutex_unlock(&gsw->lag_lock);
 	return ret;
 }
 
