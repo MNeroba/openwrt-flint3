@@ -35,7 +35,8 @@ Use a spare GL-BE9300 and establish the project's documented recovery path
 with a known-good image before the test. The AP config documents no usable
 normal serial console on this board: do not assume UART access. Use the known
 TFTP/initramfs recovery path and `ramoops`/`/sys/fs/pstore` crash evidence. If a
-working console or independent management path is available, keep it connected. Follow the backup and installation
+working console or independent management path is available, keep it
+connected. Follow the backup and installation
 instructions in the [top-level README](../../../README.md); do not test this
 candidate on the only router you can recover remotely. The P0 code issues a
 switch software reset during probe, and full post-reset PHY/SerDes initialization
@@ -185,13 +186,13 @@ or command output. A blocked test is not a pass.
 | ID | Scenario and procedure | Expected result |
 | --- | --- | --- |
 | T0 | Build/package gate above | Package and full image build cleanly; both required modules are present. |
-| T1 | Cold boot while watching serial; save the full boot log. Search for the chip-ID log and driver errors. | Chip-ID read succeeds and passes RTL8372N detection; no probe failure, MDIO timeout, SDS timeout, DSA registration failure, kernel warning, or oops. |
+| T1 | Cold boot with the verified recovery/management path available; save the full boot log and any pstore output. Search for the chip-ID log and driver errors. | Chip-ID read succeeds and passes RTL8372N detection; no probe failure, MDIO timeout, SDS timeout, DSA registration failure, kernel warning, or oops. |
 | T2 | Check `ip -d link`, `bridge link`, and `lsmod`. | DSA ports `lan1`–`lan4` exist and join the configured LAN bridge; the CPU conduit is `xgmac1`/the board's `lan` path. `rtl8372n_dsa` and `tag_rtl8_4` are loaded. |
 | T3 | Connect one peer to each physical LAN jack, one at a time. For each, record interface carrier and `ethtool` speed/duplex, then unplug and reconnect. | Jack map is LAN1→port 7, LAN2→6, LAN3→5, LAN4→4. Carrier follows the cable; no repeated flap or stuck port. Test 1G and 2.5G only when the peer supports those rates. |
 | T4 | From one directly connected host, obtain the expected LAN address and ping the router's LAN address for at least 100 packets. Record loss and `ip -s link` before/after. | Router CPU path works through the switch; no persistent loss, growing error counters, or DSA/tagger errors. |
 | T5 | Connect two independent hosts directly to two different LAN jacks, on the same untagged LAN. Confirm they are not connected through another bridge. Ping between them, then run `iperf3` for 30 seconds in both directions. Repeat across all six jack pairs if time permits. | ARP and bidirectional untagged LAN-to-LAN traffic work; no link reset, kernel warning, or persistent packet loss. Record rates as observations, not P0 pass thresholds. |
 | T6 | Record `bridge vlan show` and switch VLAN/PVID readbacks using an agreed read-only access method. | Host output records software configuration only. Successful traffic plus hardware readback is needed to confirm the VLAN 1/PVID bootstrap. General VLAN offload is not implemented. |
-| T7 | Reboot normally three times, then perform one full power-off/power-on with serial attached. Repeat T1–T4 after each boot. | Probe, link mapping, and basic CPU/LAN traffic remain consistent. No boot relies on stale switch state left by the previous run. |
+| T7 | Reboot normally three times, then perform one full power-off/power-on with the verified recovery/management path available. Repeat T1–T4 after each boot. | Probe, link mapping, and basic CPU/LAN traffic remain consistent. No boot relies on stale switch state left by the previous run. |
 | T8 | Optional: after all smoke tests pass, measure `iperf3` through a 2.5G-capable LAN peer in each direction. | Record peer, link speed, command, throughput, loss, and counters. No throughput target is defined for this unvalidated P0 candidate. |
 
 ### Additional P0 regression checks
@@ -235,7 +236,7 @@ or command output. A blocked test is not a pass.
 
 | Symptom | First evidence to attach | Likely area to investigate |
 | --- | --- | --- |
-| No RTL8372N chip-ID log / probe fails | Full serial boot log; MDIO node and address; chip-ID read result if available | MDIO transport, address 29, reset timing, chip-ID mask. |
+| No RTL8372N chip-ID log / probe fails | Full boot/dmesg log and any pstore output; MDIO node and address; chip-ID read result if available | MDIO transport, address 29, reset timing, chip-ID mask. |
 | Probe succeeds but DSA ports are absent | Probe log, `ip -d link`, DT fragment and build config | DSA registration, CPU/user port topology, required tagger module. |
 | CPU link reports up but router traffic fails | Both ends' link state, `ip -s link`, tagger/EDMA logs, all four DTS polarity flags | RTL8_4 path, SDS mode/polarity, CPU port 3 mapping, post-reset SerDes init. |
 | One or more LAN ports have no carrier | Physical jack, expected DSA port, `ethtool`, PHY/MDIO errors | Port map, internal PHY power-up sequence, PHY access. |
@@ -259,11 +260,19 @@ Test date and operator:
 Source commit:
 Kernel release:
 Image SHA-256:
+Feed revisions / attached p0-feeds.conf:
 Build host / build result:
 DT compatible / MDIO address:
 CPU port / conduit:
 SerDes polarity properties enabled:
 Chip ID from boot log:
+PHY IDs / bound drivers per port:
+Supported / local / partner advertised link modes per port:
+Physical switch and SoC PCS evidence:
+Isolation / learning / flood readbacks and access method:
+Standalone / bridge create-remove results:
+Concurrent PHY access / port lifecycle results:
+Reserved control-frame / negative forwarding results:
 T0 build:
 T1 probe:
 T2 DSA topology:
