@@ -112,6 +112,9 @@ package matrices were canceled deliberately for this feature branch:
 [PR kernels](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070319067).
 The focused ARM64 job above was retained; parent #104 runs were untouched.
 
+The detailed [table regression procedure and result template](P1-TABLE-TEST.md)
+records expected BE9300 words, test order, A0–A6 evidence and failure triage.
+
 ## Required first-device follow-up
 
 Use [FIRST-HARDWARE-TEST.md](FIRST-HARDWARE-TEST.md) for the **new image

@@ -36,6 +36,8 @@ changed build inputs and added idle/readback checks. Use an image built from
 that exact revision; the parent four-object ARM64 artifact does not qualify
 it. Bootstrap readback mismatch is a setup error; include its written/read
 values in the report and repeat the P0 forwarding/reset matrix.
+[P1-TABLE-TEST.md](P1-TABLE-TEST.md) provides the table-specific A0–A6
+procedure, expected BE9300 bootstrap word and a separate result template.
 
 ## 1. What this first test should prove
 
