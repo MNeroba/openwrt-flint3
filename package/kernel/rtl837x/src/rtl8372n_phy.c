@@ -16,6 +16,17 @@ static int rtl8372n_phy_match(struct phy_device *phydev,
 	       phydev->mdio.addr >= 4 && phydev->mdio.addr <= 7;
 }
 
+/* phylib already holds the child bus lock during page selection/restoration. */
+static int rtl8372n_phy_read_page(struct phy_device *phydev)
+{
+	return __phy_read(phydev, 31);
+}
+
+static int rtl8372n_phy_write_page(struct phy_device *phydev, int page)
+{
+	return __phy_write(phydev, 31, page);
+}
+
 static int rtl8372n_phy_read_mmd(struct phy_device *phydev, int devad, u16 regnum)
 {
 	struct rtl837x_priv *priv = phydev->mdio.bus->priv;
@@ -136,6 +147,8 @@ struct phy_driver rtl8372n_phy_driver = {
 	.name = "RTL8372N internal PHY (P0)",
 	.flags = PHY_IS_INTERNAL,
 	.match_phy_device = rtl8372n_phy_match,
+	.read_page = rtl8372n_phy_read_page,
+	.write_page = rtl8372n_phy_write_page,
 	.get_features = rtl8372n_phy_get_features,
 	.config_aneg = rtl8372n_phy_config_aneg,
 	.read_status = rtl8372n_phy_read_status,

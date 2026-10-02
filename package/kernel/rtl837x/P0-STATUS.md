@@ -10,6 +10,8 @@ Updated: 2026-10-02. This is a source candidate, not a hardware-qualified driver
   addresses/masks are restricted to 4–7. Parent MDIO locking uses the nested
   subclass; lock order is documented.
 - C22 page state is per PHY, including the page-0/0xa40 alias and address bounds.
+  The private driver supplies phylib page callbacks using unlocked bus helpers;
+  page save/select/read/restore remains under the child MDIO bus lock.
 - A private PHY driver uses per-port native MMD access, published capability and
   speed decoding, standard autoneg and explicit rejection of forced 2.5G.
   Driver registration precedes child-bus creation; missing/wrong binding fails
