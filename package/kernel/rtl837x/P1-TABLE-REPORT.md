@@ -46,6 +46,8 @@ the error into existing setup cleanup, which best-effort isolates ports and
 powers down PHYs; probe cleanup also asserts the managed reset when available.
 That cleanup and reset behavior still require hardware validation. Future
 runtime VLAN/bridge callbacks need their own state/rollback policy before use.
+Separate public read and write calls do not make a read/modify/write pair
+atomic; future shared membership updates also require a state lock.
 
 ## Source disposition
 
@@ -76,14 +78,39 @@ rather than weakening the comparison without evidence.
 | Whitespace | PASS | `git diff --check` on this implementation |
 | New source style | PASS | Linux 6.18 `checkpatch.pl --no-tree --strict --file`; 0 errors, warnings or checks |
 | Complete patch style | 0 errors, 1 reviewed warning | New-file MAINTAINERS reminder; this is an OpenWrt package, not a new in-tree Linux registration |
-| Current ARM64 module build | PENDING | A new exact-revision build is required; #104's four-object artifact does not cover this five-object module |
+| Current ARM64 module build | PENDING | The rebased source includes new setup-snapshot code and the updated P0 Release-7 base; it needs a fresh exact-revision build |
+| Earlier pre-rebase P1-A prototype build | PASS, historical | [Linux 6.18.39 run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070037416) built the five-object prototype at commit 250f5d469d46ff5de07dfe8a96e3fe90636248ff; this artifact does not cover this rebased source or package release 8 |
+| Inherited broad CI matrices | CANCELED | Four automatic kernel/package runs for the original feature branch were stopped; no all-target pass is claimed |
 | Current OpenWrt package/image | NOT RUN | Parent workflow/artifacts do not cover the modified source and release 8 |
 | Runtime/codec tests | NOT RUN | No automated suite or fault-injection result is claimed |
 | BE9300 hardware | NOT RUN | No previous SDK-driver or P0 result is attributed to this change |
 
-Build results, exact source SHA and artifacts will be recorded here before
-claiming compilation for this revision. A successful mainline module build
-would cover APIs/linking, not OpenWrt packaging or switch behavior.
+### Exact build inputs and artifact
+
+- Source: `250f5d469d46ff5de07dfe8a96e3fe90636248ff`.
+- `package/kernel/rtl837x/src` Git tree:
+  `eefee5ba892bff81e29e269b099867cc67eeb0b3`.
+- Host: GitHub Ubuntu 24.04; `aarch64-linux-gnu-`; checksum-pinned Linux
+  6.18.39, using the inherited kernel tarball checksum in the workflow.
+- Run completed successfully at 2026-10-02 22:05:40 UTC.
+- [Artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070037416/artifacts/11254876693):
+  `.config`, kernel/module logs and AArch64 `rtl8372n_dsa.ko`.
+- Module SHA-256:
+  `a96e62a026ed12b9126158ce6f94bd670220e3b0122f976d2cb25198b243777f`.
+- The downloaded candidate log contains each of the five object compilations,
+  modpost and linking, with no compiler warnings/errors. The downloaded module
+  is an ELF64 AArch64 relocatable object.
+- Later documentation-only updates preserve the source, package Makefile,
+  workflow, board DTS, config and pinned feeds from that exact build revision.
+
+This artifact covers APIs/linking, not OpenWrt packaging or switch behavior.
+No runtime/codec test suite was run. The broad inherited push/PR kernel and
+package matrices were canceled deliberately for this feature branch:
+[push packages](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070038337),
+[push kernels](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070038397),
+[PR packages](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070319023),
+[PR kernels](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070319067).
+The focused ARM64 job above was retained; parent #104 runs were untouched.
 
 ## Required first-device follow-up
 

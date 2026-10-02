@@ -20,6 +20,8 @@ VLAN 1, configured PVIDs, port isolation, learning limits, flood masks and VLAN
 controls. Snapshot read failures or unexpected values are logged and do not
 fail setup. The exact VLAN-table write readback remains fail-closed and can
 still fail setup; this behavior has not yet been validated on BE9300 hardware.
+A previous pre-rebase P1-A prototype passed the focused ARM64 module build,
+but that artifact does not cover this source revision or the new snapshot code.
 
 P1-A does not add user-configurable VLAN offload, FDB/MDB, bridge/STP, LAG or
 rate limiting. Its source requires a fresh module and OpenWrt image build and
