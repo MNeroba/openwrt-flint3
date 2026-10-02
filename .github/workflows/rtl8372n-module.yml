@@ -30,7 +30,7 @@ jobs:
         working-directory: linux-6.18.39
         run: |
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- allnoconfig
-          scripts/config --enable MODULES --enable MODULE_UNLOAD --enable NET --enable NETDEVICES --enable INET --enable OF --enable PHYLIB --enable MDIO_DEVICE --enable BRIDGE --enable NET_DSA --enable REGMAP_MMIO --module NET_DSA_TAG_RTL8_4
+          scripts/config --enable MODULES --enable MODULE_UNLOAD --enable NET --enable NETDEVICES --enable INET --enable OF --enable PHYLIB --enable MDIO_DEVICE --enable BRIDGE --enable NET_DSA --enable GPIOLIB --enable KUNIT --enable REGMAP_BUILD --disable KUNIT_ALL_TESTS --module NET_DSA_TAG_RTL8_4
           make ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- olddefconfig
           for symbol in MODULES OF PHYLIB OF_MDIO NET_DSA REGMAP; do
             test "$(scripts/config --state "$symbol")" = y || { echo "Missing CONFIG_$symbol"; exit 1; }
@@ -57,3 +57,4 @@ jobs:
             linux-6.18.39/*build.log
             package/kernel/rtl837x/src/rtl8372n_dsa.ko
           if-no-files-found: warn
+          include-hidden-files: true
