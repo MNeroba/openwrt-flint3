@@ -41,18 +41,27 @@ Updated: 2026-10-02. This is a source candidate, not a hardware-qualified driver
 - A kernel-header preparation attempt against the cached Linux 6.18.38 tree
   stopped at `defconfig`: macOS `ld` rejects `--version` and Kbuild reports an
   unsupported linker. No target module was compiled by that attempt.
-- Linux CI reached candidate compilation against 6.18.39 and found use of
-  non-public single-driver PHY registration helpers. Those calls were changed
-  to the public `phy_drivers_register/unregister` API; a retest is required.
-  Mainline module compilation is distinct from the OpenWrt package/image gate.
-- Separate Linux CI is building the complete BE9300 AP image from the project
-  config. `P0-FEEDS.conf` fixes all five feed revisions; CI checks installed
-  revisions and retains generated config, logs and images.
-- No package/image build and no hardware result has passed for this revision.
+- [ARM64 module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390)
+  for `954a84bd7c` against checksum-pinned Linux 6.18.39: kernel exports/tagger,
+  all four candidate objects, `W=1`, modpost and module linking succeeded.
+  There were no compiler warnings in the candidate step. The earlier failed
+  API check led to use of the public `phy_drivers_register/unregister` API.
+  The artifact includes `.config`, complete build logs and the AArch64 module.
+  Module SHA-256:
+  `d47c1109ab19c30f81f7a7ccd034d787b1fe2e2684acb99c89389cee1b93f1d6`.
+  This API-check artifact is not an OpenWrt installation package.
+- [OpenWrt image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177)
+  is building the complete BE9300 AP image from the same code revision.
+  `P0-FEEDS.conf` fixes all five feed revisions; installed revision checks and
+  selection of the driver/MDIO-devres packages passed. Generated config, logs
+  and images are retained. Package/image completion is still pending.
+- Later documentation-only commits do not change the tested source, DTS,
+  package Makefile or workflows. No hardware result has passed.
 
 ## Remaining gates
 
-1. Run Linux module compilation/modpost and fix any exposed API issues.
+1. ARM64 compilation/modpost: passed for the revision above. Re-run for any
+   subsequent code changes; OpenWrt-specific compilation remains a separate gate.
 2. Build the OpenWrt package, DTB and full BE9300 image with pinned config/feeds.
 3. Resolve flagged provenance rows, particularly SDS facts/source lineage.
 4. Test PHY binding/AN, real 10G CPU link, cold/warm reset, isolation/fallback,

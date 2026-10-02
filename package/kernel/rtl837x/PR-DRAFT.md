@@ -26,8 +26,11 @@ as discussed in [#99](https://github.com/perceival/openwrt-flint3/issues/99).
 
 See [P0-STATUS.md](P0-STATUS.md) for current evidence. Local whitespace/style
 checks are separate from ARM64 compilation and the OpenWrt package/image gate.
-Fill in the Linux CI URL, candidate commit, generated config, logs and results
-only after the corresponding run completes. Hardware validation is pending.
+[ARM64 module compilation/modpost passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390)
+for `954a84bd7c` with `W=1` against Linux 6.18.39. The run retains its config,
+logs and module. [Full BE9300 OpenWrt image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177)
+is still pending. Later documentation-only commits leave this source snapshot
+unchanged. Hardware validation is pending.
 
 ## Review questions and limitations
 
