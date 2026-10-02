@@ -19,6 +19,8 @@ VLAN 1 setup. It changes build inputs; the parent ARM64 artifact does not
 cover this revision. The new ARM64 build passed; its own artifact and pending
 OpenWrt/bench gates are recorded in that report.
 General DSA bridge/VLAN/FDB/MDB/STP callbacks remain absent.
+The [P1-A table procedure and report template](P1-TABLE-TEST.md) supplements
+the full P0 first-device matrix with the changed bootstrap/readback checks.
 
 ## P0 scope
 
