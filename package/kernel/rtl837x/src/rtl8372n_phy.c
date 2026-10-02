@@ -87,8 +87,10 @@ static int rtl8372n_phy_read_status(struct phy_device *phydev)
 	int ret, value;
 
 	ret = genphy_read_status(phydev);
-	if (ret || !phydev->link)
-		return ret;
+	if (ret)
+		goto failed;
+	if (!phydev->link)
+		return 0;
 	if (phydev->autoneg == AUTONEG_ENABLE && phydev->autoneg_complete &&
 	    linkmode_test_bit(ETHTOOL_LINK_MODE_2500baseT_Full_BIT,
 			      phydev->supported)) {
@@ -107,7 +109,7 @@ static int rtl8372n_phy_read_status(struct phy_device *phydev)
 		goto failed;
 	}
 	/* Published Realtek PHYSR speed encoding; restrict to internal 2.5G PHYs. */
-	switch (value & (BIT(9) | GENMASK(5, 4))) {
+	switch (value & (GENMASK(10, 9) | GENMASK(5, 4))) {
 	case 0:
 		phydev->speed = SPEED_10;
 		break;
@@ -138,6 +140,7 @@ failed:
 	phydev->link = false;
 	phydev->speed = SPEED_UNKNOWN;
 	phydev->duplex = DUPLEX_UNKNOWN;
+	phydev->master_slave_state = MASTER_SLAVE_STATE_UNKNOWN;
 	phydev->pause = false;
 	phydev->asym_pause = false;
 	return ret;
