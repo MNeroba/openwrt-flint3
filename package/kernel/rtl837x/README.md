@@ -16,7 +16,8 @@ acceptance tests. It does not add P1 runtime support.
 This branch implements the [VLAN table foundation](P1-TABLE-REPORT.md) on top
 of PR #104: serialized access, checked masks/VIDs, raw readback and verified
 VLAN 1 setup. It changes build inputs; the parent ARM64 artifact does not
-cover this revision. The new build and bench status is recorded in that report.
+cover this revision. The new ARM64 build passed; its own artifact and pending
+OpenWrt/bench gates are recorded in that report.
 General DSA bridge/VLAN/FDB/MDB/STP callbacks remain absent.
 
 ## P0 scope
@@ -88,8 +89,9 @@ supported API; 6.12 compatibility is not claimed.
 
 See [P0-STATUS.md](P0-STATUS.md) for completed source work, the build attempt and
 remaining gates for the parent P0. Its mainline ARM64 module build passed.
-This P1-A branch needs a new build; see [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md).
-All BE9300 hardware checks remain pending.
+The P1-A five-object ARM64 build also passed; see
+[P1-TABLE-REPORT.md](P1-TABLE-REPORT.md) for its exact source and artifact.
+The P1-A OpenWrt package/image and all BE9300 hardware checks remain pending.
 
 ## Staged follow-up
 
