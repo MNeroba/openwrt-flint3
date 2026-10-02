@@ -2,6 +2,9 @@
 
 **Status:** test procedure for an unverified candidate. No successful OpenWrt
 module build or Flint 3 hardware run has been recorded for this P0 revision.
+See [BUILD-REPORT.md](BUILD-REPORT.md) for exact CI evidence. Start the hardware
+run only after T0 passes for the image revision under test.
+
 This plan is intended for the driver maintainer and the Flint 3 owner running
 the test. It is not a claim that any step has passed.
 
@@ -190,7 +193,7 @@ or command output. A blocked test is not a pass.
 | T2 | Check `ip -d link`, `bridge link`, and `lsmod`. | DSA ports `lan1`–`lan4` exist and join the configured LAN bridge; the CPU conduit is `xgmac1`/the board's `lan` path. `rtl8372n_dsa` and `tag_rtl8_4` are loaded. |
 | T3 | Connect one peer to each physical LAN jack, one at a time. For each, record interface carrier and `ethtool` speed/duplex, then unplug and reconnect. | Jack map is LAN1→port 7, LAN2→6, LAN3→5, LAN4→4. Carrier follows the cable; no repeated flap or stuck port. Test 1G and 2.5G only when the peer supports those rates. |
 | T4 | From one directly connected host, obtain the expected LAN address and ping the router's LAN address for at least 100 packets. Record loss and `ip -s link` before/after. | Router CPU path works through the switch; no persistent loss, growing error counters, or DSA/tagger errors. |
-| T5 | Connect two independent hosts directly to two different LAN jacks, on the same untagged LAN. Confirm they are not connected through another bridge. Ping between them, then run `iperf3` for 30 seconds in both directions. Repeat across all six jack pairs if time permits. | ARP and bidirectional untagged LAN-to-LAN traffic work; no link reset, kernel warning, or persistent packet loss. Record rates as observations, not P0 pass thresholds. |
+| T5 | Connect two independent hosts directly to two different LAN jacks, on the same untagged LAN. Confirm they are not connected through another bridge. Ping between them, then run `iperf3` for 30 seconds in both directions. Repeat across all six jack pairs; record any unavailable pair as BLOCKED. | ARP and bidirectional untagged LAN-to-LAN traffic work; no link reset, kernel warning, or persistent packet loss. Record rates as observations, not P0 pass thresholds. |
 | T6 | Record `bridge vlan show` and switch VLAN/PVID readbacks using an agreed read-only access method. | Host output records software configuration only. Successful traffic plus hardware readback is needed to confirm the VLAN 1/PVID bootstrap. General VLAN offload is not implemented. |
 | T7 | Reboot normally three times, then perform one full power-off/power-on with the verified recovery/management path available. Repeat T1–T4 after each boot. | Probe, link mapping, and basic CPU/LAN traffic remain consistent. No boot relies on stale switch state left by the previous run. |
 | T8 | Optional: after all smoke tests pass, measure `iperf3` through a 2.5G-capable LAN peer in each direction. | Record peer, link speed, command, throughput, loss, and counters. No throughput target is defined for this unvalidated P0 candidate. |

@@ -2,6 +2,9 @@
 
 Updated: 2026-10-02. This is a source candidate, not a hardware-qualified driver.
 
+[BUILD-REPORT.md](BUILD-REPORT.md) consolidates publication evidence, exact
+revisions, artifacts, feature readiness and remaining acceptance gates.
+
 ## Source work completed
 
 - Runtime contiguous-field helpers validate masks and value range. Raw bitmaps
@@ -67,5 +70,6 @@ Updated: 2026-10-02. This is a source candidate, not a hardware-qualified driver
 4. Test PHY binding/AN, real 10G CPU link, cold/warm reset, isolation/fallback,
    reserved control-frame handling and error recovery on the bench.
 5. Restore P1/P2 behavior or obtain maintainer agreement to a narrower scope.
-6. Publish a Draft only after the agreed P0 build gate; do not propose merging
-   this functional reduction as a full replacement.
+6. The Draft is published at the contributor's request for technical/hardware
+   review while full image CI and provenance review remain pending. Passing
+   those gates is still required before treating it as a replacement.
