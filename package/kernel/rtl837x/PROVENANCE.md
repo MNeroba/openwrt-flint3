@@ -40,6 +40,16 @@ through candidate edits. Hardware verification is **pending for every row**.
 | Learning limit `0x5384 + port * 4`, mask bits 12:0 | ZTE `RTL8372N_L2_LEARN_LIMIT_*`, bridge-flags learning update; RTLPlayground limit address | Zero limit for P0. Confirm actual disable and limit-exceeded behavior on hardware. |
 | Flood `0x5360`–`0x5370`, mask bits 9:0 | ZTE `RTL8372N_*FLOOD`, `rtl8372n_flood_port_set` | CPU-only unknown unicast/multicast/broadcast targets; reserved RMA/control frames are a separate unresolved bench gate. |
 
+## P1 research boundary
+
+[P1-RESEARCH.md](P1-RESEARCH.md) maps potential VLAN/L2/CIST/BPDU follow-up
+work to the pinned sources above and the Linux v6.18 DSA contract. Those rows
+are research only: they do not extend the implemented feature-to-source map
+or certify new definitions for import. In particular, conflicting descriptions
+of VLAN bit 25 and L2 bit 29 must be resolved before general table APIs are
+implemented. Every newly retained field/operation needs a ledger entry and
+source disposition; hardware validation remains a separate requirement.
+
 ## Excluded material and candidate licensing
 
 The module object list contains `rtl8372n.c`, `rtl837x_common.c`,

@@ -7,6 +7,9 @@ OpenWrt, with the limited P0 scope described below. See
 Flint 3 smoke tests, expected results, failure evidence, and a maintainer report template.
 The [pre-PR review and remediation plan](PRE-PR-PLAN.md) records blocking
 source findings, build requirements and the staged publication gates.
+The [P1 feasibility and implementation plan](P1-RESEARCH.md) maps public
+VLAN/L2/STP sources, conflicting field descriptions, dependencies and future
+acceptance tests. It does not add P1 runtime support.
 
 ## P0 scope
 
@@ -74,13 +77,19 @@ The OpenWrt package remains `kmod-rtl837x-dsa`. It builds
 supported API; 6.12 compatibility is not claimed.
 
 See [P0-STATUS.md](P0-STATUS.md) for completed source work, the build attempt and
-remaining gates. This candidate is not yet a built or hardware-qualified PR.
+remaining gates. The mainline ARM64 module build passed; the complete OpenWrt
+target build and all BE9300 hardware checks remain pending.
 
 ## Staged follow-up
 
-1. Build on a supported OpenWrt host and perform first hardware bring-up.
-2. Validate the 10G CPU link, internal PHY link, basic switching, bridge, and
-   VLAN behavior on Flint 3.
-3. Add FDB/MDB and STP support with cleanly sourced register definitions.
-4. Port and validate LAG (#47) and rate limiting (#49), then restore MIB and
-   ethtool statistics if their register map is independently confirmed.
+1. Finish the exact-revision OpenWrt build and run the P0 first-device matrix:
+   real CPU/PHY links, tags, CPU-only isolation and software forwarding.
+2. Prepare the shared table engine and resolve VLAN/L2 field meanings and
+   source lineage, following [P1-RESEARCH.md](P1-RESEARCH.md). Source design can
+   proceed while P0 hardware results are pending.
+3. Prove BPDU CPU delivery, CIST states and dynamic fast-age before enabling
+   hardware bridge/VLAN/flags; then add database-correct FDB/MDB management.
+   Each runtime step needs a build and its documented bench gates.
+4. Reach P1 parity or record agreed deferrals before porting LAG (#47) and
+   rate limiting (#49). Restore other baseline interfaces in separate, sourced
+   and tested changes or obtain explicit maintainer agreement to defer them.

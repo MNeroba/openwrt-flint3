@@ -1,6 +1,6 @@
 # RTL8372N P0 implementation status
 
-Updated: 2026-10-02. This is a source candidate, not a hardware-qualified driver.
+Updated: 2026-10-03. This is a source candidate, not a hardware-qualified driver.
 
 [BUILD-REPORT.md](BUILD-REPORT.md) consolidates publication evidence, exact
 revisions, artifacts, feature readiness and remaining acceptance gates.
@@ -60,6 +60,15 @@ revisions, artifacts, feature readiness and remaining acceptance gates.
   and images are retained. Package/image completion is still pending.
 - Later documentation-only commits do not change the tested source, DTS,
   package Makefile or workflows. No hardware result has passed.
+
+## P1 research update
+
+[P1-RESEARCH.md](P1-RESEARCH.md) records the public VLAN/L2/CIST material and
+DSA requirements available for follow-up source work. Three conflicting
+descriptions (VLAN selector, VLAN bit 25 and L2 bit 29) are identified explicitly.
+BPDU delivery, database semantics and failure handling gate hardware bridge
+offload. This update changes documentation only; no P1 callback or hardware
+result is added, and the P0 build inputs remain identical to the CI revision.
 
 ## Remaining gates
 

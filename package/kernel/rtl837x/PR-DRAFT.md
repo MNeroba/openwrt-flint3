@@ -64,7 +64,7 @@ checksums when available. A partial artifact upload does not establish success.
 | Stage | Scope | Current status |
 | --- | --- | --- |
 | P0 | Probe/reset, register access, internal PHY, 10G CPU PCS, native tags, four LAN jacks and CPU/software forwarding | Implemented source; ARM64 build passed; target build and all hardware checks pending |
-| P1 | Hardware bridge/VLAN, FDB/MDB, STP/BPDU and bridge flags | Not implemented; RMA/BPDU behavior remains an explicit P0 bench question |
+| P1 | Hardware bridge/VLAN, FDB/MDB, STP/BPDU and bridge flags | Not implemented; [source/dependency plan](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/P1-RESEARCH.md) prepared; BPDU/database/table semantics remain gates |
 | P2 | LAG #47 and rate limiting #49 | Not ported; prior feature requirements remain applicable |
 | Other baseline interfaces | MTU/jumbo, alternate tags, mirroring, MIB/ethtool, EEE and GPIO parity | Not established; restore or agree individual deferrals |
 
@@ -78,6 +78,19 @@ maintainer explicitly agrees the corresponding feature deferrals. PPE/NAT and
 802.11r remain outside this PR. Final official driver and board submissions
 should remain separate; [OpenWrt #23161](https://github.com/openwrt/openwrt/pull/23161)
 is still open and unmerged at this check.
+
+### P1 research update (2026-10-03)
+
+Public sources cover substantial VLAN/L2/CIST operations, but they disagree
+on the VLAN selector description, VLAN bit 25 and L2 bit 29. The new plan
+records these conflicts, the Linux DSA CPU/database requirements, two BPDU
+delivery options and a staged implementation/bench matrix. No P1 runtime
+callbacks are added; the tested P0 build inputs remain unchanged.
+
+Prepare shared table transactions and checked codecs first; prove BPDU CPU
+delivery, CIST and dynamic flush before enabling hardware bridge/VLAN/flags;
+then add FDB/MDB with explicit database/CPU-entry semantics. Keep the agreed
+P0 hardware → P1 → P2 order and all existing source/build/upstream gates.
 
 ## Provenance review
 
@@ -96,6 +109,7 @@ Signed-off-by is inferred.
 - [Current implementation status](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/P0-STATUS.md)
 - [Source and operation ledger](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/PROVENANCE.md)
 - [First hardware test matrix and report template](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/FIRST-HARDWARE-TEST.md)
+- [P1 feasibility, source conflicts and staged acceptance matrix](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/P1-RESEARCH.md)
 - [Pre-PR audit and phased remediation plan](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/PRE-PR-PLAN.md)
 
 @perceival, please review the P0 scope and remaining gates. A separate comment

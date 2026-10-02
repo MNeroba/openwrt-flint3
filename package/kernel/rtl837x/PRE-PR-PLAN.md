@@ -5,6 +5,9 @@ Review date: 2026-10-02.
 **Implementation update:** [P0-STATUS.md](P0-STATUS.md) records the source fixes
 and remaining gates. Findings below describe the pre-fix audit snapshot; they
 are retained as the rationale, not as a claim that every defect still exists.
+[BUILD-REPORT.md](BUILD-REPORT.md) records the subsequent ARM64 build evidence;
+[P1-RESEARCH.md](P1-RESEARCH.md) is the current 2026-10-03 P1 source/dependency
+plan. The pre-fix figures and readiness statements below are historical.
 
  This is a source-review result and an implementation
 plan, not a successful build or hardware qualification report.

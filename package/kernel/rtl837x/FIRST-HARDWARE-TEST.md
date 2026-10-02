@@ -32,6 +32,11 @@ The run does **not** qualify general VLAN offload, FDB/MDB offload, STP, LAG,
 rate limiting, GPIO, EEE, or performance parity. Do not use tests for those
 features as P0 acceptance criteria.
 
+The future P1 acceptance matrix is in [P1-RESEARCH.md](P1-RESEARCH.md). Run it
+only against a revision that implements the corresponding P1 step, after P0
+passes. In particular, establish CPU-only BPDU reception without a loop before
+a future hardware-STP loop test; the current P0 does not implement STP offload.
+
 ## 2. Safety and test setup
 
 Use a spare GL-BE9300 and establish the project's documented recovery path

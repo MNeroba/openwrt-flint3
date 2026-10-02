@@ -18,6 +18,14 @@ hardware review. It does not qualify the candidate for production or merging.
 The workflow links below are authoritative for later CI state changes; a running
 job is not a passed build.
 
+## Follow-up research (2026-10-03)
+
+[P1-RESEARCH.md](P1-RESEARCH.md) adds a source-grounded plan for VLAN/L2 table
+access, bridge flags, FDB/MDB, CIST and BPDU delivery. No P1 runtime support or
+hardware result is added. The mainline module result above still applies to
+the unchanged build inputs; the full target workflow remained in progress at
+this check. Research findings are not build or functional qualification.
+
 ## Revisions and reproduction
 
 - Proposed base: `perceival/openwrt-flint3:flint3-be9300`,
