@@ -11,6 +11,20 @@ The [P1 feasibility and implementation plan](P1-RESEARCH.md) maps public
 VLAN/L2/STP sources, conflicting field descriptions, dependencies and future
 acceptance tests. It does not add P1 runtime support.
 
+## P1-A VLAN table follow-up
+
+The separate [P1-A report](P1-TABLE-REPORT.md) documents the shared VLAN table
+transaction lock, checked VLAN 1 bootstrap masks, bounded command waits and
+exact full-word readback. Setup also emits a best-effort register snapshot for
+VLAN 1, configured PVIDs, port isolation, learning limits, flood masks and VLAN
+controls. Snapshot read failures or unexpected values are logged and do not
+fail setup. The exact VLAN-table write readback remains fail-closed and can
+still fail setup; this behavior has not yet been validated on BE9300 hardware.
+
+P1-A does not add user-configurable VLAN offload, FDB/MDB, bridge/STP, LAG or
+rate limiting. Its source requires a fresh module and OpenWrt image build and
+first-device test; Release-7 P0 evidence does not cover these changes.
+
 ## P0 scope
 
 The current code provides:

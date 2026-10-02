@@ -1,5 +1,11 @@
 # RTL8372N P0 build and review report
 
+This report's CI and hardware evidence is for the P0 Release-7 source, not the
+separate P1-A VLAN table candidate. P1-A adds a new module object, changes the
+bootstrap transaction and records best-effort register diagnostics; its exact
+source requires new module and OpenWrt image builds and hardware validation.
+See [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md) for the P1-A evidence ledger.
+
 ## Latest result (status checked 2026-10-07)
 
 | Gate | Result | Evidence / scope |
