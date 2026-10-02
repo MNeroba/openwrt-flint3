@@ -23,17 +23,20 @@ jobs:
           df -h .
       - name: Configure BE9300 AP image and record inputs
         run: |
+          cp package/kernel/rtl837x/P0-FEEDS.conf feeds.conf
           ./scripts/feeds update -a
           ./scripts/feeds install -a
+          ./scripts/feeds list -s -f > p0-feeds.conf
+          diff -u <(sed '/^#/d; /^$/d' feeds.conf) p0-feeds.conf
           cp configs/ap.config .config
           make defconfig
           {
             git rev-parse HEAD
-            for feed in feeds/*; do
-              test ! -d "$feed/.git" || git -C "$feed" rev-parse HEAD
-            done
+            ./scripts/feeds list -s
           } > p0-build-inputs.txt
           grep -E '^CONFIG_(TARGET_qualcommbe|PACKAGE_kmod-rtl837x-dsa|PACKAGE_kmod-mdio-devres|USE_APK)' .config
+          grep -qx 'CONFIG_PACKAGE_kmod-rtl837x-dsa=y' .config
+          grep -qx 'CONFIG_PACKAGE_kmod-mdio-devres=y' .config
       - name: Build complete image
         run: |
           set -o pipefail
@@ -54,6 +57,7 @@ jobs:
           if-no-files-found: warn
           path: |
             .config
+            p0-feeds.conf
             p0-*.txt
             p0-*.log
             logs/

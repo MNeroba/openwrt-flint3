@@ -115,6 +115,7 @@ Build on a supported Linux OpenWrt build host. The current checkout's macOS
 host is not a successful build environment for this package.
 
 ```sh
+cp package/kernel/rtl837x/P0-FEEDS.conf feeds.conf
 ./scripts/feeds update -a
 ./scripts/feeds install -a
 cp configs/ap.config .config
@@ -127,10 +128,11 @@ make -j"$(nproc)"
 Before the hardware run, record the exact source revision used for the
 image. A commit hash alone is insufficient if the build includes uncommitted
 changes; attach the corresponding complete patch or commit the candidate first.
-Also record the image checksum on the build host:
+Record the installed feed revisions and image checksum on the build host:
 
 ```sh
 git rev-parse HEAD
+./scripts/feeds list -s -f > p0-feeds.conf
 sha256sum bin/targets/qualcommbe/ipq53xx/*glinet_gl-be9300*sysupgrade.bin
 find bin/packages -type f \( -name '*rtl837x-dsa*.apk' -o -name '*rtl837x-dsa*.ipk' \) -print
 ```

@@ -46,7 +46,8 @@ Updated: 2026-10-02. This is a source candidate, not a hardware-qualified driver
   to the public `phy_drivers_register/unregister` API; a retest is required.
   Mainline module compilation is distinct from the OpenWrt package/image gate.
 - Separate Linux CI is building the complete BE9300 AP image from the project
-  config. Feed commit IDs, generated config, logs and images are retained.
+  config. `P0-FEEDS.conf` fixes all five feed revisions; CI checks installed
+  revisions and retains generated config, logs and images.
 - No package/image build and no hardware result has passed for this revision.
 
 ## Remaining gates
