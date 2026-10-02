@@ -102,11 +102,14 @@
 #define RTL837X_TABLE_CTRL                          0x5cac
 #define RTL837X_TABLE_DATA0                         0x5cb0
 #define RTL837X_TABLE_WRITE_DATA0                   0x5cb8
+#define RTL837X_TABLE_READ_DATA0                    0x5ccc
+#define RTL837X_TABLE_TARGET                        GENMASK(15, 8)
 #define RTL837X_TABLE_VLAN                          0x03
 #define RTL837X_TABLE_WRITE                         BIT(1)
 #define RTL837X_TABLE_EXECUTE                       BIT(0)
 #define RTL837X_TABLE_ADDRESS                       GENMASK(31, 16)
-#define RTL837X_VLAN_DATA_VALID                     BIT(25)
+/* Existing P0 raw flag; validity versus IVL semantics remain unresolved. */
+#define RTL837X_VLAN_BOOTSTRAP_FLAGS                BIT(25)
 #define RTL837X_VLAN_MEMBER_MASK                    GENMASK(9, 0)
 #define RTL837X_VLAN_UNTAG_MASK                     GENMASK(19, 10)
 

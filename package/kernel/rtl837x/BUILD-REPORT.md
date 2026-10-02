@@ -1,5 +1,10 @@
 # RTL8372N P0 build and review report
 
+This report records the parent P0 PR #104 publication. The P1-A branch changes
+source, module inputs and package release; its evidence is recorded separately
+in [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md). The four-object artifact below
+does not validate the current five-object module.
+
 ## Result at publication
 
 | Gate | Result | Evidence / scope |

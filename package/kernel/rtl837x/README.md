@@ -11,6 +11,14 @@ The [P1 feasibility and implementation plan](P1-RESEARCH.md) maps public
 VLAN/L2/STP sources, conflicting field descriptions, dependencies and future
 acceptance tests. It does not add P1 runtime support.
 
+## P1-A branch update
+
+This branch implements the [VLAN table foundation](P1-TABLE-REPORT.md) on top
+of PR #104: serialized access, checked masks/VIDs, raw readback and verified
+VLAN 1 setup. It changes build inputs; the parent ARM64 artifact does not
+cover this revision. The new build and bench status is recorded in that report.
+General DSA bridge/VLAN/FDB/MDB/STP callbacks remain absent.
+
 ## P0 scope
 
 The current code provides:
@@ -26,6 +34,8 @@ The current code provides:
 - SerDes mode selection and the optional `sds0/1-{rx,tx}-swap` device-tree
   properties, using the small set of open register operations listed in the
   provenance manifest.
+- Serialized VLAN table access with bounded waits, raw readback and checked
+  port-mask updates; bootstrap writes require exact readback equality.
 - Native RTL8_4 CPU tagging, a VLAN 1/PVID 1 bootstrap, and CPU-only port
   isolation/flooding with learning disabled. Hardware bridge offload is omitted;
   DSA's software bridge fallback is the intended P0 path and needs bench checks.
@@ -77,8 +87,9 @@ The OpenWrt package remains `kmod-rtl837x-dsa`. It builds
 supported API; 6.12 compatibility is not claimed.
 
 See [P0-STATUS.md](P0-STATUS.md) for completed source work, the build attempt and
-remaining gates. The mainline ARM64 module build passed; the complete OpenWrt
-target build and all BE9300 hardware checks remain pending.
+remaining gates for the parent P0. Its mainline ARM64 module build passed.
+This P1-A branch needs a new build; see [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md).
+All BE9300 hardware checks remain pending.
 
 ## Staged follow-up
 

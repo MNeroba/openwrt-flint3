@@ -5,6 +5,14 @@ Updated: 2026-10-03. This is a source candidate, not a hardware-qualified driver
 [BUILD-REPORT.md](BUILD-REPORT.md) consolidates publication evidence, exact
 revisions, artifacts, feature readiness and remaining acceptance gates.
 
+## P1-A branch boundary
+
+This file records the parent #104 baseline. The current branch adds a fifth
+module object, serialized/verified VLAN table setup and package release 4.
+Those source/build-input changes are not covered by the parent CI artifacts
+or the documentation-only equivalence statement below. Current evidence and
+remaining gates are in [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md).
+
 ## Source work completed
 
 - Runtime contiguous-field helpers validate masks and value range. Raw bitmaps

@@ -2,7 +2,7 @@ name: RTL8372N module build
 
 on:
   push:
-    branches: [rtl837x-dsa-port]
+    branches: [rtl837x-dsa-port, rtl8372n-p1-tables]
     paths:
       - .github/workflows/rtl8372n-module.yml
       - package/kernel/rtl837x/src/**
