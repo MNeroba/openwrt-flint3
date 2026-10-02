@@ -39,8 +39,12 @@ Updated: 2026-10-02. This is a source candidate, not a hardware-qualified driver
 - A kernel-header preparation attempt against the cached Linux 6.18.38 tree
   stopped at `defconfig`: macOS `ld` rejects `--version` and Kbuild reports an
   unsupported linker. No target module was compiled by that attempt.
-- A Linux CI compilation path is being prepared for the exact 6.18.39 API.
+- Linux CI reached candidate compilation against 6.18.39 and found use of
+  non-public single-driver PHY registration helpers. Those calls were changed
+  to the public `phy_drivers_register/unregister` API; a retest is required.
   Mainline module compilation is distinct from the OpenWrt package/image gate.
+- Separate Linux CI is building the complete BE9300 AP image from the project
+  config. Feed commit IDs, generated config, logs and images are retained.
 - No package/image build and no hardware result has passed for this revision.
 
 ## Remaining gates

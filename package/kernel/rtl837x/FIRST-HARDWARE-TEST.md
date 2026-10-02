@@ -31,9 +31,11 @@ features as P0 acceptance criteria.
 
 ## 2. Safety and test setup
 
-Use a spare GL-BE9300 if possible. Keep a serial console connected for the
-whole run and have a known-good image plus the project's documented recovery
-path ready before installing the candidate. Follow the backup and installation
+Use a spare GL-BE9300 and establish the project's documented recovery path
+with a known-good image before the test. The AP config documents no usable
+normal serial console on this board: do not assume UART access. Use the known
+TFTP/initramfs recovery path and `ramoops`/`/sys/fs/pstore` crash evidence. If a
+working console or independent management path is available, keep it connected. Follow the backup and installation
 instructions in the [top-level README](../../../README.md); do not test this
 candidate on the only router you can recover remotely. The P0 code issues a
 switch software reset during probe, and full post-reset PHY/SerDes initialization
@@ -43,7 +45,9 @@ Prepare:
 
 - One Flint 3 with the candidate image built from the exact source revision
   under test.
-- A serial console and a separate way to restore the known-good image.
+- Tested recovery/initramfs access, a known-good image and persistent crash
+  log collection. Record any actually usable console or independent management
+  path; access through the candidate's LAN ports alone is insufficient.
 - Two independent Ethernet hosts. For link-rate checks, use a peer and cable
   that support 2.5 Gb/s; a 1 Gb/s peer is still useful for basic link and
   forwarding checks.
@@ -145,7 +149,7 @@ supported" message is expected; failure to attach the port is not expected.
 
 ## 5. Capture a baseline after boot
 
-Run this from the router's serial console before starting traffic. Save the
+Run this through the verified management path before starting traffic. Save the
 output on the router or copy it to the host; do not publish ART contents,
 unique MAC addresses, serial numbers, or wireless calibration data.
 

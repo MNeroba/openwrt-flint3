@@ -78,12 +78,22 @@ static int rtl8372n_phy_read_status(struct phy_device *phydev)
 	ret = genphy_read_status(phydev);
 	if (ret || !phydev->link)
 		return ret;
+	if (phydev->autoneg == AUTONEG_ENABLE && phydev->autoneg_complete &&
+	    linkmode_test_bit(ETHTOOL_LINK_MODE_2500baseT_Full_BIT,
+			      phydev->supported)) {
+		value = phy_read_mmd(phydev, MDIO_MMD_AN, MDIO_AN_10GBT_STAT);
+		if (value < 0) {
+			ret = value;
+			goto failed;
+		}
+		linkmode_mod_bit(ETHTOOL_LINK_MODE_2500baseT_Full_BIT,
+				phydev->lp_advertising,
+				value & MDIO_AN_10GBT_STAT_LP2_5G);
+	}
 	value = phy_read_paged(phydev, 0xa43, 0x12);
 	if (value < 0) {
-		phydev->link = false;
-		phydev->speed = SPEED_UNKNOWN;
-		phydev->duplex = DUPLEX_UNKNOWN;
-		return value;
+		ret = value;
+		goto failed;
 	}
 	/* Published Realtek PHYSR speed encoding; restrict to internal 2.5G PHYs. */
 	switch (value & (BIT(9) | GENMASK(5, 4))) {
@@ -100,16 +110,26 @@ static int rtl8372n_phy_read_status(struct phy_device *phydev)
 		phydev->speed = SPEED_2500;
 		break;
 	default:
-		phydev->link = false;
-		phydev->speed = SPEED_UNKNOWN;
-		phydev->duplex = DUPLEX_UNKNOWN;
-		return -EIO;
+		ret = -EIO;
+		goto failed;
 	}
 	phydev->duplex = value & BIT(3) ? DUPLEX_FULL : DUPLEX_HALF;
+	if (phydev->speed == SPEED_2500 && phydev->duplex != DUPLEX_FULL) {
+		ret = -EIO;
+		goto failed;
+	}
 	phydev->master_slave_state = phydev->speed >= SPEED_1000 ?
 		(value & BIT(11) ? MASTER_SLAVE_STATE_MASTER :
 		 MASTER_SLAVE_STATE_SLAVE) : MASTER_SLAVE_STATE_UNSUPPORTED;
 	return 0;
+
+failed:
+	phydev->link = false;
+	phydev->speed = SPEED_UNKNOWN;
+	phydev->duplex = DUPLEX_UNKNOWN;
+	phydev->pause = false;
+	phydev->asym_pause = false;
+	return ret;
 }
 
 struct phy_driver rtl8372n_phy_driver = {

@@ -147,12 +147,12 @@ static int rtl8372n_setup_mdio(struct rtl837x_priv *priv)
 	bus->read_c45 = rtl8372n_mdio_phy_read_c45;
 	bus->write_c45 = rtl8372n_mdio_phy_write_c45;
 	bus->parent = dev;
-	bus->phy_mask = ~(ds->phys_mii_mask & RTL8372N_PHY_PORT_MASK);
+	bus->phy_mask = ~(dsa_user_ports(ds) & RTL8372N_PHY_PORT_MASK);
 
 	ret = devm_of_mdiobus_register(dev, bus, mnp);
 	if (!ret) {
 		for (port = 4; port <= 7; port++) {
-			if (!(ds->phys_mii_mask & BIT(port)))
+			if (!(dsa_user_ports(ds) & BIT(port)))
 				continue;
 			phy = mdiobus_get_phy(bus, port);
 			if (!phy || phy->drv != &rtl8372n_phy_driver) {
