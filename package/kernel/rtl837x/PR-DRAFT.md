@@ -1,50 +1,102 @@
-# rtl8372n: prepare a minimal DSA and private-PHY bring-up candidate
+# rtl8372n: add P0 DSA bring-up candidate for GL-BE9300
 
 ## Problem
 
-The shipping RTL837x package uses the old SDK-backed driver. Its author has
-[deprecated that source and pointed to the DSA refactor](https://github.com/RuijieNetworksCommunity/rtl837x-gsw-driver/issues/2#issuecomment-5935360083),
-with removal of the retained register-definition header planned. This candidate
-implements the narrow P0 step of [#100](https://github.com/perceival/openwrt-flint3/issues/100),
-as discussed in [#99](https://github.com/perceival/openwrt-flint3/issues/99).
+The shipping RTL837x package uses the old SDK-backed source. In his
+[deprecation comment](https://github.com/RuijieNetworksCommunity/rtl837x-gsw-driver/issues/2#issuecomment-5935360083),
+Airjinkela recommends the DSA refactor and plans to remove the retained
+register-definition header. This PR starts the replacement tracked in
+[#100](https://github.com/perceival/openwrt-flint3/issues/100), following the discussion in
+[#99](https://github.com/perceival/openwrt-flint3/issues/99).
 
-## Changes
+## Summary
 
-- Replace the SDK object list with a reduced RTL8372N DSA/register transport.
-  Restricted generated headers and PHY/SerDes patch arrays are excluded.
-- Serialize PHY/SDS commands; add checked runtime field helpers, per-PHY C22
-  pages, reset-safe writing and fail-closed PCS/error handling.
-- Add a private PHY layer with actual-port native MMD access and published
-  Realtek capability/status behavior; forced 2.5G is unsupported.
-- Use CPU-only isolation/flooding and disable hardware learning. Hardware
-  bridge offload is omitted; software fallback is the intended P0 path.
-- Target Linux 6.18 and add MDIO devres dependency. BE9300's coordinated DTS
-  uses `realtek,rtl8372n`; legacy BE6500 nodes are outside this candidate scope.
-- Include the source/operation ledger and first-device test procedure.
+Prepare a minimal RTL8372N DSA bring-up candidate for GL-BE9300:
 
-## Validation
+- Adapt the Airjinkela DSA/phylink/MDIO architecture with retained attribution.
+  Remove the SDK object tree, restricted generated header and vendor PHY/SerDes
+  patch arrays from the candidate.
+- Add a small register map with a pinned source/operation ledger; retain the
+  RTLPlayground MIT notice and identify unresolved SDS lineage explicitly.
+- Fix runtime register-field handling, serialize complete PHY/SDS transactions
+  and document child/parent MDIO lock ordering.
+- Add per-PHY C22 pages and a private internal-PHY driver using actual-port
+  native MMD access, published capability/status definitions and 2.5G autoneg.
+  Missing/wrong PHY binding and unsupported speed encodings fail closed;
+  forced 2.5G is unsupported.
+- Use a dedicated reset writer, fail-closed PCS reads, early topology validation
+  and setup-failure/teardown quiescing.
+- Use CPU-only isolation/flood masks with hardware learning disabled. Incomplete
+  hardware bridge callbacks are removed; untagged software bridging is the
+  intended P0 fallback and still needs bench validation.
+- Target Linux 6.18, declare MDIO devres dependency and build `rtl8372n_dsa.ko`
+  with the kernel RTL8_4 tagger. Coordinate BE9300's switch compatible to
+  `realtek,rtl8372n` and remove unsupported legacy switch properties.
+- Include reproducible CI inputs, a build/review report and the first-device
+  procedure with a result template.
 
-See [P0-STATUS.md](P0-STATUS.md) for current evidence. Local whitespace/style
-checks are separate from ARM64 compilation and the OpenWrt package/image gate.
-[ARM64 module compilation/modpost passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390)
-for `954a84bd7c` with `W=1` against Linux 6.18.39. The run retains its config,
-logs and module. [Full BE9300 OpenWrt image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177)
-is still pending. Later documentation-only commits leave this source snapshot
-unchanged. Hardware validation is pending.
+## Validation and build evidence
 
-## Review questions and limitations
+Tested source: `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`.
+Later commits change documentation only; the source, package Makefile, DTS,
+workflows and feed lock were compared with that revision before publication.
 
-- Source-owner/maintainer disposition is still required for flagged provenance
-  rows, especially SDS definitions/polarity facts. No authorization or sign-off
-  is inferred from repository licensing.
-- PHY AN, physical 10G CPU link, operation after cold reset, CPU tag semantics,
-  isolation, RMA/BPDU behavior and software fallback need BE9300 bench evidence.
-- General VLAN/FDB/MDB/STP, LAG #47, rate limiting #49, statistics, GPIO and EEE
-  are not restored. Agree the staged scope before considering a merge.
-- Keep the shipping baseline until the replacement passes the agreed gates.
-  This is not a proposal to merge a functional reduction into production.
-- Final official BE9300 integration remains gated on
-  [OpenWrt #23161](https://github.com/openwrt/openwrt/pull/23161).
+| Check | Result | Evidence |
+| --- | --- | --- |
+| ARM64 / Linux 6.18.39 | **PASS** | [CI run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390): kernel exports, tagger, four candidate objects, `W=1`, modpost and `.ko` linking; no candidate compiler warnings |
+| BE9300 OpenWrt configuration | **PASS** | AP config, pinned-feed verification and driver/MDIO-devres selection in the [target run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177) |
+| OpenWrt package / DTB / full image | **IN PROGRESS** | The target run is still building; no passed package/image result is claimed |
+| Whitespace | **PASS** | `git diff --check` against the proposed base |
+| checkpatch | **0 errors; 1 reviewed warning** | Mutable regmap config copy is needed for per-device `lock_arg` |
+| BE9300 hardware | **NOT RUN** | No earlier SDK-driver result is attributed to this implementation |
 
-Do not publish this draft body as a passed-build claim. The agreed P0 build and
-provenance gates still apply before opening the PR.
+The [ARM64 artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390/artifacts/11248964933)
+contains the generated config, complete build logs and module. Its module
+SHA-256 is `d47c1109ab19c30f81f7a7ccd034d787b1fe2e2684acb99c89389cee1b93f1d6`.
+This is an API-check artifact, not an OpenWrt installation package.
+
+The full target workflow uses `configs/ap.config` and five pinned feeds. It
+retains build inputs, generated config, logs, target packages/images and image
+checksums when available. A partial artifact upload does not establish success.
+
+## Scope and remaining work
+
+| Stage | Scope | Current status |
+| --- | --- | --- |
+| P0 | Probe/reset, register access, internal PHY, 10G CPU PCS, native tags, four LAN jacks and CPU/software forwarding | Implemented source; ARM64 build passed; target build and all hardware checks pending |
+| P1 | Hardware bridge/VLAN, FDB/MDB, STP/BPDU and bridge flags | Not implemented; RMA/BPDU behavior remains an explicit P0 bench question |
+| P2 | LAG #47 and rate limiting #49 | Not ported; prior feature requirements remain applicable |
+| Other baseline interfaces | MTU/jumbo, alternate tags, mirroring, MIB/ethtool, EEE and GPIO parity | Not established; restore or agree individual deferrals |
+
+Only RTL8372N with the explicit compatible is included in the candidate scope.
+BE9300 uses CPU port 3 at fixed 10GBASE-R and internal PHY/user ports 4–7.
+Legacy BE6500 `realtek,rtl837x` nodes are unsupported by this candidate.
+
+This Draft is for technical/provenance review and first hardware bring-up.
+Keep the shipping baseline until the acceptance criteria in #100 pass or the
+maintainer explicitly agrees the corresponding feature deferrals. PPE/NAT and
+802.11r remain outside this PR. Final official driver and board submissions
+should remain separate; [OpenWrt #23161](https://github.com/openwrt/openwrt/pull/23161)
+is still open and unmerged at this check.
+
+## Provenance review
+
+The restricted header and vendor patch arrays are excluded. The existing
+package `LICENSE` is unchanged. Remaining public-source lineage is recorded
+rather than described as fully cleared: Airjinkela's
+[SDK disclosure](https://github.com/RuijieNetworksCommunity/rtl837x-gsw-driver/issues/2#issuecomment-5946313878)
+still matters, particularly for SDS command fields and polarity definitions.
+Repository licensing and matching register values are not presented as proof
+of independent origin or as source-owner authorization. No third-party
+Signed-off-by is inferred.
+
+## Review documents
+
+- [Build/review report and exact inputs](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/BUILD-REPORT.md)
+- [Current implementation status](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/P0-STATUS.md)
+- [Source and operation ledger](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/PROVENANCE.md)
+- [First hardware test matrix and report template](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/FIRST-HARDWARE-TEST.md)
+- [Pre-PR audit and phased remediation plan](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/PRE-PR-PLAN.md)
+
+@perceival, please review the P0 scope and remaining gates. A separate comment
+below lists the requested bench tests and feedback format.
