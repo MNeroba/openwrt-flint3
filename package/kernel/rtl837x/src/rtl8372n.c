@@ -434,26 +434,15 @@ static void rtl8372n_port_disable(struct dsa_switch *ds, int port)
 static int rtl8372n_setup_default_vlan(struct rtl837x_priv *priv,
 				       u16 members, u16 untagged)
 {
-	u32 vlan_word, command;
+	u32 vlan_word;
 	int ret;
 
-	vlan_word = RTL837X_VLAN_DATA_VALID |
-		    FIELD_PREP(RTL837X_VLAN_MEMBER_MASK, members) |
-		    FIELD_PREP(RTL837X_VLAN_UNTAG_MASK, untagged);
-	ret = rtl837x_reg_write(priv, RTL837X_TABLE_WRITE_DATA0, vlan_word);
+	ret = rtl837x_vlan_set_port_masks(RTL837X_VLAN_BOOTSTRAP_FLAGS,
+					  members, untagged, &vlan_word);
 	if (ret)
 		return ret;
 
-	command = FIELD_PREP(RTL837X_TABLE_ADDRESS, 1) |
-		  (RTL837X_TABLE_VLAN << 8) |
-		  RTL837X_TABLE_WRITE | RTL837X_TABLE_EXECUTE;
-	ret = rtl837x_reg_write(priv, RTL837X_TABLE_CTRL, command);
-	if (ret)
-		return ret;
-
-	return regmap_read_poll_timeout(priv->map, RTL837X_TABLE_CTRL, command,
-					!(command & RTL837X_TABLE_EXECUTE),
-						10, 1000);
+	return rtl837x_vlan_write(priv, 1, vlan_word);
 }
 
 static int rtl8372n_configure_sds_polarity(struct rtl837x_priv *priv)

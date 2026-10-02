@@ -12,6 +12,14 @@ The candidate scope and sources are documented in [README.md](README.md) and
 [PROVENANCE.md](PROVENANCE.md). The board description is
 [`ipq5332-gl-be9300.dts`](../../../target/linux/qualcommbe/dts/ipq5332-gl-be9300.dts).
 
+For the P1-A table branch, [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md) records
+changed build inputs and added idle/readback checks. Use an image built from
+that exact revision; the parent four-object ARM64 artifact does not qualify
+it. Bootstrap readback mismatch is a setup error; include its written/read
+values in the report and repeat the P0 forwarding/reset matrix.
+[P1-TABLE-TEST.md](P1-TABLE-TEST.md) provides the table-specific A0–A6
+procedure, expected BE9300 bootstrap word and a separate result template.
+
 ## 1. What this first test should prove
 
 The first run is a narrow smoke test of the P0 path:

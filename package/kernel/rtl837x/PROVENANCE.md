@@ -35,7 +35,8 @@ through candidate edits. Hardware verification is **pending for every row**.
 | SDS indirect `0x03f8/0x03fc/0x0400`, command fields | Air `src/rtl837x_common.c` SDS command construction; ZTE SDS operations | Narrow command facts are retained, no patch arrays. This row still needs a specific lineage disposition; excluding the vendor header does not alone settle it. |
 | SDS mode `0x7b20`, mode `0x1a`, polarity pages 0/6 and bits | RTLPlayground `rtl837x_init.c::sds_init`; Air mode/polarity operations; ZTE SDS mode comparison | Only mode/polarity operations. Source and mode-change ordering review remain pending, especially TX polarity definitions and post-reset completeness. |
 | RTL8_4 CPU tag `0x603c/0x6720/0x6724` | RTLPlayground `rtl837x_regs.h` CPU tag symbols; Air `set_tag_rtl`; Linux `net/dsa/tag_rtl8_4.c` | Native tagger; no copied tagger or private 802.1Q protocol. Header format, forwarding reasons and port identity need traffic tests. |
-| VLAN 1, table `0x5cac/0x5cb8`, PVID `0x4e1c`, filter `0x4e14/0x4e18` | RTLPlayground `rtl837x_port.c::vlan_setup` and table definitions; ZTE VLAN map | Minimal bootstrap only. General VLAN callbacks are absent. |
+| VLAN 1, table `0x5cac/0x5cb8`, PVID `0x4e1c`, filter `0x4e14/0x4e18` | RTLPlayground `rtl837x_port.c::vlan_setup` and table definitions; ZTE VLAN map | Minimal bootstrap only. General VLAN callbacks are absent. P1-A preserves the bit-25 raw flag without interpreting it as validity. |
+| VLAN table read `0x5ccc`, selector-byte mask, checked port masks and serialized write/readback | RTLPlayground `rtl837x_regs.h` table-control comment/data symbols; `rtl837x_port.c::vlan_get/create` | New GPL-2.0-only table layer; selector 3 follows code. Whole-word comparison is a new fail-closed policy requiring bench validation; no L2 status/method semantics are introduced. See [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md). |
 | Isolation `0x50c0 + port * 4` | RTLPlayground isolation register; ZTE isolation operations | CPU-only matrix; unused ports cleared. Hardware bridge join/leave code removed. |
 | Learning limit `0x5384 + port * 4`, mask bits 12:0 | ZTE `RTL8372N_L2_LEARN_LIMIT_*`, bridge-flags learning update; RTLPlayground limit address | Zero limit for P0. Confirm actual disable and limit-exceeded behavior on hardware. |
 | Flood `0x5360`–`0x5370`, mask bits 9:0 | ZTE `RTL8372N_*FLOOD`, `rtl8372n_flood_port_set` | CPU-only unknown unicast/multicast/broadcast targets; reserved RMA/control frames are a separate unresolved bench gate. |
@@ -53,12 +54,12 @@ source disposition; hardware validation remains a separate requirement.
 ## Excluded material and candidate licensing
 
 The module object list contains `rtl8372n.c`, `rtl837x_common.c`,
-`rtl837x_mdio.c` and `rtl8372n_phy.c`. It excludes `rtk-api`, restricted generated
+`rtl837x_mdio.c`, `rtl8372n_phy.c` and `rtl837x_table.c`. It excludes `rtk-api`, restricted generated
 headers, all PHY/SerDes patch arrays, GPIO, swconfig and debug SDK interfaces.
 The small register header is confined to used definitions and the ledger above.
 
-The adapted driver files declare GPL-2.0-or-later; the new PHY layer declares
-GPL-2.0-only. The combined module's `MODULE_LICENSE("GPL")` is kernel metadata,
+The adapted driver files declare GPL-2.0-or-later; the new PHY and table layers
+declare GPL-2.0-only. The combined module's `MODULE_LICENSE("GPL")` is kernel metadata,
 not a claim that it resolves the origin of all register facts. The MIT input
 notice is retained in [NOTICE](NOTICE). The existing package `LICENSE` file is
 unchanged.
