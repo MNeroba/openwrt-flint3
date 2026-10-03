@@ -53,11 +53,13 @@ revisions, artifacts, feature readiness and remaining acceptance gates.
   Module SHA-256:
   `d47c1109ab19c30f81f7a7ccd034d787b1fe2e2684acb99c89389cee1b93f1d6`.
   This API-check artifact is not an OpenWrt installation package.
-- [OpenWrt image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177)
-  is building the complete BE9300 AP image from the same code revision.
-  `P0-FEEDS.conf` fixes all five feed revisions; installed revision checks and
-  selection of the driver/MDIO-devres packages passed. Generated config, logs
-  and images are retained. Package/image completion is still pending.
+- [OpenWrt image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177) completed successfully on 2026-10-02 for source
+  revision `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`. The full BE9300 AP-config package/DTB/image workflow and
+  artifact confirmation passed. All five pinned feed revisions, installed
+  revision checks, and driver/MDIO-devres package selection were verified.
+  The [full build artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177/artifacts/11254652883) contains 317 files including the
+  generated configuration, logs, packages and target images. This is build
+  evidence only; no hardware result has passed.
 - Later documentation-only commits do not change the tested source, DTS,
   package Makefile or workflows. No hardware result has passed.
 
@@ -72,13 +74,13 @@ result is added, and the P0 build inputs remain identical to the CI revision.
 
 ## Remaining gates
 
-1. ARM64 compilation/modpost: passed for the revision above. Re-run for any
-   subsequent code changes; OpenWrt-specific compilation remains a separate gate.
-2. Build the OpenWrt package, DTB and full BE9300 image with pinned config/feeds.
+1. ARM64 compilation/modpost: passed for the revision above. Re-run if source
+   or build inputs change.
+2. OpenWrt package/DTB/full-image build: **PASS** for the tested source revision
+   and pinned inputs linked above. Re-run if source or build inputs change.
 3. Resolve flagged provenance rows, particularly SDS facts/source lineage.
 4. Test PHY binding/AN, real 10G CPU link, cold/warm reset, isolation/fallback,
    reserved control-frame handling and error recovery on the bench.
 5. Restore P1/P2 behavior or obtain maintainer agreement to a narrower scope.
-6. The Draft is published at the contributor's request for technical/hardware
-   review while full image CI and provenance review remain pending. Passing
-   those gates is still required before treating it as a replacement.
+6. The Draft remains a source and provenance review candidate. Hardware
+   qualification and required source-lineage decisions remain open.

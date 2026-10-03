@@ -1,30 +1,29 @@
 # RTL8372N P0 build and review report
 
-## Result at publication
+## Latest result (status checked 2026-10-03)
 
 | Gate | Result | Evidence / scope |
 | --- | --- | --- |
 | Mainline ARM64 compilation | **PASS** | Linux 6.18.39; all four candidate objects; `W=1`; module linking and modpost |
 | OpenWrt configuration | **PASS** | BE9300 AP configuration; all five pinned feeds verified; driver and MDIO-devres packages selected |
-| OpenWrt package, DTB and image | **IN PROGRESS** | Complete image workflow has not reported success; no usable target image is claimed |
+| OpenWrt package, DTB and image | **PASS** | [Full BE9300 AP-config run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177) completed successfully for `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`; [317-file build artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177/artifacts/11254652883) uploaded |
 | Source whitespace | **PASS** | `git diff --check` against the proposed base |
 | Kernel style review | **0 errors, 1 reviewed warning** | Mutable per-device regmap config is required to set its `lock_arg` |
 | BE9300 hardware | **NOT RUN** | No result is inferred from earlier SDK-driver tests |
 | Retained source provenance | **OPEN REVIEW** | Restricted header and patch arrays excluded; SDS field/polarity lineage remains unresolved |
 | Replacement acceptance in #100 | **NOT MET** | Hardware and feature parity, or agreed deferrals, remain required |
 
-Status checked on 2026-10-02. This report supports a Draft for technical and
-hardware review. It does not qualify the candidate for production or merging.
-The workflow links below are authoritative for later CI state changes; a running
-job is not a passed build.
+The full target-build run passed on 2026-10-02 for the tested source revision. This
+report supports a Draft for technical and hardware review; a build result does
+not qualify the candidate for production or establish that it runs on a BE9300.
 
 ## Follow-up research (2026-10-03)
 
 [P1-RESEARCH.md](P1-RESEARCH.md) adds a source-grounded plan for VLAN/L2 table
 access, bridge flags, FDB/MDB, CIST and BPDU delivery. No P1 runtime support or
-hardware result is added. The mainline module result above still applies to
-the unchanged build inputs; the full target workflow remained in progress at
-this check. Research findings are not build or functional qualification.
+hardware result is added. The module and full target-image builds passed for
+the unchanged P0 build inputs. Research findings are not hardware or functional
+qualification.
 
 ## Revisions and reproduction
 
@@ -61,11 +60,12 @@ PHY transactions, SerDes or forwarding on hardware.
 
 ### OpenWrt target build
 
-[Full BE9300 run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177)
-uses [configs/ap.config](../../../configs/ap.config) and
-[P0-FEEDS.conf](P0-FEEDS.conf), then executes `make defconfig` and
-`make -j2 V=s`. Configuration and feed checks passed; complete image building
-is still in progress at publication.
+[Full BE9300 run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177) **completed successfully** on 2026-10-02 for source
+revision `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`. It used [configs/ap.config](../../../configs/ap.config)
+and [P0-FEEDS.conf](P0-FEEDS.conf), then executed `make defconfig` and
+`make -j2 V=s`. Package/DTB/image building and artifact confirmation passed.
+The [uploaded build artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177/artifacts/11254652883) contains generated configuration,
+logs, packages and image outputs.
 
 | Feed | Pinned commit |
 | --- | --- |
@@ -75,12 +75,12 @@ is still in progress at publication.
 | telephony | `5d68d53c160a325ea9d03fce393e051573bcc736` |
 | video | `816fa8fe0ca759cc5d1ba71af1a716405bf4dda4` |
 
-The workflow must finish both image building and artifact confirmation before
-T0 is marked PASS. Confirmation requires the switch module, APK/IPK package
-and BE9300 sysupgrade checksum. Uploads preserve generated `.config`,
+The image-build and artifact-confirmation gate is **PASS** for the source
+revision above. The uploaded artifact preserves generated `.config`,
 `p0-build-inputs.txt`, installed feed lock, logs, packages and target images.
-An uploaded partial log/config on failure does not establish image success.
-A separate minimal OpenWrt dependency-image build has not been run.
+This establishes successful build/packaging only; the candidate has not been
+installed or tested on a BE9300. A separate minimal OpenWrt dependency-image
+build has not been run.
 
 ## Feature readiness
 
@@ -118,7 +118,8 @@ local patch-metadata changes are excluded from the published commits.
 
 Before replacement/merge:
 
-1. Complete the OpenWrt package/DTB/image gate and confirm dependency metadata.
+1. Re-run the OpenWrt package/DTB/image build if code, configuration or pinned
+   feeds change; the full-image gate passed for the revision recorded above.
 2. Resolve retained SDS/source lineage questions.
 3. Run [FIRST-HARDWARE-TEST.md](FIRST-HARDWARE-TEST.md), including negative
    forwarding, control frames, reset and PHY concurrency checks. A fixed-link

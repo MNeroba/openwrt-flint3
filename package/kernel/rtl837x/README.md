@@ -76,14 +76,18 @@ The OpenWrt package remains `kmod-rtl837x-dsa`. It builds
 `tag_rtl8_4` DSA tagger. It explicitly depends on MDIO devres. Linux 6.18 is the
 supported API; 6.12 compatibility is not claimed.
 
-See [P0-STATUS.md](P0-STATUS.md) for completed source work, the build attempt and
-remaining gates. The mainline ARM64 module build passed; the complete OpenWrt
-target build and all BE9300 hardware checks remain pending.
+See [P0-STATUS.md](P0-STATUS.md) and [BUILD-REPORT.md](BUILD-REPORT.md) for
+the current evidence and remaining gates. The ARM64 module build and full
+BE9300 AP-config OpenWrt package/DTB/image build passed for source revision
+`954a84bd7c46dbbb2412eeddfb300aad8b4cff35` ([module run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390),
+[target image run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177)).
+These are build results only; no BE9300 hardware checks have passed.
 
 ## Staged follow-up
 
-1. Finish the exact-revision OpenWrt build and run the P0 first-device matrix:
-   real CPU/PHY links, tags, CPU-only isolation and software forwarding.
+1. Run the P0 first-device matrix on a BE9300 using the exact built image:
+   real CPU/PHY links, tags, CPU-only isolation and software forwarding. The
+   current image build passed; repeat it if source or build inputs change.
 2. Prepare the shared table engine and resolve VLAN/L2 field meanings and
    source lineage, following [P1-RESEARCH.md](P1-RESEARCH.md). Source design can
    proceed while P0 hardware results are pending.

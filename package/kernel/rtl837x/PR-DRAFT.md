@@ -45,7 +45,7 @@ workflows and feed lock were compared with that revision before publication.
 | --- | --- | --- |
 | ARM64 / Linux 6.18.39 | **PASS** | [CI run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390): kernel exports, tagger, four candidate objects, `W=1`, modpost and `.ko` linking; no candidate compiler warnings |
 | BE9300 OpenWrt configuration | **PASS** | AP config, pinned-feed verification and driver/MDIO-devres selection in the [target run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177) |
-| OpenWrt package / DTB / full image | **IN PROGRESS** | The target run is still building; no passed package/image result is claimed |
+| OpenWrt package / DTB / full image | **PASS** | [Full BE9300 AP-config run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177) completed for `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`; [build artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177/artifacts/11254652883) uploaded; no hardware result is inferred |
 | Whitespace | **PASS** | `git diff --check` against the proposed base |
 | checkpatch | **0 errors; 1 reviewed warning** | Mutable regmap config copy is needed for per-device `lock_arg` |
 | BE9300 hardware | **NOT RUN** | No earlier SDK-driver result is attributed to this implementation |
@@ -55,15 +55,16 @@ contains the generated config, complete build logs and module. Its module
 SHA-256 is `d47c1109ab19c30f81f7a7ccd034d787b1fe2e2684acb99c89389cee1b93f1d6`.
 This is an API-check artifact, not an OpenWrt installation package.
 
-The full target workflow uses `configs/ap.config` and five pinned feeds. It
-retains build inputs, generated config, logs, target packages/images and image
-checksums when available. A partial artifact upload does not establish success.
+The full target workflow uses `configs/ap.config` and five pinned feeds. The run
+completed successfully and uploaded its configuration, logs, target packages
+and images. This establishes build success only; the first-device hardware gate
+remains open.
 
 ## Scope and remaining work
 
 | Stage | Scope | Current status |
 | --- | --- | --- |
-| P0 | Probe/reset, register access, internal PHY, 10G CPU PCS, native tags, four LAN jacks and CPU/software forwarding | Implemented source; ARM64 build passed; target build and all hardware checks pending |
+| P0 | Probe/reset, register access, internal PHY, 10G CPU PCS, native tags, four LAN jacks and CPU/software forwarding | Implemented source; ARM64 and full target-image builds passed; hardware checks pending |
 | P1 | Hardware bridge/VLAN, FDB/MDB, STP/BPDU and bridge flags | Not implemented; [source/dependency plan](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/P1-RESEARCH.md) prepared; BPDU/database/table semantics remain gates |
 | P2 | LAG #47 and rate limiting #49 | Not ported; prior feature requirements remain applicable |
 | Other baseline interfaces | MTU/jumbo, alternate tags, mirroring, MIB/ethtool, EEE and GPIO parity | Not established; restore or agree individual deferrals |
