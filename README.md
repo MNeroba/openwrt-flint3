@@ -67,34 +67,20 @@ file and build manifest with your download.
 
 ## Status
 
-The following results are **reported by the maintainer for GL-BE9300** with
-the current RTL837x driver. Check each release's notes for its exact feature
-scope; current-branch work and published images can differ.
+The latest published reference images are from [`ref-20260930`](https://github.com/perceival/openwrt-flint3/releases/tag/ref-20260930). The rows below describe the **shipping RTL837x driver** and maintainer-reported GL-BE9300 results. Image inclusion, a successful build and a hardware test are different kinds of evidence; check the exact profile manifest before flashing.
 
-| Subsystem | State |
-| --- | --- |
-| Boot / procd / SSH | ✅ Working |
-| LAN (RTL8372N via DSA + EDMA/PPE) | ✅ Working |
-| WAN (2.5G, USXGMII) | ✅ Working; links at 2.5 Gbps |
-| VLANs (bridge-vlan on DSA) | ✅ Working |
-| PPE hardware flow offload | ✅ Opt-in IPv4 LAN→WAN NAT (TCP/UDP, untagged or 802.1Q WAN): ~2.3 Gbit/s at ~1% CPU via the firewall's hardware flow offloading. WAN→LAN and IPv6 offload are not included in [ref-20260930](https://github.com/perceival/openwrt-flint3/releases/tag/ref-20260930); they are follow-up work |
-| Wi-Fi 7, all three bands | ✅ Working |
-| MLO (AP MLD across 2.4/5/6 GHz) | ✅ Working |
-| DFS | ✅ Working, including several BSSes per DFS radio started together |
-| 802.11k / 802.11v | ✅ Working |
-| eMMC sysupgrade + return to stock | ✅ Working |
+| Area | Shipping firmware status | Evidence and limits |
+| --- | --- | --- |
+| Boot, install and recovery | ✅ Reported working | The exact `router` and `vanilla` reference images passed a wiped-overlay first boot, reached `procd`, brought up LAN and DHCP; SSH is reported working on the shipping baseline. eMMC sysupgrade and return to stock are reported working; see the hardware-verified device instructions. |
+| Ethernet and basic VLAN | ✅ Reported working | RTL8372N DSA LAN via EDMA/PPE, bridge VLANs and the RTL8221B 2.5G USXGMII WAN (linking at 2.5 Gbps) are reported working on the existing driver. Throughput between two units over a 2.5G trunk was ~1.8–1.9 Gbit/s. This does not validate the replacement driver in [#104](https://github.com/perceival/openwrt-flint3/pull/104). |
+| Wi-Fi 7, MLO, DFS, 802.11k/v | ✅ Reported working | Maintainer reports cover all three bands, tri-band AP MLO, multiple BSSes on DFS radios and 802.11k/v. Exact image and client/topology still matter. |
+| 802.11r roaming with MLO | ⚠️ Experimental and image-specific | Only the AP reference profile includes the `992–999a` hostapd series. `999a` is marked **not hardware-verified**; a separate post-FT data-path failure remains reported. `vanilla` and `router` reference images do not include the series. |
+| PPE hardware flow offload | 🟡 Opt-in, limited | In `ref-20260930`, IPv4 LAN→WAN SNAT for TCP/UDP is reported at ~2.3 Gbit/s and ~1% CPU, on untagged or 802.1Q-tagged WAN. Tagged-WAN download traffic, WAN→LAN hardware offload and IPv6 hardware offload are not included. See the [detailed shipping-feature matrix](docs/feature-status.md#shipping-firmware-existing-rtl837x-driver). |
+| LAG and egress rate policing | 🧪 Open PRs; not in the reference images | [#47](https://github.com/perceival/openwrt-flint3/pull/47) and [#49](https://github.com/perceival/openwrt-flint3/pull/49) target the existing driver. Prior-head hardware measurements are recorded in the PRs; the current PR heads still need their own build and validation. |
+| Fan response near the first thermal trip | ⚠️ Known behavior under review | Two units measured 48.7 °C / 14% / 1126 rpm and 50.4 °C / 50% / 3493 rpm at idle. The finer trip-table change had not reached the tree at the latest [#8 update](https://github.com/perceival/openwrt-flint3/issues/8). |
+| Replacement DSA driver | 🧪 Build passed; hardware pending | [Draft #104](https://github.com/perceival/openwrt-flint3/pull/104) passed an ARM64 module build and a full BE9300 AP-config OpenWrt image build for the recorded source revision. **No BE9300 hardware run has been reported for this replacement.** Its separate P1/P2 parity work remains open. |
 
-Throughput measured between two units over a 2.5G trunk: **~1.8–1.9 Gbit/s**.
-
-The measurements above describe the reported test setups, not a throughput
-guarantee for every client or configuration. The [PPE/rtl8_4 bench notes](docs/rtl8_4-ppe-alias-20260927.md)
-record additional historical measurements and their conditions.
-
-> [!NOTE]
-> The replacement DSA driver in [Draft PR #104](https://github.com/perceival/openwrt-flint3/pull/104)
-> is a separate candidate. Results in this section describe the existing driver;
-> hardware tests and feature-parity work for the replacement remain open.
-
+See the [full feature and validation matrix](docs/feature-status.md) for the exact image revisions, evidence scope, known limits and replacement-driver gaps. “`vanilla`” is this project’s minimal image profile; it does not mean an unmodified upstream OpenWrt target or a catalogue of every generic OpenWrt package.
 ## Known issues
 
 - **ath12k firmware hang under sustained load.** After hours with many clients
@@ -109,6 +95,8 @@ record additional historical measurements and their conditions.
   events are unreliable for multi-link stations, so hostapd's
   `disassoc_low_ack` now defaults to 0 in these images (set it to 1 on a
   wifi-iface to restore the old behaviour).
+- **Earlier PPE NAT port-rewrite regression.** Fixed in [`ref-20260930`](https://github.com/perceival/openwrt-flint3/releases/tag/ref-20260930) by patch 0448. Router images or local builds made from 2026-09-23 through that release with PPE hardware offload enabled could mishandle a firewall-remapped source port. Update affected builds; [the release notes](https://github.com/perceival/openwrt-flint3/releases/tag/ref-20260930) describe the impact and fix. The 2026-09-15 reference images predate this regression.
+- **Fan response at idle.** On two units, crossing the first 50 °C thermal trip changed the reported fan from 14% (1126 rpm at 48.7 °C) to 50% (3493 rpm at 50.4 °C). The proposed finer in-tree curve was still unapplied at the latest [issue #8 update](https://github.com/perceival/openwrt-flint3/issues/8).
 - **PPE WAN RX FIFO overruns.** Roughly 0.07–0.09 % of packets at ~1.9 Gbit/s.
   No longer the hard ~600 Mbit/s cap earlier builds had, but not zero.
 - **802.11r with MLO is experimental.** Do not enable
@@ -183,7 +171,7 @@ linked issues and PRs for subsequent results and maintainer decisions.
 | --- | --- | --- |
 | **IPQ53xx upstream base** | 🚧 In review | [OpenWrt #23161](https://github.com/openwrt/openwrt/pull/23161) is open; official integration depends on the upstream base |
 | **RTL8372N replacement plan** | 🚧 In progress | [#99](https://github.com/perceival/openwrt-flint3/issues/99) coordinates upstream work; [#100](https://github.com/perceival/openwrt-flint3/issues/100) tracks source provenance, required features and acceptance tests |
-| **P0: DSA bring-up** | 🧪 Draft candidate | [#104](https://github.com/perceival/openwrt-flint3/pull/104): probe/init, PHY/SerDes and native-tag plumbing; hardware validation remains pending |
+| **P0: DSA bring-up** | 🧪 Draft candidate; target build passed | [#104](https://github.com/perceival/openwrt-flint3/pull/104): ARM64 module and full BE9300 AP-config image builds passed for the recorded source revision ([module](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390), [target image](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177)); BE9300 hardware validation remains pending |
 | **P1: switching parity** | 🚧 Partial implementation | [Dependent P1-A PR](https://github.com/MNeroba/openwrt-flint3/pull/1): serialized VLAN-table foundation; full bridge/VLAN/FDB/MDB/STP support remains open |
 | **LAG / rate limiting** | 🚧 Open PRs for the existing driver | [#47](https://github.com/perceival/openwrt-flint3/pull/47) and [#49](https://github.com/perceival/openwrt-flint3/pull/49); replacement-driver porting and validation follow the agreed P0 → P1 → P2 plan |
 
