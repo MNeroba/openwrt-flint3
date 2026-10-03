@@ -1,15 +1,40 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/flint3-banner-dark.svg">
+    <img src="docs/assets/flint3-banner-light.svg" alt="Flint 3 — a community OpenWrt port for GL-BE9300, powered by IPQ5332" width="960">
+  </picture>
+</p>
+
+<p align="center">
+  <a href="https://github.com/perceival/openwrt-flint3"><img src="https://img.shields.io/badge/OpenWrt-community_port-167d9a?style=flat-square" alt="OpenWrt: community port"></a>
+  <a href="#hardware"><img src="https://img.shields.io/badge/SoC-IPQ5332-425b70?style=flat-square" alt="SoC: IPQ5332"></a>
+  <a href="#hardware"><img src="https://img.shields.io/badge/Linux-6.18-425b70?style=flat-square" alt="Linux: 6.18"></a>
+  <a href="https://github.com/perceival/openwrt-flint3/releases"><img src="https://img.shields.io/badge/Reference_images-prerelease-c18423?style=flat-square" alt="Reference images: prerelease"></a>
+</p>
+
+<p align="center">
+  <a href="#download-images"><b>Downloads</b></a> ·
+  <a href="#status"><b>Status</b></a> ·
+  <a href="#known-issues"><b>Known issues</b></a> ·
+  <a href="#installing"><b>Installation</b></a> ·
+  <a href="#building"><b>Build</b></a> ·
+  <a href="#roadmap"><b>Roadmap</b></a> ·
+  <a href="#contributing"><b>Contribute</b></a>
+</p>
+
 # OpenWrt for the GL.iNet Flint 3 (GL-BE9300)
 
-Mainline **OpenWrt** support for the **GL.iNet Flint 3 (GL-BE9300)** — Qualcomm
+Community-maintained **OpenWrt** support for the **GL.iNet Flint 3 (GL-BE9300)** — Qualcomm
 **IPQ5332** (quad Cortex-A53) with tri-band Wi-Fi 7, a Realtek **RTL8372N** 10G
 switch and a **RTL8221B** 2.5G WAN PHY.
 
+> [!IMPORTANT]
 > **This branch (`flint3-be9300`) is a complete, buildable OpenWrt tree.**
 > Clone it and build — there is nothing to drop into another checkout.
 > (An earlier `main` branch held a target *overlay*; it is retired and
 > preserved at the tag `archive/main-overlay`.)
 
-Target: **`qualcommbe/ipq53xx`**, kernel **6.18**.
+Target: **`qualcommbe/ipq53xx`** · Kernel: **Linux 6.18** · Tested board: **GL-BE9300**.
 
 > [!WARNING]
 > **Unofficial, community-maintained port — not affiliated with, endorsed by, or supported
@@ -19,33 +44,56 @@ Target: **`qualcommbe/ipq53xx`**, kernel **6.18**.
 > unit's unique radio calibration data and MAC addresses and cannot be recovered from
 > anywhere else. If this router matters to you, test on a spare unit before relying on it.
 
-## Hardware
+## Download images
 
-| Block | Detail |
-|---|---|
-| SoC | Qualcomm IPQ5332, 4× Cortex-A53 |
-| Wi-Fi 2.4 GHz | on-SoC radio, ath12k over AHB |
-| Wi-Fi 5 / 6 GHz | 2× QCN9274, ath12k over PCIe |
-| Switch | RTL8372N, out-of-tree DSA driver (`realtek,rtl837x`); SoC↔switch link is 10GBASE-R |
-| WAN | RTL8221B 2.5G, USXGMII |
-| Storage | eMMC |
+Pre-built reference images are published periodically on the
+**[Releases page](https://github.com/perceival/openwrt-flint3/releases)**.
+The published reference batches are **prereleases**, not official OpenWrt images.
+Read the release notes, build manifests and checksums for the exact image you choose.
+
+| Profile | Intended use | Included configuration |
+| --- | --- | --- |
+| **`vanilla`** | Minimal default OpenWrt | The exact, unmodified default this tree produces with zero customization: **no LuCI**, `wpad-basic-mbedtls`; what you get building it yourself with no changes |
+| **`ap`** | Access point | Full config with **LuCI** and tri-band **MLO**, plus the FT-over-MLO roaming series described in the release manifest; the maintainer's household profile. See the [FT/MLO limitation](#known-issues) |
+| **`router`** | Gateway | **LuCI**, WireGuard, unbound, chrony and mDNS reflection; nftables flowtable offload in software by default, **PPE hardware offload opt-in** (see [Status](#status)) |
+
+For **stock → OpenWrt**, choose the **factory** image and follow
+[Installing](#installing). For an existing build of this port, choose the
+**sysupgrade** image. The **initramfs** image is a separate RAM-boot image;
+follow the device-page procedure for its use.
+
+See the disclaimer above before flashing any of them. Keep the image's checksum
+file and build manifest with your download.
 
 ## Status
 
+The following results are **reported by the maintainer for GL-BE9300** with
+the current RTL837x driver. Check each release's notes for its exact feature
+scope; current-branch work and published images can differ.
+
 | Subsystem | State |
-|---|---|
-| Boot / procd / SSH | working |
-| LAN (RTL8372N via DSA + EDMA/PPE) | working |
-| WAN (2.5G, USXGMII) | working, links at 2.5 Gbps |
-| VLANs (bridge-vlan on DSA) | working |
-| PPE hardware flow offload | IPv4 LAN→WAN NAT (TCP/UDP, untagged or 802.1Q WAN) ~2.3 Gbit/s at ~1% CPU; opt-in via the firewall's hardware flow offloading. WAN→LAN and IPv6 in the next release |
-| Wi-Fi 7, all three bands | working |
-| MLO (AP MLD across 2.4/5/6 GHz) | working |
-| DFS | working, including several BSSes per DFS radio started together |
-| 802.11k / 802.11v | working |
-| eMMC sysupgrade + return to stock | working |
+| --- | --- |
+| Boot / procd / SSH | ✅ Working |
+| LAN (RTL8372N via DSA + EDMA/PPE) | ✅ Working |
+| WAN (2.5G, USXGMII) | ✅ Working; links at 2.5 Gbps |
+| VLANs (bridge-vlan on DSA) | ✅ Working |
+| PPE hardware flow offload | ✅ Opt-in IPv4 LAN→WAN NAT (TCP/UDP, untagged or 802.1Q WAN): ~2.3 Gbit/s at ~1% CPU via the firewall's hardware flow offloading. WAN→LAN and IPv6 offload are not included in [ref-20260930](https://github.com/perceival/openwrt-flint3/releases/tag/ref-20260930); they are follow-up work |
+| Wi-Fi 7, all three bands | ✅ Working |
+| MLO (AP MLD across 2.4/5/6 GHz) | ✅ Working |
+| DFS | ✅ Working, including several BSSes per DFS radio started together |
+| 802.11k / 802.11v | ✅ Working |
+| eMMC sysupgrade + return to stock | ✅ Working |
 
 Throughput measured between two units over a 2.5G trunk: **~1.8–1.9 Gbit/s**.
+
+The measurements above describe the reported test setups, not a throughput
+guarantee for every client or configuration. The [PPE/rtl8_4 bench notes](docs/rtl8_4-ppe-alias-20260927.md)
+record additional historical measurements and their conditions.
+
+> [!NOTE]
+> The replacement DSA driver in [Draft PR #104](https://github.com/perceival/openwrt-flint3/pull/104)
+> is a separate candidate. Results in this section describe the existing driver;
+> hardware tests and feature-parity work for the replacement remain open.
 
 ## Known issues
 
@@ -63,44 +111,34 @@ Throughput measured between two units over a 2.5G trunk: **~1.8–1.9 Gbit/s**.
   wifi-iface to restore the old behaviour).
 - **PPE WAN RX FIFO overruns.** Roughly 0.07–0.09 % of packets at ~1.9 Gbit/s.
   No longer the hard ~600 Mbit/s cap earlier builds had, but not zero.
-- **802.11r is incompatible with MLO.** hostapd's FT code has no MLD
-  awareness — do not enable 11r on an MLO SSID. 11k/11v are fine.
+- **802.11r with MLO is experimental.** Do not enable
+  11r on an MLO SSID in an image without the FT-over-MLO series: the unpatched
+  hostapd FT path has no MLD awareness. The current tree contains patches
+  `992–999a`, and the AP reference manifest describes that series. This is
+  experimental work: [patch 999a](package/network/services/hostapd/patches/999a-FT-reuse-ANonce-for-a-repeated-auth-with-same-SNonce.patch)
+  is explicitly marked **not hardware-verified** and does not resolve the
+  separate reported post-FT data-path failure. Check the exact image's release
+  notes and tested client/topology before using it. The series targets FT
+  over-the-air; [patch 992](package/network/services/hostapd/patches/992-AP-MLD-Add-FT-support-for-non-AP-MLDs.patch)
+  does not change FT over-the-DS with AP MLDs. **802.11k/11v are reported working.**
 
-## Building
+## Hardware
 
-```sh
-git clone -b flint3-be9300 https://github.com/perceival/openwrt-flint3.git
-cd openwrt-flint3
-./scripts/feeds update -a
-./scripts/feeds install -a
-make menuconfig     # Target System: Qualcomm Atheros 802.11be
-                    # Subtarget:     ipq53xx
-                    # Target Profile: GL.iNet GL-BE9300
-make -j"$(nproc)"
-```
-
-Images land in `bin/targets/qualcommbe/ipq53xx/`.
-
-### Don't want to build from source?
-
-Pre-built reference images are published periodically on the
-**[Releases page](https://github.com/perceival/openwrt-flint3/releases)**, in three flavours:
-
-- **`vanilla`** — the exact, unmodified default this tree produces with zero customization
-  (no LuCI, `wpad-basic-mbedtls`) — what you'd get building it yourself with no changes
-- **`ap`** — full config (LuCI, tri-band MLO) plus the FT-over-MLO roaming series; what the
-  maintainer's own household runs
-- **`router`** — gateway role: LuCI, WireGuard, unbound, chrony, mDNS reflection; nftables
-  flowtable offload in software by default, PPE hardware offload opt-in (see Status)
-
-See the disclaimer above before flashing any of them.
+| Block | Detail |
+|---|---|
+| SoC | Qualcomm IPQ5332, 4× Cortex-A53 |
+| Wi-Fi 2.4 GHz | on-SoC radio, ath12k over AHB |
+| Wi-Fi 5 / 6 GHz | 2× QCN9274, ath12k over PCIe |
+| Switch | RTL8372N, out-of-tree DSA driver (`realtek,rtl837x`); SoC↔switch link is 10GBASE-R |
+| WAN | RTL8221B 2.5G, USXGMII |
+| Storage | eMMC |
 
 ## Installing
 
 Full, hardware-verified instructions — including the round trip back to stock —
 are on the device page:
 
-**https://openwrt.org/toh/gl.inet/gl-be9300**
+**[GL-BE9300 device page: installation and recovery](https://openwrt.org/toh/gl.inet/gl-be9300)**
 
 Short version: from stock firmware, use the **factory** image with
 `sysupgrade -F -n`. The stock image check requires a QSDK FIT, so `-F` is
@@ -118,6 +156,41 @@ factory-image path instead (see [issue #9](https://github.com/perceival/openwrt-
 
 **Back up your eMMC first** — the ART partition holds this unit's radio
 calibration and MAC addresses and cannot be recovered from anywhere else.
+
+## Building
+
+```sh
+git clone -b flint3-be9300 https://github.com/perceival/openwrt-flint3.git
+cd openwrt-flint3
+./scripts/feeds update -a
+./scripts/feeds install -a
+make menuconfig     # Target System: Qualcomm Atheros 802.11be
+                    # Subtarget:     ipq53xx
+                    # Target Profile: GL.iNet GL-BE9300
+make -j"$(nproc)"
+```
+
+Images land in `bin/targets/qualcommbe/ipq53xx/`.
+
+Prefer a pre-built image? See [Download images](#download-images) for the three profiles.
+
+## Roadmap
+
+Development links below are a snapshot checked on **2026-10-03**. Follow the
+linked issues and PRs for subsequent results and maintainer decisions.
+
+| Track | Current state | Evidence and next step |
+| --- | --- | --- |
+| **IPQ53xx upstream base** | 🚧 In review | [OpenWrt #23161](https://github.com/openwrt/openwrt/pull/23161) is open; official integration depends on the upstream base |
+| **RTL8372N replacement plan** | 🚧 In progress | [#99](https://github.com/perceival/openwrt-flint3/issues/99) coordinates upstream work; [#100](https://github.com/perceival/openwrt-flint3/issues/100) tracks source provenance, required features and acceptance tests |
+| **P0: DSA bring-up** | 🧪 Draft candidate | [#104](https://github.com/perceival/openwrt-flint3/pull/104): probe/init, PHY/SerDes and native-tag plumbing; hardware validation remains pending |
+| **P1: switching parity** | 🚧 Partial implementation | [Dependent P1-A PR](https://github.com/MNeroba/openwrt-flint3/pull/1): serialized VLAN-table foundation; full bridge/VLAN/FDB/MDB/STP support remains open |
+| **LAG / rate limiting** | 🚧 Open PRs for the existing driver | [#47](https://github.com/perceival/openwrt-flint3/pull/47) and [#49](https://github.com/perceival/openwrt-flint3/pull/49); replacement-driver porting and validation follow the agreed P0 → P1 → P2 plan |
+
+The published package remains the working baseline while the replacement is
+reviewed. A build pass, an open PR or a checked planning item does not establish
+hardware support in a reference image. See #100 for the complete acceptance
+criteria and any explicitly agreed feature deferrals.
 
 ## Other boards
 
@@ -142,7 +215,7 @@ matching switch driver.
 
 **Upstream:** OpenWrt main has no IPQ53xx support yet. The subtarget is proposed in
 [openwrt/openwrt#23161](https://github.com/openwrt/openwrt/pull/23161) (open). The RTL8372N
-switch driver used here exists only in this tree.
+switch driver used here is out of tree and has not been merged into OpenWrt main.
 
 **Testers wanted.** If you own a GL-BE6500, a UniFi 7 Pro XGS or another IPQ53xx device and are
 comfortable with a serial console and an eMMC/NAND backup, I would like to hear from you: open an
@@ -158,11 +231,38 @@ Patches from this work that have gone upstream or are in review:
 - hostapd WDS/AP_VLAN `bss->ctx` fix (applied by Jouni Malinen)
 - ath12k `hw_scan` NULL-deref report (with the Qualcomm dev team)
 
+## Contributing
+
+Hardware reports, reproducible bug reports and focused PRs are welcome.
+Use the [issue tracker](https://github.com/perceival/openwrt-flint3/issues)
+and check existing reports before opening another one.
+
+For a useful report, include:
+
+- Device model and hardware revision; image profile, release tag or source commit.
+- Kernel/OpenWrt revision and whether this is a published image or a local build.
+- Steps to reproduce, expected/actual behavior and relevant configuration.
+- Complete boot/kernel logs and, where relevant, packet captures, counters or pstore.
+- For performance or Wi-Fi results: peer/client models, link rates, bands, VLAN/MLO
+  setup, offload settings and the measurement method.
+
+Remove passwords, keys and other private data from attachments. For another
+IPQ53xx board, also include the stock boot log and board photo requested in
+[Other boards](#other-boards).
+
 ## Links
 
-- Forum thread: https://forum.openwrt.org/t/gl-inet-flint-3-exploration-gl-be9300-ipq5332/250267
-- Device page: https://openwrt.org/toh/gl.inet/gl-be9300
-- Q6/PAS research notes: [`2.4GHZ-Q6-PAS-FINDINGS.md`](2.4GHZ-Q6-PAS-FINDINGS.md)
+- [OpenWrt forum: Flint 3 exploration](https://forum.openwrt.org/t/gl-inet-flint-3-exploration-gl-be9300-ipq5332/250267)
+- [GL-BE9300 device page](https://openwrt.org/toh/gl.inet/gl-be9300)
+- [Reference images and release notes](https://github.com/perceival/openwrt-flint3/releases)
+- [Q6/PAS research notes](2.4GHZ-Q6-PAS-FINDINGS.md)
+- [DSA tag-protocol investigation](docs/dsa-tag-protocol-decision.md)
+- [PPE TCP offload investigation](docs/ppe-tcp-offload-blocker-20260924.md)
+- [Native rtl8_4 / PPE parser alias and bench results](docs/rtl8_4-ppe-alias-20260927.md)
+
+The investigation documents include dated experiments and earlier blockers;
+read their recorded revisions and follow-up sections alongside the current
+release notes.
 
 ## Credits
 
@@ -170,3 +270,8 @@ Built on [JiaY-shi's](https://github.com/JiaY-shi/openwrt) GL-BE6500 tree, which
 provided the working IPQ5332 Wi-Fi and RTL837x DSA foundation. Thanks to
 everyone contributing hardware findings and testing via the issue tracker and
 the forum thread.
+
+The replacement-driver effort also evaluates
+[airjinkela's RTL8372N DSA refactor](https://github.com/airjinkela/rtl837x-dsa-driver).
+Thanks for the architecture work and detailed review replies; the source-lineage
+review and replacement scope are tracked in [#100](https://github.com/perceival/openwrt-flint3/issues/100).
