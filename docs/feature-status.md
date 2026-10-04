@@ -1,6 +1,6 @@
 # GL-BE9300 feature and validation status
 
-**Snapshot checked: 2026-10-03.** This page tracks board-specific behavior and switch/acceleration support. It is not a list of every package or generic feature available in OpenWrt. The `vanilla` name means the minimal profile built from this project’s `flint3-be9300` tree.
+**Snapshot checked: 2026-10-04.** This page tracks board-specific behavior and switch/acceleration support. It is not a list of every package or generic feature available in OpenWrt. The `vanilla` name means the minimal profile built from this project’s `flint3-be9300` tree.
 
 ## How to read the statuses
 
@@ -39,7 +39,7 @@ All manifests record the default `rtl8_4` switch tagger, the PPE 0448 security f
 | ath12k crash recovery | **Recovery included; crash cause open** | The release records automatic firmware-coredump release and radio recovery in seconds. Sustained-load firmware crashes remain a known issue. |
 | LAG link-state synchronization | **Open PR; not in the reference release** | [#47](https://github.com/perceival/openwrt-flint3/pull/47) targets the existing driver. A two-port LAG/failover test is reported for a prior PR head. The current head has not had its own package build or hardware run; a link-up LACP standby with TX disabled is explicitly outside validated behavior. |
 | Egress port rate policing | **Open PR; not in the reference release** | [#49](https://github.com/perceival/openwrt-flint3/pull/49) targets the existing driver. Earlier-head measurements reported 476 Mbit/s for a 500 Mbit/s limit, 95 Mbit/s for 100 Mbit/s, and restoration after deletion. The current head has not had its own package build or hardware run. |
-| Fan control around the first trip | **Hardware behavior measured; tuning change not merged** | [Issue #8](https://github.com/perceival/openwrt-flint3/issues/8) records two idle units on opposite sides of the 50 °C trip: 48.7 °C at 14%/1126 rpm and 50.4 °C at 50%/3493 rpm. The finer trip table was still unapplied in the latest update. |
+| Fan control around the first trip | **Current release unchanged; proposed retune compile-checked only** | [Issue #8](https://github.com/perceival/openwrt-flint3/issues/8) records two idle units on opposite sides of the 50 °C trip: 48.7 °C at 14%/1126 rpm and 50.4 °C at 50%/3493 rpm. [PR #106](https://github.com/perceival/openwrt-flint3/pull/106) proposes active trips at 58/65/72/79/86/93 °C with 2 °C hysteresis. It is compile-checked, not hardware-tested; the requested ap1/ap2 idle and fan-stability check remains pending. |
 
 The source includes additional legacy-driver interfaces; the table above deliberately distinguishes reported end-to-end behavior from source presence. Check the PRs and test reports before relying on a feature outside the evidence shown here.
 
@@ -49,7 +49,7 @@ These results belong to the replacement code only and must not be combined with 
 
 | Area | Candidate status | Build and hardware evidence |
 | --- | --- | --- |
-| P0 probe, reset, register transport, internal PHY, 10G PCS and native tags | **Implemented in Draft #104 source** | ARM64/Linux 6.18.39 module build passed with W=1/modpost. A full BE9300 AP-config OpenWrt image build also passed for source revision `954a84bd7c46dbbb2412eeddfb300aad8b4cff35` ([module run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390), [image run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177)). **No BE9300 hardware test is reported.** |
+| P0 probe, reset, register transport, internal PHY, 10G PCS and native tags | **Implemented in Draft #104 source; exact current-head image independently reproduced** | ARM64/Linux 6.18.39 module and CI full-image builds passed for the recorded source (`954a84bd…`). The maintainer also reports an independent full build of exact #104 source `908810c09b`, with verified image revision/checksums and `rtl8372n_dsa.ko` plus `tag_rtl8_4.ko` staged for the bench ([report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832)). **No BE9300 hardware test is reported yet.** |
 | P0 LAN ports, CPU link and software forwarding/isolation | **Implemented as the candidate’s intended fallback; not qualified** | The full first-device procedure is in [#104](https://github.com/perceival/openwrt-flint3/pull/104). Port mapping, PHY negotiation, native-tag behavior, reset recovery and software bridge forwarding all require the documented hardware run. |
 | P1-A VLAN table transaction foundation | **Partially implemented in dependent Draft PR #1** | Adds shared serialization, checked VID/masks, raw readback and routes VLAN 1 bootstrap through the table path. Focused five-object ARM64 module build passed. Target image and hardware checks for this revision remain open; it does **not** add general DSA bridge/VLAN callbacks. |
 | Hardware bridge/VLAN offload | **Not implemented in #104** | P1 research records VLAN/PVID and bridge-flag work, source conflicts and required table/error semantics. Only a staged plan and partial table foundation exist. |
