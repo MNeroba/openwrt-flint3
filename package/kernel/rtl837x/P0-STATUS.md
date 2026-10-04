@@ -1,6 +1,6 @@
 # RTL8372N P0 implementation status
 
-Updated: 2026-10-03. This is a source candidate, not a hardware-qualified driver.
+Updated: 2026-10-04. This is a source candidate, not a hardware-qualified driver.
 
 [BUILD-REPORT.md](BUILD-REPORT.md) consolidates publication evidence, exact
 revisions, artifacts, feature readiness and remaining acceptance gates.
@@ -60,6 +60,13 @@ revisions, artifacts, feature readiness and remaining acceptance gates.
   The [full build artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177/artifacts/11254652883) contains 317 files including the
   generated configuration, logs, packages and target images. This is build
   evidence only; no hardware result has passed.
+- The maintainer independently reports a T0-equivalent build of #104 revision
+  `908810c09bd9adfbbc7d25437a9d50b55b2de940`, using the reference AP
+  config with `wsdd2` and vendor `ssdk` stripped. The image revision matches
+  its tree; checksummed sysupgrade includes `rtl8372n_dsa.ko` and
+  `tag_rtl8_4.ko`, with the previous `rtl837x` module absent. The image is
+  staged for hardware testing ([report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832)).
+  This is build evidence only; T1–T8 remain NOT RUN.
 - Later documentation-only commits do not change the tested source, DTS,
   package Makefile or workflows. No hardware result has passed.
 

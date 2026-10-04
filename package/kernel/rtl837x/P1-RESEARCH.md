@@ -1,6 +1,6 @@
 # RTL8372N P1 feasibility and implementation plan
 
-Updated: 2026-10-03. Applies to the P0 candidate in [PR #104](https://github.com/perceival/openwrt-flint3/pull/104), with the replacement requirements tracked in [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100).
+Updated: 2026-10-04. Applies to the P0 candidate in [PR #104](https://github.com/perceival/openwrt-flint3/pull/104), with the replacement requirements tracked in [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100).
 
 ## 1. Conclusion and current boundary
 
@@ -50,7 +50,7 @@ work is feasible, not that a feature is implemented or ready to advertise.
 | --- | --- | --- | --- |
 | Shared VLAN/L2 table engine | Control `0x5cac`; status/method `0x5cb0`; write words `0x5cb8/0x5cbc/0x5cc0`; read words `0x5ccc/0x5cd0/0x5cd4`; VLAN selector `3`, L2 selector `4` in RTLPlayground code | Common transaction lock, bounded idle/execute polling, checked staging/readback and explicit error returns | Validate timeout budgets, selector/method restoration and readback on RTL8372N; source-map each retained field |
 | VLAN/PVID | Membership bits 9:0, untag bits 19:10; PVID base `0x4e1c` with two 12-bit port fields; admission `0x4e10`; filter `0x4e18` | Read/modify/write design; port/VID bounds; tagged/untagged/PVID lifecycle and deletion rollback | Resolve bit 25 interpretation; prove no-PVID rejection, filtering-on/off behavior and CPU VLAN/tag semantics |
-| Bridge join/leave and isolation | Isolation `0x50c0 + port * 4`; Linux DSA database contract | Per-bridge port matrix, standalone CPU-only restore, explicit unsupported-domain fallback | Prove database separation and tagger forwarding marks; initially propose one hardware bridge until additional domains are established |
+| Bridge join/leave and isolation | Isolation `0x50c0 + port * 4`; Linux DSA database contract | Per-bridge port matrix, standalone CPU-only restore, explicit unsupported-domain fallback | Maintainer agrees to one initially offloaded hardware bridge; prove database separation and tagger forwarding marks, and test CPU-only/software fallback isolation for unsupported domains |
 | Learning and flood flags | Learning limit `0x5384 + port * 4`; flood masks `0x5360`–`0x5370` | Checked `BR_LEARNING`, `BR_FLOOD`, `BR_MCAST_FLOOD`, `BR_BCAST_FLOOD`; isolation policy | Confirm zero-limit behavior, limit-exceeded action, CPU delivery and combined flood/VLAN/isolation effects; unsupported flags must fail explicitly |
 | Dynamic FDB flush | `0x53d4` command / `0x53dc` mode in RTLPlayground; additional busy/mode fields in ZTE | Bounded per-port flush design and static-entry preservation policy | Establish completion/error behavior and dynamic-only semantics; static MDB/BPDU entries must survive |
 | FDB add/delete/dump | MAC/VID/port/static/age layout and next-entry iteration; ZTE lookup/hit/delete example | Checked codecs, finite iteration, CPU/local-address and `dsa_db` design | Resolve IVL versus validity, lookup-hit/capacity/delete semantics and VID 0 versus nonzero databases; no fabricated success on unsupported CPU entries |
@@ -111,9 +111,11 @@ status are also not justified by a matching register address alone.
   traffic. A fixed VID 1/PVID 1 assignment is not sufficient for both modes.
 - Define `DSA_DB_PORT` and `DSA_DB_BRIDGE`, VID 0 and nonzero VID handling.
   A single global MAC/VID key does not establish separation between two
-  bridges using the same MAC/VID. Initially propose one offloaded bridge
-  (`max_num_bridges = 1`); keep unsupported bridges in the DSA standalone
-  CPU-only configuration. Do not declare `fdb_isolation` until implemented.
+  bridges using the same MAC/VID. The maintainer accepts one initially offloaded
+  hardware bridge (`max_num_bridges = 1`); multiple bridge domains/MST remain
+  deferred. Keep unsupported bridges in the DSA standalone CPU-only
+  configuration and test isolation. Do not declare `fdb_isolation` until
+  implemented.
 - Handle CPU/local FDB and MDB entries or document a deliberate CPU-flood
   strategy consistent with the DSA configuration. Do not copy an unconditional
   successful return for a CPU FDB request from the ZTE comparison source.
@@ -190,9 +192,11 @@ mark the corresponding case BLOCKED; do not infer a pass from register writes.
 
 ## 7. Open decisions and evidence requests
 
-- **Maintainer:** confirm the proposed initial one-bridge scope and whether
-  multi-bridge/MST behavior is required for the first P1 submission. Confirm
-  any deferral under #100; existing replacement acceptance remains unchanged.
+- **Maintainer scope:** one initially offloaded hardware bridge is accepted;
+  multiple bridge domains/MST remain deferred pending semantics work. The
+  staged P0 → P1 → P2 order is agreed. Keep #104 and P1-A separate until P0
+  hardware results exist; preserve CPU-only/software fallback isolation for
+  unsupported domains.
 - **Hardware owner:** first provide the P0 report; then BPDU captures and
   readbacks for table control/status, VLAN 1 plus a test VID, PVID/admission,
   isolation/learning/flood and CIST before/after controlled changes. Use an

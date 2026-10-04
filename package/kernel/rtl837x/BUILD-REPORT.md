@@ -1,23 +1,28 @@
 # RTL8372N P0 build and review report
 
-## Latest result (status checked 2026-10-03)
+## Latest result (status checked 2026-10-04)
 
 | Gate | Result | Evidence / scope |
 | --- | --- | --- |
 | Mainline ARM64 compilation | **PASS** | Linux 6.18.39; all four candidate objects; `W=1`; module linking and modpost |
 | OpenWrt configuration | **PASS** | BE9300 AP configuration; all five pinned feeds verified; driver and MDIO-devres packages selected |
-| OpenWrt package, DTB and image | **PASS** | [Full BE9300 AP-config run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177) completed successfully for `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`; [317-file build artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177/artifacts/11254652883) uploaded |
+| OpenWrt package, DTB and image | **PASS** | CI full build passed for `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`; the maintainer independently reports a T0-equivalent build of exact #104 head `908810c09bd9adfbbc7d25437a9d50b55b2de940`, with checksummed sysupgrade staged for the bench ([report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832)) |
 | Source whitespace | **PASS** | `git diff --check` against the proposed base |
 | Kernel style review | **0 errors, 1 reviewed warning** | Mutable per-device regmap config is required to set its `lock_arg` |
 | BE9300 hardware | **NOT RUN** | No result is inferred from earlier SDK-driver tests |
 | Retained source provenance | **OPEN REVIEW** | Restricted header and patch arrays excluded; SDS field/polarity lineage remains unresolved |
 | Replacement acceptance in #100 | **NOT MET** | Hardware and feature parity, or agreed deferrals, remain required |
 
-The full target-build run passed on 2026-10-02 for the tested source revision. This
-report supports a Draft for technical and hardware review; a build result does
-not qualify the candidate for production or establish that it runs on a BE9300.
+The CI full target-build run passed on 2026-10-02 for the tested source revision.
+On 2026-10-04, the maintainer also reported an independent T0-equivalent build
+of #104 revision `908810c09bd9adfbbc7d25437a9d50b55b2de940`, using the reference
+AP config with `wsdd2` and vendor `ssdk` stripped. The resulting image revision
+matched its source tree; its checksummed sysupgrade contains
+`rtl8372n_dsa.ko` and `tag_rtl8_4.ko`, with the old `rtl837x` module absent.
+The image is staged for BE9300 testing. This is build/packaging evidence only:
+no hardware test has passed, and no behavior on the device is established.
 
-## Follow-up research (2026-10-03)
+## Follow-up research (updated 2026-10-04)
 
 [P1-RESEARCH.md](P1-RESEARCH.md) adds a source-grounded plan for VLAN/L2 table
 access, bridge flags, FDB/MDB, CIST and BPDU delivery. No P1 runtime support or
@@ -30,6 +35,8 @@ qualification.
 - Proposed base: `perceival/openwrt-flint3:flint3-be9300`,
   `2365932733ca8ec3b346621d9cec2eb3df3b2cf3`.
 - CI source: `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`.
+- Maintainer-side exact-head build report: `908810c09bd9adfbbc7d25437a9d50b55b2de940`
+  ([comment](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832)).
 - Tested `package/kernel/rtl837x/src` Git tree:
   `785d7682936058c86e90af809e16694ac6dc7492`.
 - Subsequent commits update documentation only. Before publication, the source
@@ -75,8 +82,10 @@ logs, packages and image outputs.
 | telephony | `5d68d53c160a325ea9d03fce393e051573bcc736` |
 | video | `816fa8fe0ca759cc5d1ba71af1a716405bf4dda4` |
 
-The image-build and artifact-confirmation gate is **PASS** for the source
-revision above. The uploaded artifact preserves generated `.config`,
+The CI image-build and artifact-confirmation gate is **PASS** for the source
+revision above. The maintainer separately reproduced revision `908810c09b`
+with the documented config adjustments and staged its checksummed image for
+bench use. The uploaded CI artifact preserves generated `.config`,
 `p0-build-inputs.txt`, installed feed lock, logs, packages and target images.
 This establishes successful build/packaging only; the candidate has not been
 installed or tested on a BE9300. A separate minimal OpenWrt dependency-image
