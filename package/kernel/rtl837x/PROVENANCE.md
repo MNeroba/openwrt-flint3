@@ -15,11 +15,14 @@ PHY/SerDes patch payloads; review of the remaining lineage is still pending.
 | [Linux Realtek PHY](https://github.com/torvalds/linux/blob/v6.18/drivers/net/phy/realtek/realtek_main.c) | `v6.18`, GPL-2.0+ | Published PHY page/capability/status behavior. Original file credits Johnson Leung / Freescale Semiconductor (2004); see its retained upstream attribution and history. Candidate native MMD access uses the actual PHY port, unlike this source's single-PHY address-0 VEND2 helper. |
 | [Linux r8169 transport](https://github.com/torvalds/linux/blob/v6.18/drivers/net/ethernet/realtek/r8169_main.c) | `v6.18`, GPL-2.0-only | Published `r8168g_mdio_read/write` page/OCP address semantics. Source credits ShuChen / Realtek (2002), Francois Romieu (2003–2007) and other contributors. No NIC MMIO transport or firmware is imported. |
 | [Linux MDIO definitions](https://github.com/torvalds/linux/blob/v6.18/include/uapi/linux/mdio.h) | `v6.18`, GPL-2.0 WITH Linux-syscall-note | Standard MMD/2.5G advertisement constants, used through the kernel header. |
+| [Linux PHY device lifecycle](https://github.com/gregkh/linux/blob/v6.18.39/drivers/net/phy/phy_device.c) and [driver core](https://github.com/gregkh/linux/blob/v6.18.39/drivers/base/dd.c) | `v6.18.39`, upstream kernel sources | Review `get_phy_c22_id`, `phy_bus_match`, `phy_probe` and `device_is_bound`; use the exported binding API under the device lock. Diagnostic logging is new code; no PHY IDs or vendor payloads are introduced. |
 
 ## Feature-to-source map
 
 Locations name functions/symbols in the pinned files to keep references stable
-through candidate edits. Hardware verification is **pending for every row**.
+through candidate edits. Full hardware qualification is **pending for every
+row**. The first T1 run reads chip ID `0x83727000` but fails internal-PHY binding;
+T2–T8 are blocked ([report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5983997672)).
 
 | Candidate feature/symbols | Specific public source location | Derivation / remaining question |
 | --- | --- | --- |

@@ -34,6 +34,10 @@ static int rtl8372n_phy_read_mmd(struct phy_device *phydev, int devad, u16 regnu
 	int ret;
 
 	ret = rtl837x_phy_read_c45(priv, phydev->mdio.addr, devad, regnum, &value);
+	if (ret)
+		dev_err_ratelimited(priv->dev,
+				    "private PHY MMD read failed: port=%d devad=%d reg=0x%04x err=%d\n",
+				    phydev->mdio.addr, devad, regnum, ret);
 	return ret ? ret : value;
 }
 
@@ -48,13 +52,20 @@ static int rtl8372n_phy_get_features(struct phy_device *phydev)
 {
 	int ret, value;
 
+	phydev_info(phydev, "private PHY feature probe: id=0x%08x clause=%s\n",
+		    phydev->phy_id, phydev->is_c45 ? "C45" : "C22");
 	ret = genphy_read_abilities(phydev);
-	if (ret)
+	if (ret) {
+		phydev_err(phydev, "C22 ability read failed: %d\n", ret);
 		return ret;
+	}
 	/* Same published capability predicate as Realtek Internal NBASE-T. */
 	value = phy_read_paged(phydev, 0xa61, 0x13);
-	if (value < 0)
+	if (value < 0) {
+		phydev_err(phydev, "2.5G capability read failed: %d\n", value);
 		return value;
+	}
+	phydev_info(phydev, "private PHY 2.5G capability: value=0x%04x\n", value);
 	linkmode_mod_bit(ETHTOOL_LINK_MODE_2500baseT_Full_BIT,
 			phydev->supported, value & MDIO_PMA_SPEED_2_5G);
 	return 0;

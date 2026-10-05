@@ -1,15 +1,15 @@
 # RTL8372N P0 build and review report
 
-## Latest result (status checked 2026-10-04)
+## Latest result (status checked 2026-10-05)
 
 | Gate | Result | Evidence / scope |
 | --- | --- | --- |
-| Mainline ARM64 compilation | **PASS** | Linux 6.18.39; all four candidate objects; `W=1`; module linking and modpost |
+| Mainline ARM64 compilation | **Baseline PASS; diagnostic revision pending** | Linux 6.18.39; all four baseline objects; `W=1`; module linking and modpost. Rebuild required for the PHY diagnostic source change. |
 | OpenWrt configuration | **PASS** | BE9300 AP configuration; all five pinned feeds verified; driver and MDIO-devres packages selected |
-| OpenWrt package, DTB and image | **PASS** | CI full build passed for `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`; the maintainer independently reports a T0-equivalent build of exact #104 head `908810c09bd9adfbbc7d25437a9d50b55b2de940`, with checksummed sysupgrade staged for the bench ([report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832)) |
+| OpenWrt package, DTB and image | **Baseline PASS; diagnostic revision pending** | CI full build passed for `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`; the maintainer independently reproduced T0 for `908810c09bd9adfbbc7d25437a9d50b55b2de940` ([report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832)). The diagnostic revision changes source and package release; its exact-source T0 must pass before flashing. |
 | Source whitespace | **PASS** | `git diff --check` against the proposed base |
 | Kernel style review | **0 errors, 1 reviewed warning** | Mutable per-device regmap config is required to set its `lock_arg` |
-| BE9300 hardware | **NOT RUN** | No result is inferred from earlier SDK-driver tests |
+| BE9300 hardware | **T1 FAIL; T2–T8 BLOCKED** | The 2026-10-04 [bench report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5983997672) reads chip ID `0x83727000`, then aborts at internal-PHY binding on port 4. No replacement-driver forwarding result is established. |
 | Retained source provenance | **OPEN REVIEW** | Restricted header and patch arrays excluded; SDS field/polarity lineage remains unresolved |
 | Replacement acceptance in #100 | **NOT MET** | Hardware and feature parity, or agreed deferrals, remain required |
 
@@ -19,8 +19,23 @@ of #104 revision `908810c09bd9adfbbc7d25437a9d50b55b2de940`, using the reference
 AP config with `wsdd2` and vendor `ssdk` stripped. The resulting image revision
 matched its source tree; its checksummed sysupgrade contains
 `rtl8372n_dsa.ko` and `tag_rtl8_4.ko`, with the old `rtl837x` module absent.
-The image is staged for BE9300 testing. This is build/packaging evidence only:
-no hardware test has passed, and no behavior on the device is established.
+That image was installed on the recoverable bench on 2026-10-04. T1 failed at
+the internal-PHY binding check; T2–T8 are blocked. The switch ID is observable,
+but internal-PHY access, CPU/LAN links and forwarding remain unqualified.
+
+## PHY probe diagnostic revision (2026-10-05)
+
+[PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) records the failure, the unresolved
+alternatives and the next T0/T1 run. The revision logs actual PHYSID reads,
+per-port device/binding state, feature-probe failures and native-MMD/read-command
+errors. The binding gate now checks completed device binding under the device
+lock as well as both driver identities. It collects all available user-port
+results before returning the existing setup failure. Package release is 4.
+
+No PHY ID is fabricated, error is suppressed or alternative driver rebound.
+PHY/SerDes/reset/forwarding programming and the scan sequence are unchanged.
+This is a diagnostic revision and a binding-check correction, not a demonstrated
+fix for the bench failure. Previous build passes do not validate this new source.
 
 ## Follow-up research (updated 2026-10-04)
 
@@ -39,9 +54,10 @@ qualification.
   ([comment](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832)).
 - Tested `package/kernel/rtl837x/src` Git tree:
   `785d7682936058c86e90af809e16694ac6dc7492`.
-- Subsequent commits update documentation only. Before publication, the source
-  tree, package Makefile, BE9300 DTS, build workflows and pinned feeds were
-  compared with the CI revision; no build-input change was introduced.
+- Documentation commits through `7be7f8d541` retain the baseline build inputs.
+  The 2026-10-05 diagnostic revision changes three driver sources and bumps the
+  package release. DTS, configuration, workflows and pinned feeds are unchanged;
+  new module and OpenWrt image builds are required.
 - Build hosts: GitHub-hosted Ubuntu 24.04. ARM64 API check uses
   `aarch64-linux-gnu-`; OpenWrt uses the project toolchain/config.
 
@@ -87,9 +103,10 @@ revision above. The maintainer separately reproduced revision `908810c09b`
 with the documented config adjustments and staged its checksummed image for
 bench use. The uploaded CI artifact preserves generated `.config`,
 `p0-build-inputs.txt`, installed feed lock, logs, packages and target images.
-This establishes successful build/packaging only; the candidate has not been
-installed or tested on a BE9300. A separate minimal OpenWrt dependency-image
-build has not been run.
+This establishes successful build/packaging for the baseline. The independently
+built `908810c09b` image reached the reported T1 failure on BE9300; it did not
+reach traffic tests. A separate minimal OpenWrt dependency-image build has not
+been run.
 
 ## Feature readiness
 
@@ -139,5 +156,6 @@ Before replacement/merge:
    integration remains tied to [OpenWrt #23161](https://github.com/openwrt/openwrt/pull/23161),
    which was open and unmerged at this check.
 
-Keep the shipping baseline while this Draft is reviewed. No hardware result,
-source-owner sign-off or full functional parity is claimed.
+Keep the shipping baseline while this Draft is reviewed. Hardware T1 is failed
+and T2–T8 are blocked; no successful bring-up, source-owner sign-off or full
+functional parity is claimed.

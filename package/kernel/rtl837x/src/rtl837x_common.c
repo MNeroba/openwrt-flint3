@@ -175,8 +175,12 @@ static int rtl837x_phy_read_locked(struct rtl837x_priv *priv, int phy,
 	if (ret)
 		return ret;
 	ret = rtl837x_phy_wait_ready(priv, &ctrl);
-	if (ret)
+	if (ret) {
+		dev_err_ratelimited(priv->dev,
+				    "PHY read completion failed: port=%d devad=%d reg=0x%04x last_ctrl=0x%08x err=%d\n",
+				    phy, devad, regnum, ctrl, ret);
 		return ret;
+	}
 	ret = rtl837x_reg_read(priv, RTL837X_SMI_PHY_READ_DATA, &data);
 	if (ret)
 		return ret;

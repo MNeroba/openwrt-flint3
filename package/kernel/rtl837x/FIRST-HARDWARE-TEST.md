@@ -1,9 +1,12 @@
 # RTL8372N P0 first-hardware test plan
 
-**Status:** test procedure for an unverified candidate. No successful OpenWrt
-module build or Flint 3 hardware run has been recorded for this P0 revision.
-See [BUILD-REPORT.md](BUILD-REPORT.md) for exact CI evidence. Start the hardware
-run only after T0 passes for the image revision under test.
+**Status (2026-10-05):** baseline T0 passed; the first BE9300 run of
+`908810c09b` returned **T1 FAIL; T2–T8 BLOCKED** at internal-PHY binding
+([report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5983997672)).
+The diagnostic revision needs a new exact-source T0 and T1 run; see
+[PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for the required logs and interpretation.
+See [BUILD-REPORT.md](BUILD-REPORT.md) for build evidence. Start the hardware run
+only after T0 passes for the image revision under test.
 
 This plan is intended for the driver maintainer and the Flint 3 owner running
 the test. It is not a claim that any step has passed.
@@ -209,6 +212,11 @@ or command output. A blocked test is not a pass.
   Ports 4–7 must bind to the private PHY driver; probe deliberately fails on
   missing/wrong binding. Record supported, advertised and partner modes from
   `ethtool`, including a 2.5G-capable peer and 1G/100M peers where available.
+- If registration aborts, save the full boot log before devres cleanup removes
+  the private bus. Include `PHY ID`, `PHY binding`, `private PHY feature probe`,
+  capability and C22/C45/MMD/completion-error messages for every scanned port.
+  Missing sysfs nodes after cleanup do not distinguish scan failure from a
+  binding failure. Keep T2–T8 BLOCKED until T1 passes.
 - Before forming a bridge, verify a pair of standalone LAN ports does not
   forward between the hosts. Then attach the first port to an empty software
   bridge, attach the second, verify bidirectional traffic, remove each port

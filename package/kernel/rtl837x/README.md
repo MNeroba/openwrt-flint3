@@ -49,7 +49,9 @@ The SerDes path selects the 10GBASE-R mode and applies the board's optional
 polarity swaps. It does not contain PHY firmware, vendor patch arrays, or the
 full SerDes initialization sequence used by vendor SDKs. Internal PHY
 power-control and link operation, and the 10G CPU link after reset, still need
-hardware validation. Flint 3 hardware bring-up results are pending.
+hardware validation. The first Flint 3 run returned **T1 FAIL; T2–T8 BLOCKED**
+at internal-PHY binding. [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) documents the
+next diagnostic run and the unresolved cause.
 
 ## Device tree
 
@@ -81,13 +83,15 @@ the current evidence and remaining gates. The ARM64 module build and full
 BE9300 AP-config OpenWrt package/DTB/image build passed for source revision
 `954a84bd7c46dbbb2412eeddfb300aad8b4cff35` ([module run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390),
 [target image run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177)).
-These are build results only; no BE9300 hardware checks have passed.
+These are baseline build results. The current PHY diagnostic revision changes
+source and package release and needs its own module/image build and T0/T1 run.
+No BE9300 bring-up or traffic check has passed.
 
 ## Staged follow-up
 
-1. Run the P0 first-device matrix on a BE9300 using the exact built image:
-   real CPU/PHY links, tags, CPU-only isolation and software forwarding. The
-   current image build passed; repeat it if source or build inputs change.
+1. Build the exact diagnostic revision and repeat T1 with the requested PHY
+   evidence. Resolve probe failure before proceeding to real CPU/PHY links,
+   tags, CPU-only isolation and software forwarding in the P0 matrix.
 2. Prepare the shared table engine and resolve VLAN/L2 field meanings and
    source lineage, following [P1-RESEARCH.md](P1-RESEARCH.md). Source design can
    proceed while P0 hardware results are pending.

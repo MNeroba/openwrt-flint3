@@ -4,10 +4,12 @@
  */
 #include <linux/bitfield.h>
 #include <linux/delay.h>
+#include <linux/device.h>
 #include <linux/errno.h>
 #include <linux/ethtool.h>
 #include <linux/iopoll.h>
 #include <linux/kernel.h>
+#include <linux/mii.h>
 #include <linux/of.h>
 #include <linux/phy.h>
 #include <linux/regmap.h>
@@ -73,11 +75,20 @@ static int rtl8372n_mdio_phy_read_c22(struct mii_bus *bus, int addr, int regnum)
 {
 	struct rtl837x_priv *priv = bus->priv;
 	u16 val;
+	int ret;
 
-	int ret = priv->ops->phy_read_c22(priv, addr, regnum, &val);
+	ret = priv->ops->phy_read_c22(priv, addr, regnum, &val);
+	if (regnum == MII_PHYSID1 || regnum == MII_PHYSID2)
+		dev_info(priv->dev,
+			 "PHY ID port %d reg %d: value=0x%04x err=%d\n",
+			 addr, regnum, ret ? 0 : val, ret);
 
-	if (ret)
+	if (ret) {
+		dev_err_ratelimited(priv->dev,
+				    "PHY C22 read failed: port=%d reg=%d err=%d\n",
+				    addr, regnum, ret);
 		return ret;
+	}
 
 	return val;
 }
@@ -95,8 +106,12 @@ static int rtl8372n_mdio_phy_read_c45(struct mii_bus *bus, int port, int devad, 
 	u16 val;
 	int ret = priv->ops->phy_read_c45(priv, port, devad, regnum, &val);
 
-	if (ret)
+	if (ret) {
+		dev_err_ratelimited(priv->dev,
+				    "PHY C45 read failed: port=%d devad=%d reg=0x%04x err=%d\n",
+				    port, devad, regnum, ret);
 		return ret;
+	}
 
 	return val;
 }
@@ -155,12 +170,28 @@ static int rtl8372n_setup_mdio(struct rtl837x_priv *priv)
 			if (!(dsa_user_ports(ds) & BIT(port)))
 				continue;
 			phy = mdiobus_get_phy(bus, port);
-			if (!phy || phy->drv != &rtl8372n_phy_driver) {
+			if (!phy) {
+				dev_err(dev, "PHY binding port %d: phy_device absent\n",
+					port);
+				ret = -ENODEV;
+				continue;
+			}
+			device_lock(&phy->mdio.dev);
+			dev_info(dev,
+				 "PHY binding port %d: id=0x%08x clause=%s bound=%d driver=%s private_phy=%d\n",
+				 port, phy->phy_id, phy->is_c45 ? "C45" : "C22",
+				 device_is_bound(&phy->mdio.dev),
+				 phy->mdio.dev.driver ? phy->mdio.dev.driver->name : "none",
+				 phy->drv == &rtl8372n_phy_driver);
+			/* phy->drv can survive an unsuccessful phylib probe. */
+			if (!device_is_bound(&phy->mdio.dev) ||
+			    phy->mdio.dev.driver != &rtl8372n_phy_driver.mdiodrv.driver ||
+			    phy->drv != &rtl8372n_phy_driver) {
 				dev_err(dev, "port %d did not bind to the private PHY driver\n",
 					port);
 				ret = -ENODEV;
-				break;
 			}
+			device_unlock(&phy->mdio.dev);
 		}
 	}
 	if (ret) {

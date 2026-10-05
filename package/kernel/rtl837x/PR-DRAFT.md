@@ -38,33 +38,57 @@ Prepare a minimal RTL8372N DSA bring-up candidate for GL-BE9300:
 ## Validation and build evidence
 
 Tested source: `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`.
-Later commits change documentation only; the source, package Makefile, DTS,
-workflows and feed lock were compared with that revision before publication.
+Documentation through `7be7f8d541` preserves those baseline build inputs. The
+2026-10-05 PHY diagnostic revision changes three driver sources and bumps the
+package release to 4; its ARM64 module and full OpenWrt image builds are pending.
+Earlier passes apply to the baseline, not automatically to the new source.
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| ARM64 / Linux 6.18.39 | **PASS** | [CI run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390): kernel exports, tagger, four candidate objects, `W=1`, modpost and `.ko` linking; no candidate compiler warnings |
+| ARM64 / Linux 6.18.39 | **Baseline PASS; diagnostic revision pending** | [CI run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390): kernel exports, tagger, four candidate objects, `W=1`, modpost and `.ko` linking; no candidate compiler warnings |
 | BE9300 OpenWrt configuration | **PASS** | AP config, pinned-feed verification and driver/MDIO-devres selection in the [target run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177) |
-| OpenWrt package / DTB / full image | **PASS** | [Full BE9300 AP-config run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177) completed for `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`; [build artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177/artifacts/11254652883) uploaded; no hardware result is inferred |
+| OpenWrt package / DTB / full image | **Baseline PASS; diagnostic revision pending** | CI full build passed for `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`; on 2026-10-04 the maintainer independently reproduced a T0-equivalent build for revision `908810c09bd9adfbbc7d25437a9d50b55b2de940`, verified the image revision/checksums, and staged sysupgrade with `rtl8372n_dsa.ko` + `tag_rtl8_4.ko` and no old `rtl837x` module ([report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832)). Baseline build evidence; the subsequent T1 hardware failure is recorded below |
 | Whitespace | **PASS** | `git diff --check` against the proposed base |
 | checkpatch | **0 errors; 1 reviewed warning** | Mutable regmap config copy is needed for per-device `lock_arg` |
-| BE9300 hardware | **NOT RUN** | No earlier SDK-driver result is attributed to this implementation |
+| BE9300 hardware | **T1 FAIL; T2–T8 BLOCKED** | [First bench report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5983997672), `908810c09b`: chip ID `0x83727000` reads, then port-4 internal-PHY binding aborts setup; no DSA user ports or traffic test |
 
 The [ARM64 artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390/artifacts/11248964933)
 contains the generated config, complete build logs and module. Its module
 SHA-256 is `d47c1109ab19c30f81f7a7ccd034d787b1fe2e2684acb99c89389cee1b93f1d6`.
 This is an API-check artifact, not an OpenWrt installation package.
 
-The full target workflow uses `configs/ap.config` and five pinned feeds. The run
-completed successfully and uploaded its configuration, logs, target packages
-and images. This establishes build success only; the first-device hardware gate
-remains open.
+The full target workflow uses `configs/ap.config` and five pinned feeds. It
+retains build inputs, generated config, logs, target packages/images and image
+checksums when available. A partial artifact upload does not establish success.
+
+## PHY diagnostic revision (2026-10-05)
+
+The first hardware run reads the switch ID but aborts at internal-PHY binding.
+The original message does not distinguish an absent PHY from an unexpected
+PHY driver. A valid `phy->drv` pointer also does not prove that a phylib probe
+completed successfully.
+
+The new revision:
+
+- Logs actual C22 PHYSID reads and their errno, then records every available
+  user port's device/binding state, PHY ID, C22/C45 mode and actual driver.
+- Requires `device_is_bound()` under the PHY device lock and both private-driver
+  identities; missing, wrong or unbound PHYs retain the existing setup failure.
+- Logs capability-probe and C22/C45/native-MMD/read-completion errors with
+  register context. It does not add diagnostic reads or change register policy.
+- Updates the hardware evidence to **T1 FAIL; T2–T8 BLOCKED** and supplies a
+  [diagnostic report and rerun procedure](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/PHY-PROBE-REPORT.md).
+
+This is a diagnostic revision and a binding-check correction. The bench failure
+is not claimed fixed. A new exact-source T0 is required before flashing; repeat
+T1 with the full boot log, then run T2–T8 only if probe succeeds. The Realtek
+module remains required for the external WAN PHY. P1-A stays separate.
 
 ## Scope and remaining work
 
 | Stage | Scope | Current status |
 | --- | --- | --- |
-| P0 | Probe/reset, register access, internal PHY, 10G CPU PCS, native tags, four LAN jacks and CPU/software forwarding | Implemented source; ARM64 and full target-image builds passed; hardware checks pending |
+| P0 | Probe/reset, register access, internal PHY, 10G CPU PCS, native tags, four LAN jacks and CPU/software forwarding | Baseline builds passed; first bench run failed T1 at internal-PHY binding and blocked T2–T8; diagnostic revision requires new builds and T0/T1 |
 | P1 | Hardware bridge/VLAN, FDB/MDB, STP/BPDU and bridge flags | Not implemented; [source/dependency plan](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/P1-RESEARCH.md) prepared; BPDU/database/table semantics remain gates |
 | P2 | LAG #47 and rate limiting #49 | Not ported; prior feature requirements remain applicable |
 | Other baseline interfaces | MTU/jumbo, alternate tags, mirroring, MIB/ethtool, EEE and GPIO parity | Not established; restore or agree individual deferrals |
@@ -78,20 +102,27 @@ Keep the shipping baseline until the acceptance criteria in #100 pass or the
 maintainer explicitly agrees the corresponding feature deferrals. PPE/NAT and
 802.11r remain outside this PR. Final official driver and board submissions
 should remain separate; [OpenWrt #23161](https://github.com/openwrt/openwrt/pull/23161)
-is still open and unmerged at this check.
+was open and unmerged at the previous integration check. On 2026-10-04 the
+maintainer ran the independent `908810c09b` image on a recoverable bench: T1
+failed and T2–T8 were blocked. Resolve the P0 probe failure and rerun its matrix
+before the separate P1-A image and A0–A6 tests.
 
-### P1 research update (2026-10-03)
+### P1 research and maintainer scope update (2026-10-04)
 
 Public sources cover substantial VLAN/L2/CIST operations, but they disagree
 on the VLAN selector description, VLAN bit 25 and L2 bit 29. The new plan
 records these conflicts, the Linux DSA CPU/database requirements, two BPDU
 delivery options and a staged implementation/bench matrix. No P1 runtime
-callbacks are added; the tested P0 build inputs remain unchanged.
+callbacks were added by that research update; it left the baseline P0 build
+inputs unchanged. The later diagnostic source revision is tracked separately.
 
-Prepare shared table transactions and checked codecs first; prove BPDU CPU
-delivery, CIST and dynamic flush before enabling hardware bridge/VLAN/flags;
-then add FDB/MDB with explicit database/CPU-entry semantics. Keep the agreed
-P0 hardware → P1 → P2 order and all existing source/build/upstream gates.
+Perceival agrees with the P0 hardware → P1 parity → P2 order and accepts one
+initially offloaded hardware bridge for P1. Multiple bridge domains/MST remain
+deferred pending semantics work; unsupported domains require CPU-only/software
+fallback and isolation tests. Keep #104 and P1-A separate until the P0 hardware
+results exist. Prepare shared table transactions and checked codecs first;
+prove BPDU CPU delivery, CIST and dynamic flush before enabling hardware
+bridge/VLAN/flags; then add FDB/MDB with explicit database/CPU-entry semantics.
 
 ## Provenance review
 
@@ -109,6 +140,7 @@ Signed-off-by is inferred.
 - [Build/review report and exact inputs](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/BUILD-REPORT.md)
 - [Current implementation status](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/P0-STATUS.md)
 - [Source and operation ledger](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/PROVENANCE.md)
+- [PHY probe failure analysis and diagnostic rerun](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/PHY-PROBE-REPORT.md)
 - [First hardware test matrix and report template](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/FIRST-HARDWARE-TEST.md)
 - [P1 feasibility, source conflicts and staged acceptance matrix](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/P1-RESEARCH.md)
 - [Pre-PR audit and phased remediation plan](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/PRE-PR-PLAN.md)
