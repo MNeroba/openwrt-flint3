@@ -61,7 +61,9 @@ iperf3 runs rather than the 30-second procedure). T6 has software configuration
 output only. T8 used the router as the iperf3 endpoint, so it is not
 switching-performance evidence. Release 6 also logged spurious `-EINVAL`
 power-down warnings on unsupported ports 0–2; package release 7 now limits
-those callbacks to ports 4–7 and needs new CI/hardware confirmation. See
+those callbacks to ports 4–7. Its [ARM64 module build passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454484695);
+the [full image build](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524)
+is in progress, and hardware confirmation is still needed. See
 [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for the warning causes, evidence and
 remaining P0 gates. The earlier boot stop was not reproduced, but its cause is
 not proven.
@@ -83,7 +85,8 @@ The P0 driver does not provide a GPIO controller and ignores the legacy
 `rtl837x,sds0mode`, MDI-reverse, and PHY-TX-polarity properties. SerDes mode is
 selected by phylink from the port's `phy-mode`; only `10gbase-r` is accepted
 for ports 3 and 8. PHY enable/disable callbacks are limited to internal PHY
-ports 4–7; the package-release-7 guard still needs CI and hardware confirmation.
+ports 4–7; release-7 module CI passed, full-image CI is in progress, and a
+hardware check is still required.
 
 ## Build output
 
@@ -97,13 +100,25 @@ the current evidence and remaining gates. The ARM64 module build and full
 BE9300 AP-config OpenWrt package/DTB/image build passed for source revision
 `954a84bd7c46dbbb2412eeddfb300aad8b4cff35` ([module run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390),
 [target image run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177)).
-Diagnostic `1b7a32bef2` passed [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) and
-[image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255), but T1 failed at PHY binding. Release 5 failed module compilation because it referenced a private kernel macro. Release 6 [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) and [image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) passed; its candidate module SHA-256 is `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`. The maintainer's [release-6 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917) passes T0/T1/T2/T4/T7; the [T3/T5 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6016542658) adds partial coverage of connected jacks and the three pairs among LAN1–LAN3. T6 remains unverified in hardware. Package release 7 contains the new callback guard; its full image and hardware check are pending.
+Diagnostic `1b7a32bef2` passed [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197)
+and [image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255),
+but T1 failed at PHY binding. Release 5 failed module compilation because it
+referenced a private kernel macro. Release 6 [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227)
+and [image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073)
+passed; its candidate module SHA-256 is
+`9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`.
+The maintainer's [release-6 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917)
+passes T0/T1/T2/T4/T7. The [T3/T5 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6016542658)
+adds partial coverage of connected jacks and the three pairs among LAN1–LAN3.
+T6 remains unverified in hardware. Package release 7 contains the new callback
+guard; its module CI passed, the full-image build is running, and a hardware
+check is pending.
 
 ## Staged follow-up
 
-1. Build package release 7; confirm the release-6 PHY binding result persists
-   and that the ports 0–2 power-down warnings are gone. Finish T3 with a LAN4
+1. After release-7 full-image CI completes, flash that image and confirm the
+   release-6 PHY binding result persists and that the ports 0–2 power-down
+   warnings are gone. Finish T3 with a LAN4
    peer and physical cable cycles; complete all six T5 pairs with 30-second
    bidirectional iperf3 runs.
 2. Prepare the shared table engine and resolve VLAN/L2 field meanings and

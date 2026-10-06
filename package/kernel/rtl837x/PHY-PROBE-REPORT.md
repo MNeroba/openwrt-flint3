@@ -1,11 +1,12 @@
 # RTL8372N internal-PHY binding failure and correction
 
 Updated: 2026-10-06 after the release-6 hardware report. The RTL8224 binding
-blocker is resolved on hardware: T0/T1/T2/T4/T7 passed. T3 is partial, T5 was
-not run, T6 is software configuration output only, and T8 is CPU-endpoint data,
-not switch-forwarding evidence. Release-6 module and full-image CI both passed.
-A package-release-7 follow-up now limits PHY power callbacks to ports 4–7; its
-CI and hardware results are pending. P0 is not yet fully qualified.
+blocker is resolved on hardware: T0/T1/T2/T4/T7 passed. Follow-up T3 and T5
+are partial (T5 covers 3/6 pairs); T6 is software configuration output only,
+and T8 is CPU-endpoint data, not switch-forwarding evidence. Release-6
+module and full-image CI both passed. A package-release-7 follow-up now limits
+PHY power callbacks to ports 4–7; its module CI passed, full-image CI is in
+progress, and hardware results are pending. P0 is not yet fully qualified.
 
 ## Earlier diagnostic hardware failure (release 4)
 
@@ -47,20 +48,20 @@ and [redacted serial logs](https://gist.github.com/perceival/f7abebb5395db63b97d
 | T0 | PASS | Exact-source image built with the documented AP config adjustments; both candidate modules are present. The report does not include the image SHA-256. |
 | T1 | PASS | Chip ID `0x83727000`; PHY ID `0x001ccad0` and private-driver binding on ports 4–7. |
 | T2 | PASS | Four DSA interfaces exist under `br-lan`, conduit `lan`, both modules loaded. |
-| T3 | PARTIAL | lan1 2.5G, lan2 1G, lan3 2.5G; lan4 had no peer and no unplug/replug cycle was run. |
+| T3 | PARTIAL | lan1 2.5G, lan2 1G, lan3 2.5G; lan4 had no peer. lan2/lan3 recovered after peer-interface down/up; no physical unplug/replug was run. |
 | T4 | PASS | 100/100 pings to the router from one 2.5G client; this is router reachability, not LAN-pair forwarding. |
-| T5 | NOT RUN | Only one host was available. |
+| T5 | PARTIAL (3/6 pairs) | Bidirectional ping and 8–10 s iperf3 TCP runs passed for LAN1–LAN2, LAN1–LAN3 and LAN2–LAN3 on the CPU/software-bridge path. LAN4 pairs were unavailable; procedure's 30 s duration was not met. |
 | T6 | NOT VERIFIED IN HARDWARE | VLAN 1/PVID output reflects software configuration; there was no switch-register readback. |
 | T7 | PASS | Three warm reboots and one cold power cycle; binding, link rates and pings repeated, without the earlier stop. |
 | T8 | RECORDED ONLY | iperf3 used the router as endpoint and was CPU-bound; it is not a switch-forwarding result or acceptance threshold. |
 
 ### Warning diagnosis
 
-- **PHY power-down `-22` on ports 0–2:** Release 6's `port_disable` treated every non-SerDes port as an internal PHY. The PHY accessor explicitly accepts only ports 4–7, so it returned `-EINVAL` before issuing an MDIO/PHY command. Package release 7 now checks the supported PHY-port mask in both `port_enable` and `port_disable`. This is a source-level correction; it still needs CI and hardware confirmation that the warnings disappear.
+- **PHY power-down `-22` on ports 0–2:** Release 6's `port_disable` treated every non-SerDes port as an internal PHY. The PHY accessor explicitly accepts only ports 4–7, so it returned `-EINVAL` before issuing an MDIO/PHY command. Package release 7 now checks the supported PHY-port mask in both `port_enable` and `port_disable`. Its ARM64 module CI passed; full-image CI is in progress. Hardware confirmation that the warnings disappear is still required.
 - **Conduit `tx_errors=18446744073709551614` (`2^64−2`):** This is the unsigned result of an existing Qualcomm PPE statistics calculation in `target/linux/qualcommbe/patches-6.18/0342-net-qualcomm-Update-IPQ9574-PPE-driver.patch`: `tx_packets - tx_frames_g`. At the reported sample the second counter exceeds the first by two. That identifies why the displayed value underflows, but not whether the PPE hardware counters are semantically correct. It is outside the RTL8372N driver and should be handled separately with the raw `lan` PPE MIB/ethtool counters; it is not evidence of RTL8372N packet loss.
 - **`10GBASE-R link not up before USXG_EN`:** In release 6 this follows `qcom_ppe ... wan: configuring for inband/usxgmii`; the log later continues and the router is reachable. It is a WAN PCS event, not evidence that the switch-to-SoC CPU link failed, and it does not explain the earlier release-4 log ending.
 
-The next hardware run should use the package-release-7 image, confirm the three spurious power-down warnings are gone, finish T3 on every jack including unplug/replug, and run all six LAN pairs for T5 with two hosts. Keep T6 marked unverified unless an agreed read-only hardware readback is available. The author offered to repeat T3/T5 once the second host is available.
+The next hardware run should use the package-release-7 image and confirm the three spurious power-down warnings are gone. For T3, test LAN4 with a peer and physically unplug/replug each jack. For T5, add the three LAN4 pairs and repeat traffic in both directions for the procedure's 30 seconds per run. Keep T6 marked unverified unless an agreed read-only hardware readback is available. These release-6 follow-up results use the CPU/software-bridge path; release 7 still needs its own image and T1 check.
 
 ## Why matching the same ID is insufficient
 
@@ -112,20 +113,20 @@ vendor patch data is introduced.
 | --- | --- | --- | --- |
 | Diagnostic `1b7a32bef2`, release 4 | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255) | Maintainer T0 PASS; T1 FAIL; T2–T8 BLOCKED |
 | Registration correction, release 5 (`614188cff5`) | [FAIL](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769): private kernel macro not visible | Cancelled after release-5 module CI failed | Not run |
-| Corrected registration, release 6 (`32d958fe17`) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) | T0/T1/T2/T4/T7 pass; T3 partial, T5 not run, T6 software output only, T8 recorded |
-| PHY callback guard, release 7 | Pending | Pending | Pending; retest warnings and remaining T3/T5 |
+| Corrected registration, release 6 (`32d958fe17`) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) | T0/T1/T2/T4/T7 pass; T3 partial; T5 partial (3/6 pairs, short traffic runs); T6 software output only; T8 recorded |
+| PHY callback guard, release 7 | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454484695) | [IN PROGRESS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524) | Pending; retest warnings and remaining T3/T5 |
 
 Release 5 failed compilation because `DEFAULT_GPIO_RESET_DELAY` is private to
 kernel `of_mdio.c`. Release 6 uses a named local 10 us constant matching
 `__of_mdiobus_register()` and explicitly reports unsupported PHY package nodes.
 Release 6 [ARM64 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) passed with all four objects, `W=1`,
 modpost and link success; candidate compilation has no warnings. Module
-SHA-256: `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`. [Full-image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) also passed, and the author reports exact-source T0/T1 success. The new release-7 guard needs its own module/image builds and hardware confirmation.
+SHA-256: `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`. [Full-image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) also passed, and the author reports exact-source T0/T1 success. Release 7's module build passed; its full-image build is in progress and hardware confirmation is still required.
 
 ## Remaining hardware work
 
-1. Build and flash package release 7 from the published PR revision; record the
-   exact commit, image revision and SHA-256. Confirm T0/T1 still pass and the
+1. After release-7 full-image CI completes, flash that image; record the exact
+   commit, image revision and SHA-256. Confirm T0/T1 still pass and the
    power-down warnings for ports 0–2 are absent.
 2. Complete T3 with a link partner on each jack, record all supported/local/
    partner modes, then unplug/replug each link and verify mapping and recovery.

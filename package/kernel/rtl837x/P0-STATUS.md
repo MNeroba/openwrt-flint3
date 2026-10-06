@@ -16,8 +16,9 @@ instead of the 30 seconds in the procedure. T6 has software output only; T8 is
 router-endpoint CPU traffic. The report and warning diagnosis are in
 [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md).
 Package release 7 limits PHY enable/disable operations to ports 4–7 to remove
-spurious `-EINVAL` warnings observed on ports 0–2; release-7 CI and hardware
-confirmation are still pending. P0 is not fully qualified.
+spurious `-EINVAL` warnings observed on ports 0–2. Release-7 ARM64 module CI
+passed; full-image CI is in progress and hardware confirmation is pending. P0
+is not fully qualified.
 
 ## Source work completed
 
@@ -99,7 +100,15 @@ confirmation are still pending. P0 is not fully qualified.
   confirms maintainer T0 PASS and T1 FAIL: all four IDs are `0x001ccad0`, but
   the in-tree RTL8224 driver wins binding. A later boot hang is also reported.
 - Release 5 failed compilation on a private kernel macro. Release 6 fixes that;
-  [ARM64 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) and [full image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) passed. The [release-6 bench report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917) passes T0/T1/T2/T4/T7. Its [T3/T5 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6016542658) covers connected jacks and all three pairs among LAN1–LAN3; LAN4, physical cable cycling, 30-second traffic runs and hardware T6 remain open. The earlier stop was not reproduced, but its cause is not established. Release 7's port-callback guard needs fresh CI and hardware confirmation.
+  [ARM64 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227)
+  and [full image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073)
+  passed. The [release-6 bench report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917)
+  passes T0/T1/T2/T4/T7. Its [T3/T5 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6016542658)
+  covers connected jacks and all three pairs among LAN1–LAN3; LAN4, physical
+  cable cycling, 30-second traffic runs and hardware T6 remain open. The earlier
+  stop was not reproduced, but its cause is not established. Release 7's
+  port-callback guard passed ARM64 module CI; full-image CI is in progress and
+  hardware confirmation is pending.
 
 ## P1 research update
 

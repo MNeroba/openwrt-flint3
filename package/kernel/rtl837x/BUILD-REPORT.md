@@ -4,11 +4,11 @@
 
 | Gate | Result | Evidence / scope |
 | --- | --- | --- |
-| Mainline ARM64 compilation | **Release 6 PASS; release 7 pending** | Release-6 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227): four objects, `W=1`, modpost and module link, with no candidate compiler warnings. Release 5 failed on the private `DEFAULT_GPIO_RESET_DELAY` macro. |
+| Mainline ARM64 compilation | **Release 6 and 7 PASS** | Release-7 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454484695): four objects, `W=1`, modpost and module link, with no candidate compiler warnings; module SHA-256 `8163371788badabaf4777f88b24e6de0559634a574c1cc59c3033822df2eeb37`. Release 5 failed on the private `DEFAULT_GPIO_RESET_DELAY` macro. |
 | OpenWrt configuration | **PASS for release 6 inputs** | BE9300 AP configuration; five pinned feeds verified; driver and MDIO-devres packages selected. |
-| OpenWrt package, DTB and image | **Release 6 PASS; release 7 pending** | Release-6 [full BE9300 image CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073). Rebuild after the release-7 source/package change. |
-| Source whitespace/style | **Release 6 PASS; release 7 pending review** | The follow-up is limited to the PHY-port guard and package release bump; no check result is claimed for it yet. |
-| BE9300 hardware | **Release 6 T0/T1/T2/T4/T7 PASS; T3 PARTIAL; T5 NOT RUN; T6 software output only; T8 recorded** | [Maintainer's report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917) and [redacted logs](https://gist.github.com/perceival/f7abebb5395db63b97d3775ebd2c544a). Release 7 needs a fresh T0/T1 and the missing T3/T5 coverage. |
+| OpenWrt package, DTB and image | **Release 6 PASS; release 7 IN PROGRESS** | Release-6 [full BE9300 image CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073). Release-7 [full image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524) is running. |
+| Source whitespace/style | **Release 6 and 7 PASS** | Release 7 passed `git diff --check` and strict `checkpatch.pl` with 0 findings. |
+| BE9300 hardware | **Release 6 T0/T1/T2/T4/T7 PASS; T3 PARTIAL; T5 PARTIAL (3/6 pairs); T6 software output only; T8 recorded** | [Maintainer's report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917), [T3/T5 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6016542658) and [redacted logs](https://gist.github.com/perceival/f7abebb5395db63b97d3775ebd2c544a). Release 7 needs a fresh T0/T1 and the missing T3/T5 coverage. |
 | Retained source provenance | **OPEN REVIEW** | Restricted header and patch arrays excluded; SDS field/polarity lineage remains unresolved. |
 | Replacement acceptance in #100 | **NOT MET** | P0 needs remaining hardware coverage; P1/P2 parity or maintainer-agreed deferrals remain required. |
 
@@ -16,12 +16,13 @@ The CI full target-build run passed on 2026-10-02 for its tested source
 revision. The maintainer's independent `908810c09b` image on 2026-10-04 is a
 historical run: it reached the first T1 failure and did not qualify traffic.
 The later release-6 hardware result supersedes that status for T0/T1/T2/T4/T7;
-see the table above and [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md). T3/T5 and
-hardware T6 remain open, and the release-7 source guard needs its own build.
+see the table above and [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md). T3/T5 are
+partial and hardware T6 remains open. Release 7's module build passed; its full
+image build is in progress, followed by a fresh hardware check.
 
 ## PHY binding correction and release-6 bench result (2026-10-06)
 
-The initial [diagnostic report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562) showed successful C22 ID reads but binding to the in-tree RTL8224 driver. Release 6's pre-registration per-device matcher corrected that failure. The maintainer's [release-6 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917) confirms private-driver binding on ports 4–7 and passes T0/T1/T2/T4/T7. T3 is partial, T5 was not run, and T6 is software output only. The full cause, logs and warning disposition are in [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md).
+The initial [diagnostic report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562) showed successful C22 ID reads but binding to the in-tree RTL8224 driver. Release 6's pre-registration per-device matcher corrected that failure. The maintainer's [release-6 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917) confirms private-driver binding on ports 4–7 and passes T0/T1/T2/T4/T7. Follow-up results make T3 partial and T5 partial (3/6 LAN pairs); T6 is software output only. The full cause, logs and warning disposition are in [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md).
 
 Release 5 suppresses automatic internal-bus discovery and assigns the private
 matcher before PHY registration, but its ARM64 build failed on an inaccessible
@@ -30,8 +31,9 @@ upstream OF-MDIO behavior and rejects unsupported `ethernet-phy-package` nodes
 with an explicit error. Release-6 module and full-image CI both passed; the
 maintainer then passed T0/T1 on hardware. Five starts did not reproduce the
 prior boot stop, but the old stop's cause is not established. The new package
-release-7 guard prevents PHY access to non-PHY DSA port holes 0–2; it still
-needs its own build and hardware confirmation.
+release-7 guard prevents PHY access to non-PHY DSA port holes 0–2; its ARM64
+module build passed, its full image build is in progress, and hardware
+confirmation is still needed.
 
 Diagnostic release 4 (`1b7a32bef2`) passed [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) and
 [full-image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255); those passes do not qualify releases 5 or 6.
@@ -58,7 +60,8 @@ qualification.
   builds. Release 5 (2026-10-06) failed ARM64 module CI because
   `DEFAULT_GPIO_RESET_DELAY` is private to kernel OF-MDIO. Release 6 fixes the
   compile error and passed both module and full-image CI. Package release 7
-  adds the callback guard and requires fresh module/image builds.
+  adds the callback guard; its module CI passed, full-image CI is in progress,
+  and hardware confirmation is still required.
 - Build hosts: GitHub-hosted Ubuntu 24.04. ARM64 API check uses
   `aarch64-linux-gnu-`; OpenWrt uses the project toolchain/config.
 
@@ -162,5 +165,5 @@ Keep the shipping baseline while this Draft is reviewed. Release 6 passed
 T0/T1/T2/T4/T7. Follow-up T3/T5 covers link rates on LAN1–LAN3 and bidirectional
 software-bridge traffic across the three pairs among them; LAN4, physical cable
 cycles, 30-second iperf3 runs and hardware T6 readback remain open. Release-7
-image/hardware checks remain pending. No full P0 qualification, source-owner
-sign-off or functional parity is claimed.
+full-image CI is running; hardware checks remain pending. No full P0
+qualification, source-owner sign-off or functional parity is claimed.
