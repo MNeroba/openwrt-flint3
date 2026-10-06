@@ -39,18 +39,19 @@ Prepare a minimal RTL8372N DSA bring-up candidate for GL-BE9300:
 
 Tested source: `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`.
 Documentation through `7be7f8d541` preserves those baseline build inputs. The
-2026-10-05 PHY diagnostic revision changes three driver sources and bumps the
-package release to 4; its ARM64 module and full OpenWrt image builds are pending.
-Earlier passes apply to the baseline, not automatically to the new source.
+diagnostic `1b7a32bef2` passed both [module](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) and
+[image](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255) builds. Its maintainer T0 passed; T1 failed due to RTL8224
+binding. The release-5 registration correction needs fresh module/image builds
+and an exact-source hardware rerun. Earlier passes apply to their own inputs.
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| ARM64 / Linux 6.18.39 | **Baseline PASS; diagnostic revision pending** | [CI run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390): kernel exports, tagger, four candidate objects, `W=1`, modpost and `.ko` linking; no candidate compiler warnings |
+| ARM64 / Linux 6.18.39 | **Diagnostic PASS; release-5 correction pending** | [CI run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390): baseline kernel exports, tagger, four objects, `W=1`, modpost/linking; diagnostic also passed the module run linked above. Release 5 pending |
 | BE9300 OpenWrt configuration | **PASS** | AP config, pinned-feed verification and driver/MDIO-devres selection in the [target run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177) |
-| OpenWrt package / DTB / full image | **Baseline PASS; diagnostic revision pending** | CI full build passed for `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`; on 2026-10-04 the maintainer independently reproduced a T0-equivalent build for revision `908810c09bd9adfbbc7d25437a9d50b55b2de940`, verified the image revision/checksums, and staged sysupgrade with `rtl8372n_dsa.ko` + `tag_rtl8_4.ko` and no old `rtl837x` module ([report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832)). Baseline build evidence; the subsequent T1 hardware failure is recorded below |
+| OpenWrt package / DTB / full image | **Diagnostic PASS; release-5 correction pending** | CI full build passed for `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`; on 2026-10-04 the maintainer independently reproduced a T0-equivalent build for revision `908810c09bd9adfbbc7d25437a9d50b55b2de940`, verified the image revision/checksums, and staged sysupgrade with `rtl8372n_dsa.ko` + `tag_rtl8_4.ko` and no old `rtl837x` module ([report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832)). Diagnostic image CI and maintainer T0 also passed; release 5 pending. T1 hardware failure recorded below |
 | Whitespace | **PASS** | `git diff --check` against the proposed base |
-| checkpatch | **0 errors; 1 reviewed warning** | Mutable regmap config copy is needed for per-device `lock_arg` |
-| BE9300 hardware | **T1 FAIL; T2–T8 BLOCKED** | [First bench report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5983997672), `908810c09b`: chip ID `0x83727000` reads, then port-4 internal-PHY binding aborts setup; no DSA user ports or traffic test |
+| checkpatch | **Release-5 source patch: 0 errors/warnings/checks** | Strict patch review passed; full-source baseline has one reviewed mutable-regmap warning |
+| BE9300 hardware | **T1 FAIL; T2–T8 BLOCKED** | [Diagnostic report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562), `1b7a32bef2`: all four IDs `0x001ccad0`; RTL8224 wins binding. Later boot hang unresolved; release-5 rerun pending |
 
 The [ARM64 artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390/artifacts/11248964933)
 contains the generated config, complete build logs and module. Its module
@@ -61,34 +62,38 @@ The full target workflow uses `configs/ap.config` and five pinned feeds. It
 retains build inputs, generated config, logs, target packages/images and image
 checksums when available. A partial artifact upload does not establish success.
 
-## PHY diagnostic revision (2026-10-05)
+## Confirmed PHY binding cause and registration correction (2026-10-06)
 
-The first hardware run reads the switch ID but aborts at internal-PHY binding.
-The original message does not distinguish an absent PHY from an unexpected
-PHY driver. A valid `phy->drv` pointer also does not prove that a phylib probe
-completed successfully.
+Perceival's [diagnostic report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562) confirms all four PHYs read
+ID `0x001ccad0`, but the in-tree `RTL8224 2.5Gbps PHY` driver wins binding.
+Adding another matching ID or relying on module ordering provides no priority.
 
-The new revision:
+The release-5 correction:
 
-- Logs actual C22 PHYSID reads and their errno, then records every available
-  user port's device/binding state, PHY ID, C22/C45 mode and actual driver.
-- Requires `device_is_bound()` under the PHY device lock and both private-driver
-  identities; missing, wrong or unbound PHYs retain the existing setup failure.
-- Logs capability-probe and C22/C45/native-MMD/read-completion errors with
-  register context. It does not add diagnostic reads or change register policy.
-- Updates the hardware evidence to **T1 FAIL; T2–T8 BLOCKED** and supplies a
-  [diagnostic report and rerun procedure](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/PHY-PROBE-REPORT.md).
+- Registers the private bus with automatic scanning disabled, discovers actual
+  PHY IDs and sets a device-specific matcher before registering each PHY.
+  The matcher admits only the private driver on this bus's enabled ports 4–7;
+  no vendor-specific OF-compatible override is promised.
+- Preserves optional MDIO-node/PHY-node association and reset delays; rejects
+  invalid, duplicate or missing explicit internal PHY addresses. The BE9300
+  path needs no DT compatible change. WAN Realtek remains available.
+- Retains completed-binding checks and all probe/read-error diagnostics.
+  Registered PHYs are owned by managed bus teardown; failed registration frees
+  the unregistered device. No ID spoofing or post-probe rebind is used.
+- Leaves PHY/SerDes/reset/forwarding register programming unchanged.
 
-This is a diagnostic revision and a binding-check correction. The bench failure
-is not claimed fixed. A new exact-source T0 is required before flashing; repeat
-T1 with the full boot log, then run T2–T8 only if probe succeeds. The Realtek
-module remains required for the external WAN PHY. P1-A stays separate.
+The [failure/fix report](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/PHY-PROBE-REPORT.md)
+records source evidence and the next bench procedure. The later boot hang
+following the SoC PCS message remains unresolved and is not claimed fixed.
+New builds/T0 must pass before flashing. Repeat T1 with the complete serial log,
+all four private binding results and boot progress beyond the former hang
+point; run T2–T8 only after T1 passes. P1-A remains separate.
 
 ## Scope and remaining work
 
 | Stage | Scope | Current status |
 | --- | --- | --- |
-| P0 | Probe/reset, register access, internal PHY, 10G CPU PCS, native tags, four LAN jacks and CPU/software forwarding | Baseline builds passed; first bench run failed T1 at internal-PHY binding and blocked T2–T8; diagnostic revision requires new builds and T0/T1 |
+| P0 | Probe/reset, register access, internal PHY, 10G CPU PCS, native tags, four LAN jacks and CPU/software forwarding | Baseline builds passed; first bench run failed T1 at internal-PHY binding and blocked T2–T8; release-5 correction requires new builds and T0/T1 |
 | P1 | Hardware bridge/VLAN, FDB/MDB, STP/BPDU and bridge flags | Not implemented; [source/dependency plan](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/P1-RESEARCH.md) prepared; BPDU/database/table semantics remain gates |
 | P2 | LAG #47 and rate limiting #49 | Not ported; prior feature requirements remain applicable |
 | Other baseline interfaces | MTU/jumbo, alternate tags, mirroring, MIB/ethtool, EEE and GPIO parity | Not established; restore or agree individual deferrals |

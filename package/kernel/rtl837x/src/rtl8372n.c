@@ -128,6 +128,60 @@ bool rtl8372n_phy_bus_match(struct mii_bus *bus)
 	return bus && bus->read == rtl8372n_mdio_phy_read_c22;
 }
 
+static int rtl8372n_register_phys(struct rtl837x_priv *priv,
+				  struct mii_bus *bus, struct device_node *mnp)
+{
+	struct device_node *child;
+	struct phy_device *phy;
+	u32 seen = 0;
+	int port, addr, ret;
+
+	/* This private bus exposes only enabled internal user PHYs. */
+	for_each_available_child_of_node(mnp, child) {
+		addr = of_mdio_parse_addr(priv->dev, child);
+		if (addr < 0 || !of_mdiobus_child_is_phy(child) ||
+		    !(BIT(addr) & dsa_user_ports(priv->ds) & RTL8372N_PHY_PORT_MASK) ||
+		    (seen & BIT(addr))) {
+			of_node_put(child);
+			return -EINVAL;
+		}
+		seen |= BIT(addr);
+	}
+	if (mnp && seen != (dsa_user_ports(priv->ds) & RTL8372N_PHY_PORT_MASK))
+		return -EINVAL;
+
+	for (port = 4; port <= 7; port++) {
+		if (!(dsa_user_ports(priv->ds) & BIT(port)))
+			continue;
+
+		/* Discover the real ID, but constrain matching before registration. */
+		phy = get_phy_device(bus, port, false);
+		if (IS_ERR(phy)) {
+			ret = PTR_ERR(phy);
+			dev_err(priv->dev, "PHY discovery port %d failed: %d\n", port, ret);
+			return ret;
+		}
+		phy->mdio.bus_match = rtl8372n_phy_device_match;
+
+		for_each_available_child_of_node(mnp, child) {
+			if (of_mdio_parse_addr(priv->dev, child) == port)
+				break;
+		}
+		if (child)
+			ret = of_mdiobus_phy_device_register(bus, phy, child, port);
+		else
+			ret = phy_device_register(phy);
+		of_node_put(child);
+		if (ret) {
+			phy_device_free(phy);
+			dev_err(priv->dev, "PHY registration port %d failed: %d\n", port, ret);
+			return ret;
+		}
+		/* Registered PHYs are removed and freed by managed bus teardown. */
+	}
+	return 0;
+}
+
 static int rtl8372n_setup_mdio(struct rtl837x_priv *priv)
 {
 	struct device_node *np = priv->dev->of_node;
@@ -162,9 +216,18 @@ static int rtl8372n_setup_mdio(struct rtl837x_priv *priv)
 	bus->read_c45 = rtl8372n_mdio_phy_read_c45;
 	bus->write_c45 = rtl8372n_mdio_phy_write_c45;
 	bus->parent = dev;
-	bus->phy_mask = ~(dsa_user_ports(ds) & RTL8372N_PHY_PORT_MASK);
+	/* Automatic scanning would bind an already loaded RTL8224 driver. */
+	bus->phy_mask = ~0;
+	if (mnp) {
+		device_set_node(&bus->dev, of_fwnode_handle(mnp));
+		bus->reset_delay_us = DEFAULT_GPIO_RESET_DELAY;
+		of_property_read_u32(mnp, "reset-delay-us", &bus->reset_delay_us);
+		of_property_read_u32(mnp, "reset-post-delay-us", &bus->reset_post_delay_us);
+	}
 
-	ret = devm_of_mdiobus_register(dev, bus, mnp);
+	ret = devm_mdiobus_register(dev, bus);
+	if (!ret)
+		ret = rtl8372n_register_phys(priv, bus, mnp);
 	if (!ret) {
 		for (port = 4; port <= 7; port++) {
 			if (!(dsa_user_ports(ds) & BIT(port)))

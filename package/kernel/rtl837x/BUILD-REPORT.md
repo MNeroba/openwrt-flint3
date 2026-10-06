@@ -1,15 +1,15 @@
 # RTL8372N P0 build and review report
 
-## Latest result (status checked 2026-10-05)
+## Latest result (status checked 2026-10-06)
 
 | Gate | Result | Evidence / scope |
 | --- | --- | --- |
-| Mainline ARM64 compilation | **Baseline PASS; diagnostic revision pending** | Linux 6.18.39; all four baseline objects; `W=1`; module linking and modpost. Rebuild required for the PHY diagnostic source change. |
+| Mainline ARM64 compilation | **Diagnostic PASS; release-5 correction pending** | Linux 6.18.39; diagnostic `1b7a32bef2` [passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197). New registration source requires rebuild. |
 | OpenWrt configuration | **PASS** | BE9300 AP configuration; all five pinned feeds verified; driver and MDIO-devres packages selected |
-| OpenWrt package, DTB and image | **Baseline PASS; diagnostic revision pending** | CI full build passed for `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`; the maintainer independently reproduced T0 for `908810c09bd9adfbbc7d25437a9d50b55b2de940` ([report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832)). The diagnostic revision changes source and package release; its exact-source T0 must pass before flashing. |
+| OpenWrt package, DTB and image | **Diagnostic PASS; release-5 correction pending** | CI full build passed for `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`; the maintainer independently reproduced T0 for `908810c09bd9adfbbc7d25437a9d50b55b2de940` ([report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832)). Diagnostic `1b7a32bef2` [image CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255) and maintainer T0 passed. Release-5 correction needs its own build/T0 before flashing. |
 | Source whitespace | **PASS** | `git diff --check` against the proposed base |
-| Kernel style review | **0 errors, 1 reviewed warning** | Mutable per-device regmap config is required to set its `lock_arg` |
-| BE9300 hardware | **T1 FAIL; T2–T8 BLOCKED** | The 2026-10-04 [bench report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5983997672) reads chip ID `0x83727000`, then aborts at internal-PHY binding on port 4. No replacement-driver forwarding result is established. |
+| Kernel style review | **Release-5 source patch: 0 errors/warnings/checks** | Strict patch review passed; full-source baseline has one reviewed mutable-regmap warning |
+| BE9300 hardware | **T1 FAIL; T2–T8 BLOCKED** | The [2026-10-06 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562) confirms IDs `0x001ccad0` on all four ports; RTL8224 binds instead of the private driver. Later boot hang unresolved. Release-5 hardware rerun pending. |
 | Retained source provenance | **OPEN REVIEW** | Restricted header and patch arrays excluded; SDS field/polarity lineage remains unresolved |
 | Replacement acceptance in #100 | **NOT MET** | Hardware and feature parity, or agreed deferrals, remain required |
 
@@ -23,19 +23,22 @@ That image was installed on the recoverable bench on 2026-10-04. T1 failed at
 the internal-PHY binding check; T2–T8 are blocked. The switch ID is observable,
 but internal-PHY access, CPU/LAN links and forwarding remain unqualified.
 
-## PHY probe diagnostic revision (2026-10-05)
+## Confirmed PHY binding cause and registration correction (2026-10-06)
 
-[PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) records the failure, the unresolved
-alternatives and the next T0/T1 run. The revision logs actual PHYSID reads,
-per-port device/binding state, feature-probe failures and native-MMD/read-command
-errors. The binding gate now checks completed device binding under the device
-lock as well as both driver identities. It collects all available user-port
-results before returning the existing setup failure. Package release is 4.
+The [diagnostic hardware report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562) confirms successful C22 ID
+reads on all four ports and completed binding to the in-tree RTL8224 driver.
+T0 passed; T1 failed and T2–T8 remain blocked. The complete cause/fix and next
+bench requirements are in [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md).
 
-No PHY ID is fabricated, error is suppressed or alternative driver rebound.
-PHY/SerDes/reset/forwarding programming and the scan sequence are unchanged.
-This is a diagnostic revision and a binding-check correction, not a demonstrated
-fix for the bench failure. Previous build passes do not validate this new source.
+Release 5 suppresses automatic internal-bus discovery, obtains real PHY IDs,
+sets a device-specific private-driver matcher before registration, and retains
+strict binding/error checks and managed bus ownership. WAN Realtek binding
+remains available. PHY/SerDes/reset/forwarding register policy is unchanged.
+The later boot hang is not claimed fixed. New module/image builds and hardware
+T0/T1 are required; all traffic tests remain unqualified.
+
+Diagnostic release 4 (`1b7a32bef2`) passed [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) and
+[full-image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255); those passes do not qualify release 5.
 
 ## Follow-up research (updated 2026-10-04)
 
@@ -57,7 +60,8 @@ qualification.
 - Documentation commits through `7be7f8d541` retain the baseline build inputs.
   The 2026-10-05 diagnostic revision changes three driver sources and bumps the
   package release. DTS, configuration, workflows and pinned feeds are unchanged;
-  new module and OpenWrt image builds are required.
+  its diagnostic builds passed. The 2026-10-06 registration correction bumps
+  release to 5 and requires new module and OpenWrt image builds.
 - Build hosts: GitHub-hosted Ubuntu 24.04. ARM64 API check uses
   `aarch64-linux-gnu-`; OpenWrt uses the project toolchain/config.
 

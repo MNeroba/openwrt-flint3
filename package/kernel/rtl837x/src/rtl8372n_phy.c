@@ -16,6 +16,14 @@ static int rtl8372n_phy_match(struct phy_device *phydev,
 	       phydev->mdio.addr >= 4 && phydev->mdio.addr <= 7;
 }
 
+/* Install before device_add(): a PHY ID match has no driver priority. */
+int rtl8372n_phy_device_match(struct device *dev,
+			      const struct device_driver *driver)
+{
+	return driver == &rtl8372n_phy_driver.mdiodrv.driver &&
+	       rtl8372n_phy_match(to_phy_device(dev), &rtl8372n_phy_driver);
+}
+
 /* phylib already holds the child bus lock during page selection/restoration. */
 static int rtl8372n_phy_read_page(struct phy_device *phydev)
 {

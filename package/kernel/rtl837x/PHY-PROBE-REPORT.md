@@ -1,93 +1,105 @@
-# RTL8372N internal-PHY probe diagnostics
+# RTL8372N internal-PHY binding failure and correction
 
-Updated: 2026-10-05. This revision improves diagnosis and corrects the binding
-gate. It does not establish the root cause or a hardware fix for the T1 failure.
+Updated: 2026-10-06. The T1 binding failure has an observed cause. The
+registration correction is prepared; its builds and hardware rerun are pending.
+The later boot hang remains a separate unresolved observation.
 
-## Reported failure
+## Latest hardware evidence
 
-Perceival's [2026-10-04 bench report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5983997672)
-uses source `908810c09bd9adfbbc7d25437a9d50b55b2de940`, Linux 6.18.39,
-CPU port 3 and user ports 4–7, with all four SerDes polarity properties enabled.
-Sysupgrade SHA-256:
-`6acb8d57df6023ae10417048c5390cbbf044c4f835a5bef262d8e63fb4585a5e`.
-The source through pre-diagnostic head `7be7f8d541` has the same driver inputs.
+Perceival's [diagnostic-revision report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562) tests `1b7a32bef2`
+on GL-BE9300 with the reference AP configuration, `kmod-qca-ssdk` and
+`kmod-qca-nss-ppe` removed, and `kmod-phy-realtek` retained for WAN.
+T0 passed: both candidate/tagger modules are in the image and SHA-256 was
+verified. The report does not publish the new image checksum itself.
 
-T0 passed. The installed image reads chip ID `0x83727000`, then reports
-`port 4 did not bind to the private PHY driver` and aborts setup with `-ENODEV`.
-No DSA user ports are created. **T1 FAIL; T2–T8 BLOCKED** is the recorded result.
-The report has no oops, pstore record or MDIO/SDS timeout. Successful outer
-switch-register access does not establish successful internal-PHY transactions.
+The switch ID is `0x83727000`. All four internal PHYs read PHYSID1 `0x001c`
+and PHYSID2 `0xcad0` with `err=0`. Port 4's binding summary is:
 
-## Source analysis
+```text
+id=0x001ccad0 clause=C22 bound=1 driver=RTL8224 2.5Gbps PHY private_phy=0
+```
 
-The original check combines a missing `phy_device` and an unexpected
-`phy->drv` into one message, and stops at the first failing port. It cannot
-distinguish the two alternatives proposed in the bench report.
+The standard Realtek driver has successfully bound where the private driver
+was required. Setup correctly rejects it with `-ENODEV`.
+**T1 FAIL; T2–T8 BLOCKED.** PHY-ID discovery now has positive evidence;
+private feature probing, link negotiation, CPU traffic and forwarding do not.
 
-Linux 6.18.39 [phylib](https://github.com/gregkh/linux/blob/v6.18.39/drivers/net/phy/phy_device.c)
-can turn a C22 ID-read `-EIO` into `-ENODEV`, allowing scanning to continue.
-The candidate's internal access also returns `-EIO` on nonzero command status,
-which does not require a timeout. Actual read values/errors are therefore needed.
+The board also hangs about seven seconds after probe failure, following
+`10GBASE-R link not up before USXG_EN`. It produces no further serial output
+for minutes and the watchdog does not restart it; a second power cycle
+reproduced this. The excerpt does not establish the hang's cause. Do not claim
+that fixing PHY selection also fixes this hang; request the complete serial log.
 
-The [driver core](https://github.com/gregkh/linux/blob/v6.18.39/drivers/base/dd.c)
-iterates matching drivers and stops at a successful probe. The private driver's
-bus match grants no priority over an already registered Realtek driver. Autoload
-17 versus 18 does not prove the runtime registration order. A Realtek driver
-binding to the internal PHYs is plausible, not yet observed; keep the Realtek
-module available for the external WAN PHY.
+## Why matching the same ID is insufficient
 
-There is also an independent binding-check defect: `phy_probe` assigns
-`phy->drv` before feature/EEE initialization and can return an error without
-clearing it. This pointer alone does not prove that binding completed.
-`device_is_bound` explicitly requires the device lock and reports successful
-binding; the revised gate uses it and checks the actual device-driver identity
-as well as the PHY-driver identity.
+Linux 6.18.39's [driver core](https://github.com/gregkh/linux/blob/v6.18.39/drivers/base/dd.c)
+iterates matching drivers and stops after successful binding. A private
+`match_phy_device` predicate grants no priority over an already registered
+Realtek driver. Module autoload priorities 17/18 do not establish runtime order.
+Adding another matching PHY ID does not resolve that ordering issue.
 
-## Diagnostic change
+The [MDIO bus matcher](https://github.com/gregkh/linux/blob/v6.18.39/drivers/net/phy/mdio_bus.c)
+uses the PHY device's `mdio.bus_match` callback after OF matching. This
+per-device callback can be set before registration, preventing the standard
+ID matcher from selecting RTL8224 on these private-bus devices. A DT change
+is unnecessary for the reported BE9300 path, which has no child MDIO node.
+No arbitrary vendor-specific PHY compatible override is promised.
 
-- Log C22 `MII_PHYSID1`/`MII_PHYSID2` reads actually issued by the existing scan,
-  with port, register, value and errno. A nonzero `err` means the displayed zero
-  value is a placeholder, not a successful PHY ID read. If PHYSID1 fails,
-  phylib may not issue PHYSID2; the revision adds no extra diagnostic reads.
-- Report every available user port after successful bus registration: absent
-  PHY, or ID, C22/C45 mode, completed-binding flag, actual driver name and
-  private-PHY identity. Inspect binding under the child device lock. Continue
-  collecting port results and then retain the existing `-ENODEV` setup cleanup.
-- Log private feature-probe entry, C22 ability or 2.5G capability failures and
-  the successfully read capability value. Native MMD and child-bus C22/C45 read
-  failures retain their errno and address context; repeated errors are limited.
-- Log read-completion failures with port, MMD, register and last control value.
-  On a polling read error, that value may still be the issued command rather
-  than a fresh hardware status; use errno and the full surrounding log together.
-- Bump package release from 3 to 4 so the diagnostic package is identifiable.
+## Registration correction (package release 5)
 
-The register map, scan order, reset, PHY power, SerDes and forwarding policy
-are unchanged. No alternate-driver rebind, fabricated ID, SDK table, firmware,
-error suppression or relaxed binding gate is added.
+1. Register the managed internal MDIO bus with all automatic scanning masked.
+   This prevents a PHY from being created and bound before its matcher is set.
+2. Discover each enabled internal user PHY, addresses 4–7, with
+   `get_phy_device()`. Retain the actual hardware IDs and existing C22/C45
+   discovery semantics; do not fabricate IDs to avoid `realtek.ko`.
+3. Set `mdio.bus_match` to permit the private driver identity on this private
+   bus/address range, then call `phy_device_register()`. No alternate driver
+   is probed first and subsequently unbound/rebound by this registration path.
+4. Preserve optional MDIO-node association, reset delays and per-PHY OF
+   registration for explicit child PHY nodes. Require unique addresses for
+   every enabled internal user port; unsupported/missing children fail.
+5. Keep the strict completed-binding gate and feature/MMD/read diagnostics.
+   A private probe failure still aborts setup; it cannot become a false pass.
+6. Free an unregistered PHY after registration failure. Registered PHYs belong
+   to managed bus teardown, including partial registration and setup failure.
 
-## Next bench run
+The standard Realtek driver remains available for WAN and all other buses.
+Reset, PHY/SerDes register programming, forwarding and firmware policy are
+unchanged. No restricted header or vendor patch data is introduced.
 
-1. Rebuild the exact new source and pass T0. The baseline's module/image passes
-   do not validate the diagnostic revision. Record commit, any local deltas,
-   configuration/feed lock and image SHA-256; verify release 4 and both modules.
-2. Use the established recovery/management path, CPU port 3, users 4–7 and all
-   four polarity properties. Keep `kmod-phy-realtek` for WAN and the same config
-   adjustments as the previous run; do not change module ordering as a workaround.
-3. Repeat T1 and attach the full boot log, including every `PHY ID`, `PHY binding`,
-   `private PHY feature probe`, capability and PHY read-error line. An early bus
-   registration failure may prevent binding summaries; its errno and earlier
-   scan/read logs still matter. Save logs before failed-probe devres cleanup
-   removes private-bus sysfs nodes.
-4. If T1 fails, keep T2–T8 BLOCKED and report the first failing operation. If T1
-   passes, continue the complete [P0 matrix](FIRST-HARDWARE-TEST.md), including
-   private-driver binding, PHY rates, CPU traffic, isolation and warm/cold reset.
+## Revision-specific build evidence
 
-| Observed result | Next investigation |
-| --- | --- |
-| ID read fails or no usable ID; PHY absent | Internal command status, C22/OCP mapping, reset/power readiness; use any C45 scan evidence already logged before changing discovery. |
-| PHY present and a different driver is actually bound | Make private-bus selection deterministic before registration; preserve WAN driver behavior and repeat T0/T1. |
-| PHY present but `bound=0`, including `private_phy=1` | Inspect feature/MMD/probe errors; the old pointer check could accept a failed probe. |
-| All PHYs bound to the private driver | Continue T2–T8; successful binding alone does not qualify links or forwarding. |
+| Revision | Mainline ARM64 module | Full BE9300 image | Hardware |
+| --- | --- | --- | --- |
+| Diagnostic `1b7a32bef2`, release 4 | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255) | Maintainer T0 PASS; T1 FAIL; T2–T8 BLOCKED |
+| Registration correction, release 5 | New build required | New build required | Not run |
 
-Mainline ARM64 and full OpenWrt image rebuilds are pending at preparation.
-No hardware result for this diagnostic revision is claimed.
+Earlier build passes qualify their own inputs only. The release-5 revision
+changes three sources and the package release; it needs fresh compilation,
+modpost, packaging and exact-source T0 before flashing.
+
+## Requested next bench run
+
+1. Rebuild the exact release-5 source with the same recorded configuration
+   adjustments and pinned inputs. Pass T0; report commit/local deltas,
+   configuration/feed lock, image revision and image SHA-256.
+2. Keep CPU port 3, internal users 4–7, all four polarity properties and
+   `kmod-phy-realtek` for WAN. Use the established recoverable bench.
+3. Attach the **complete serial log**, including the previous failing boot if
+   available. Save all PHY ID/binding/feature/capability/read errors before
+   failed-probe cleanup removes sysfs evidence.
+4. T1 requires all four ports to show `bound=1`,
+   `driver=RTL8372N internal PHY (P0)` and `private_phy=1`, successful switch/DSA
+   setup, and a boot reaching usable management beyond the former hang point.
+   Confirm the external WAN PHY still binds to its normal Realtek driver.
+5. If discovery or private probe fails, report its first errno and full context;
+   keep T2–T8 BLOCKED. If binding succeeds but boot still hangs, report that
+   separately with timing and the full PCS/SoC log. Do not infer causation from
+   the last printed PCS message alone.
+6. If T1 passes, continue the entire [P0 matrix](FIRST-HARDWARE-TEST.md):
+   PHY rates/AN, CPU tag/jack mapping, isolation, software forwarding and
+   warm/cold reset. Include the boot-hang observation in reset results.
+   On a recoverable bench, record any failed-probe/reprobe cleanup errors.
+
+Successful binding alone is not hardware qualification or feature parity.
+The dependent P1-A series remains separate until P0 results are available.

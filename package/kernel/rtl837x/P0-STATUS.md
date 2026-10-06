@@ -1,6 +1,6 @@
 # RTL8372N P0 implementation status
 
-Updated: 2026-10-05. This is a source candidate, not a hardware-qualified driver.
+Updated: 2026-10-06. This is a source candidate, not a hardware-qualified driver.
 
 [BUILD-REPORT.md](BUILD-REPORT.md) consolidates publication evidence, exact
 revisions, artifacts, feature readiness and remaining acceptance gates.
@@ -17,7 +17,10 @@ revisions, artifacts, feature readiness and remaining acceptance gates.
   page save/select/read/restore remains under the child MDIO bus lock.
 - A private PHY driver uses per-port native MMD access, published capability and
   speed decoding, standard autoneg and explicit rejection of forced 2.5G.
-  Driver registration precedes child-bus creation. The gate checks successful
+  Driver registration precedes child-bus creation. Each discovered PHY receives
+  a device-specific private-driver matcher before registration; automatic bus
+  scanning is disabled. Hardware IDs and the external WAN driver are retained.
+  The gate checks successful
   device binding under the device lock and both private-driver identities;
   missing/wrong/unbound PHYs fail probe. ID, binding and read-error diagnostics
   cover the next run described in [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md).
@@ -32,9 +35,8 @@ revisions, artifacts, feature readiness and remaining acceptance gates.
 - Setup failure and teardown quiesce forwarding/PHYs; managed GPIO reset is
   asserted on failed probe/removal. Shutdown clears driver data.
 - The module targets Linux 6.18, declares MDIO devres dependency, bumps package
-  release to 4. Autoload priority is 17, before normal Realtek autoload at 18;
-  this does not guarantee selection if Realtek has already been requested or
-  registered before the private bus is scanned.
+  release to 5. Selection on the private bus no longer relies on autoload
+  priority; the ordinary Realtek driver remains available for external PHYs.
 - BE9300 uses `realtek,rtl8372n`. Legacy BE6500 `realtek,rtl837x` is unsupported
   by this candidate, so it must not replace the shipping package yet.
 - The source ledger and first-device procedure were updated; general VLAN,
@@ -74,10 +76,14 @@ revisions, artifacts, feature readiness and remaining acceptance gates.
   The [2026-10-04 hardware report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5983997672)
   records **T1 FAIL; T2–T8 BLOCKED**: chip ID `0x83727000` reads successfully,
   then internal-PHY binding fails on port 4. No traffic check has passed.
-- Documentation through `7be7f8d541` preserves the baseline inputs. The current
-  diagnostic revision changes three sources and the package release; its own
-  module/image builds and bench rerun are pending. Baseline passes do not qualify
-  the new source. DTS, feeds, config and workflows are unchanged.
+- Diagnostic `1b7a32bef2` passed both [module](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) and
+  [image](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255) CI. The [2026-10-06 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562)
+  confirms maintainer T0 PASS and T1 FAIL: all four IDs are `0x001ccad0`, but
+  the in-tree RTL8224 driver wins binding. A later boot hang is also reported.
+- The release-5 registration correction selects the private driver before
+  adding each PHY device. Its own module/image builds and hardware rerun are
+  pending; earlier passes do not qualify it. The boot hang is unresolved.
+  DTS, feeds, configuration and workflows are unchanged.
 
 ## P1 research update
 
@@ -87,7 +93,7 @@ descriptions (VLAN selector, VLAN bit 25 and L2 bit 29) are identified explicitl
 BPDU delivery, database semantics and failure handling gate hardware bridge
 offload. That research update changed documentation only and added no P1
 callback or hardware result; the P0 inputs were identical to the CI revision
-at that step. The current diagnostic revision needs its own build and bench run.
+at that step. The current registration correction needs its own build and bench run.
 
 ## Remaining gates
 

@@ -1,9 +1,9 @@
 # RTL8372N P0 first-hardware test plan
 
-**Status (2026-10-05):** baseline T0 passed; the first BE9300 run of
-`908810c09b` returned **T1 FAIL; T2–T8 BLOCKED** at internal-PHY binding
-([report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5983997672)).
-The diagnostic revision needs a new exact-source T0 and T1 run; see
+**Status (2026-10-06):** diagnostic `1b7a32bef2` T0 passed;
+**T1 FAIL; T2–T8 BLOCKED**. The [new report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562) confirms all four
+IDs but RTL8224 binding instead of the private driver; a later boot hang is
+also reported. The release-5 correction needs a new exact-source T0/T1; see
 [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for the required logs and interpretation.
 See [BUILD-REPORT.md](BUILD-REPORT.md) for build evidence. Start the hardware run
 only after T0 passes for the image revision under test.
@@ -210,7 +210,11 @@ or command output. A blocked test is not a pass.
 
 - Capture each `/sys/bus/mdio_bus/devices/*/phy_id` and its `driver` symlink.
   Ports 4–7 must bind to the private PHY driver; probe deliberately fails on
-  missing/wrong binding. Record supported, advertised and partner modes from
+  missing/wrong binding. Each port must log `bound=1`,
+  `driver=RTL8372N internal PHY (P0)` and `private_phy=1`. Keep
+  `kmod-phy-realtek` for WAN and check its normal binding. Boot must reach usable
+  management beyond the previously reported hang point; retain the full serial
+  log and timing if it hangs again. Record supported, advertised and partner modes from
   `ethtool`, including a 2.5G-capable peer and 1G/100M peers where available.
 - If registration aborts, save the full boot log before devres cleanup removes
   the private bus. Include `PHY ID`, `PHY binding`, `private PHY feature probe`,

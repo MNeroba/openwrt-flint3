@@ -84,6 +84,8 @@ int rtl837x_phys_write_c45(struct rtl837x_priv *priv, u16 phy_mask,
 			   int devad, int regnum, u16 val);
 
 bool rtl8372n_phy_bus_match(struct mii_bus *bus);
+int rtl8372n_phy_device_match(struct device *dev,
+			      const struct device_driver *driver);
 extern struct phy_driver rtl8372n_phy_driver;
 extern const struct rtl837x_variant rtl8372n_variant;
 
