@@ -1,7 +1,7 @@
 # RTL8372N internal-PHY binding failure and correction
 
-Updated: 2026-10-06. The T1 binding failure has an observed cause. The
-registration correction is prepared; its builds and hardware rerun are pending.
+Updated: 2026-10-06. T1's binding failure has an observed cause. Release 5 did
+not compile; release 6 fixes the build error and awaits fresh CI and hardware.
 The later boot hang remains a separate unresolved observation.
 
 ## Latest hardware evidence
@@ -45,22 +45,28 @@ ID matcher from selecting RTL8224 on these private-bus devices. A DT change
 is unnecessary for the reported BE9300 path, which has no child MDIO node.
 No arbitrary vendor-specific PHY compatible override is promised.
 
-## Registration correction (package release 5)
+## Registration correction (package release 6)
 
 1. Register the managed internal MDIO bus with all automatic scanning masked.
    This prevents a PHY from being created and bound before its matcher is set.
 2. Discover each enabled internal user PHY, addresses 4–7, with
    `get_phy_device()`. Retain the actual hardware IDs and existing C22/C45
    discovery semantics; do not fabricate IDs to avoid `realtek.ko`.
-3. Set `mdio.bus_match` to permit the private driver identity on this private
-   bus/address range, then call `phy_device_register()`. No alternate driver
-   is probed first and subsequently unbound/rebound by this registration path.
-4. Preserve optional MDIO-node association, reset delays and per-PHY OF
-   registration for explicit child PHY nodes. Require unique addresses for
-   every enabled internal user port; unsupported/missing children fail.
-5. Keep the strict completed-binding gate and feature/MMD/read diagnostics.
+3. Set `mdio.bus_match` to select the private driver on this bus/address range,
+   then call `phy_device_register()`. Linux checks OF matches before this
+   callback, so the override applies to the BE9300 path with no child MDIO PHY
+   node and ordinary PHY-ID matching. A vendor-specific child compatible needs
+   separate review; the callback cannot override an earlier OF match.
+4. Preserve explicit child-PHY association and bus reset delays. Require one
+   unique child address per enabled internal user port. This PHY driver uses C22
+   page/ability operations, so reject C45 declarations and C45-only discoveries
+   before registration. Reject unsupported PHY package nodes explicitly rather
+   than reporting a misleading invalid address.
+5. Match upstream OF-MDIO's 10 us default reset delay and parse optional bus
+   reset delays.
+6. Keep the strict completed-binding gate and feature/MMD/read diagnostics.
    A private probe failure still aborts setup; it cannot become a false pass.
-6. Free an unregistered PHY after registration failure. Registered PHYs belong
+7. Free an unregistered PHY after registration failure. Registered PHYs belong
    to managed bus teardown, including partial registration and setup failure.
 
 The standard Realtek driver remains available for WAN and all other buses.
@@ -72,15 +78,18 @@ unchanged. No restricted header or vendor patch data is introduced.
 | Revision | Mainline ARM64 module | Full BE9300 image | Hardware |
 | --- | --- | --- | --- |
 | Diagnostic `1b7a32bef2`, release 4 | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255) | Maintainer T0 PASS; T1 FAIL; T2–T8 BLOCKED |
-| Registration correction, release 5 | New build required | New build required | Not run |
+| Registration correction, release 5 (`614188cff5`) | [FAIL](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769): private kernel macro not visible | In progress at last check | Not run |
+| Corrected registration, release 6 | New build required | New build required | Not run |
 
-Earlier build passes qualify their own inputs only. The release-5 revision
-changes three sources and the package release; it needs fresh compilation,
-modpost, packaging and exact-source T0 before flashing.
+Release 5 failed compilation because `DEFAULT_GPIO_RESET_DELAY` is private to
+kernel `of_mdio.c`. Release 6 uses a named local 10 us constant matching
+`__of_mdiobus_register()` and explicitly reports unsupported PHY package nodes.
+Fresh compilation, modpost, image packaging and exact-source T0 are required.
+Earlier passes apply to their own inputs only.
 
 ## Requested next bench run
 
-1. Rebuild the exact release-5 source with the same recorded configuration
+1. Rebuild the exact release-6 source with the same recorded configuration
    adjustments and pinned inputs. Pass T0; report commit/local deltas,
    configuration/feed lock, image revision and image SHA-256.
 2. Keep CPU port 3, internal users 4–7, all four polarity properties and

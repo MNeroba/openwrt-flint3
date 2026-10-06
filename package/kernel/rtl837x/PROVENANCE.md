@@ -24,7 +24,7 @@ Locations name functions/symbols in the pinned files to keep references stable
 through candidate edits. Full hardware qualification is **pending for every
 row**. The first T1 run reads chip ID `0x83727000` but fails internal-PHY binding.
 The [diagnostic rerun](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562) confirms valid IDs on all four PHYs
-but RTL8224 binding. T2–T8 are blocked; release-5 hardware results are pending.
+but RTL8224 binding. T2–T8 are blocked; release-6 hardware results are pending.
 
 | Candidate feature/symbols | Specific public source location | Derivation / remaining question |
 | --- | --- | --- |

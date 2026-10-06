@@ -51,8 +51,11 @@ full SerDes initialization sequence used by vendor SDKs. Internal PHY
 power-control and link operation, and the 10G CPU link after reset, still need
 hardware validation. The first Flint 3 run returned **T1 FAIL; T2–T8 BLOCKED**
 at internal-PHY binding. [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) documents the
-confirmed RTL8224 binding cause, release-5 registration correction and next
-bench run. The separately reported boot hang remains unresolved.
+confirmed RTL8224 binding cause and release-6 registration correction. It also
+rejects C45-only PHYs because this driver's internal PHY operations use C22.
+Release 5 failed module compilation on a private kernel macro; release 6 fixes that and
+requires new module/image builds and T0/T1. The separately reported boot hang
+remains unresolved.
 
 ## Device tree
 
@@ -86,12 +89,13 @@ BE9300 AP-config OpenWrt package/DTB/image build passed for source revision
 [target image run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177)).
 Diagnostic `1b7a32bef2` also passed [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) and
 [image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255); maintainer T0 passed, but T1 still failed.
-The release-5 registration correction needs fresh module/image builds and T0/T1.
+Release 5 failed module compilation because it referenced a private kernel
+macro. Release 6 fixes that error and needs fresh module/image builds and T0/T1.
 No BE9300 bring-up or traffic check has passed.
 
 ## Staged follow-up
 
-1. Build the exact registration correction and repeat T1 with the requested PHY
+1. Build the exact release-6 correction and repeat T1 with the requested PHY
    evidence. Resolve probe failure before proceeding to real CPU/PHY links,
    tags, CPU-only isolation and software forwarding in the P0 matrix.
 2. Prepare the shared table engine and resolve VLAN/L2 field meanings and

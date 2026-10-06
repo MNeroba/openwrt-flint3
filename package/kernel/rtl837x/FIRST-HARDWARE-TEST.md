@@ -3,7 +3,7 @@
 **Status (2026-10-06):** diagnostic `1b7a32bef2` T0 passed;
 **T1 FAIL; T2–T8 BLOCKED**. The [new report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562) confirms all four
 IDs but RTL8224 binding instead of the private driver; a later boot hang is
-also reported. The release-5 correction needs a new exact-source T0/T1; see
+also reported. The release-6 correction needs a new exact-source T0/T1; see
 [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for the required logs and interpretation.
 See [BUILD-REPORT.md](BUILD-REPORT.md) for build evidence. Start the hardware run
 only after T0 passes for the image revision under test.

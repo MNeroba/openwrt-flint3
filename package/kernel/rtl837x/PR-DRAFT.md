@@ -41,17 +41,17 @@ Tested source: `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`.
 Documentation through `7be7f8d541` preserves those baseline build inputs. The
 diagnostic `1b7a32bef2` passed both [module](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) and
 [image](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255) builds. Its maintainer T0 passed; T1 failed due to RTL8224
-binding. The release-5 registration correction needs fresh module/image builds
-and an exact-source hardware rerun. Earlier passes apply to their own inputs.
+binding. Release 5 failed module CI on a private kernel macro. Release 6 fixes
+it and needs fresh module/image builds and an exact-source hardware rerun. Earlier passes apply to their own inputs.
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| ARM64 / Linux 6.18.39 | **Diagnostic PASS; release-5 correction pending** | [CI run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390): baseline kernel exports, tagger, four objects, `W=1`, modpost/linking; diagnostic also passed the module run linked above. Release 5 pending |
+| ARM64 / Linux 6.18.39 | **Diagnostic PASS; release 5 compile failed; release 6 pending** | [Release 4 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) passed. [Release 5 CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769) failed because `DEFAULT_GPIO_RESET_DELAY` is private to `of_mdio.c`. Release 6 fixes that; new run pending. |
 | BE9300 OpenWrt configuration | **PASS** | AP config, pinned-feed verification and driver/MDIO-devres selection in the [target run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177) |
-| OpenWrt package / DTB / full image | **Diagnostic PASS; release-5 correction pending** | CI full build passed for `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`; on 2026-10-04 the maintainer independently reproduced a T0-equivalent build for revision `908810c09bd9adfbbc7d25437a9d50b55b2de940`, verified the image revision/checksums, and staged sysupgrade with `rtl8372n_dsa.ko` + `tag_rtl8_4.ko` and no old `rtl837x` module ([report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832)). Diagnostic image CI and maintainer T0 also passed; release 5 pending. T1 hardware failure recorded below |
+| OpenWrt package / DTB / full image | **Diagnostic PASS; release 5 image running; release 6 pending** | Baseline and diagnostic image builds passed; maintainer T0 details are [here](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832). The [release-5 image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395426353) was still running at last check; release 6 needs a fresh exact-revision image build. |
 | Whitespace | **PASS** | `git diff --check` against the proposed base |
-| checkpatch | **Release-5 source patch: 0 errors/warnings/checks** | Strict patch review passed; full-source baseline has one reviewed mutable-regmap warning |
-| BE9300 hardware | **T1 FAIL; T2–T8 BLOCKED** | [Diagnostic report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562), `1b7a32bef2`: all four IDs `0x001ccad0`; RTL8224 wins binding. Later boot hang unresolved; release-5 rerun pending |
+| checkpatch | **Release-5 patch: 0 checkpatch findings; CI compile failed** | Release 6 fixes the private-macro reference |
+| BE9300 hardware | **T1 FAIL; T2–T8 BLOCKED** | [Diagnostic report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562), `1b7a32bef2`: all four IDs `0x001ccad0`; RTL8224 wins binding. Later boot hang unresolved; release-6 rerun pending |
 
 The [ARM64 artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390/artifacts/11248964933)
 contains the generated config, complete build logs and module. Its module
@@ -68,14 +68,21 @@ Perceival's [diagnostic report](https://github.com/perceival/openwrt-flint3/pull
 ID `0x001ccad0`, but the in-tree `RTL8224 2.5Gbps PHY` driver wins binding.
 Adding another matching ID or relying on module ordering provides no priority.
 
-The release-5 correction:
+Release 5 failed ARM64 compilation because `DEFAULT_GPIO_RESET_DELAY` is
+private to kernel `of_mdio.c`. Release 6 replaces it with a named local 10 us
+default matching upstream. It reports unsupported `ethernet-phy-package` nodes
+explicitly.
+
+The release-6 correction:
 
 - Registers the private bus with automatic scanning disabled, discovers actual
   PHY IDs and sets a device-specific matcher before registering each PHY.
-  The matcher admits only the private driver on this bus's enabled ports 4–7;
-  no vendor-specific OF-compatible override is promised.
+  The per-device MDIO callback admits the private driver on enabled ports 4–7.
+  Linux checks OF matches before invoking this callback; vendor-specific child
+  compatibles need separate review. BE9300 has no child MDIO PHY nodes.
 - Preserves optional MDIO-node/PHY-node association and reset delays; rejects
-  invalid, duplicate or missing explicit internal PHY addresses. The BE9300
+  invalid, duplicate or missing explicit internal PHY addresses and unsupported
+  C45 PHYs/package nodes. The BE9300
   path needs no DT compatible change. WAN Realtek remains available.
 - Retains completed-binding checks and all probe/read-error diagnostics.
   Registered PHYs are owned by managed bus teardown; failed registration frees
@@ -85,7 +92,7 @@ The release-5 correction:
 The [failure/fix report](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/PHY-PROBE-REPORT.md)
 records source evidence and the next bench procedure. The later boot hang
 following the SoC PCS message remains unresolved and is not claimed fixed.
-New builds/T0 must pass before flashing. Repeat T1 with the complete serial log,
+Release 5 module CI failed on a private macro. Release 6 must pass fresh builds and T0 before flashing. Repeat T1 with the complete serial log,
 all four private binding results and boot progress beyond the former hang
 point; run T2–T8 only after T1 passes. P1-A remains separate.
 
@@ -93,7 +100,7 @@ point; run T2–T8 only after T1 passes. P1-A remains separate.
 
 | Stage | Scope | Current status |
 | --- | --- | --- |
-| P0 | Probe/reset, register access, internal PHY, 10G CPU PCS, native tags, four LAN jacks and CPU/software forwarding | Baseline builds passed; first bench run failed T1 at internal-PHY binding and blocked T2–T8; release-5 correction requires new builds and T0/T1 |
+| P0 | Probe/reset, register access, internal PHY, 10G CPU PCS, native tags, four LAN jacks and CPU/software forwarding | Baseline builds passed; first bench run failed T1 at internal-PHY binding and blocked T2–T8; release-6 correction requires new builds and T0/T1 |
 | P1 | Hardware bridge/VLAN, FDB/MDB, STP/BPDU and bridge flags | Not implemented; [source/dependency plan](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/P1-RESEARCH.md) prepared; BPDU/database/table semantics remain gates |
 | P2 | LAG #47 and rate limiting #49 | Not ported; prior feature requirements remain applicable |
 | Other baseline interfaces | MTU/jumbo, alternate tags, mirroring, MIB/ethtool, EEE and GPIO parity | Not established; restore or agree individual deferrals |

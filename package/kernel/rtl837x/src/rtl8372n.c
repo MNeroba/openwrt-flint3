@@ -17,6 +17,8 @@
 
 #include "rtl837x.h"
 
+#define RTL8372N_MDIO_RESET_DELAY_US 10
+
 #define IS_SERDES_PORT(port) (((port) == 3) || ((port) == 8))
 
 #define PORT_TO_SERDES_IDX(port) ((port) == 3 ? 0 : 1)
@@ -138,6 +140,18 @@ static int rtl8372n_register_phys(struct rtl837x_priv *priv,
 
 	/* This private bus exposes only enabled internal user PHYs. */
 	for_each_available_child_of_node(mnp, child) {
+		if (of_node_name_eq(child, "ethernet-phy-package")) {
+			dev_err(priv->dev,
+				"PHY packages are not supported on the private MDIO bus\n");
+			of_node_put(child);
+			return -EOPNOTSUPP;
+		}
+		if (of_device_is_compatible(child, "ethernet-phy-ieee802.3-c45")) {
+			dev_err(priv->dev,
+				"Clause 45 PHYs are not supported on internal ports 4-7\n");
+			of_node_put(child);
+			return -EOPNOTSUPP;
+		}
 		addr = of_mdio_parse_addr(priv->dev, child);
 		if (addr < 0 || !of_mdiobus_child_is_phy(child) ||
 		    !(BIT(addr) & dsa_user_ports(priv->ds) & RTL8372N_PHY_PORT_MASK) ||
@@ -147,8 +161,11 @@ static int rtl8372n_register_phys(struct rtl837x_priv *priv,
 		}
 		seen |= BIT(addr);
 	}
-	if (mnp && seen != (dsa_user_ports(priv->ds) & RTL8372N_PHY_PORT_MASK))
+	if (mnp && seen != (dsa_user_ports(priv->ds) & RTL8372N_PHY_PORT_MASK)) {
+		dev_err(priv->dev,
+			"MDIO node must describe every enabled internal PHY at ports 4-7\n");
 		return -EINVAL;
+	}
 
 	for (port = 4; port <= 7; port++) {
 		if (!(dsa_user_ports(priv->ds) & BIT(port)))
@@ -160,6 +177,12 @@ static int rtl8372n_register_phys(struct rtl837x_priv *priv,
 			ret = PTR_ERR(phy);
 			dev_err(priv->dev, "PHY discovery port %d failed: %d\n", port, ret);
 			return ret;
+		}
+		if (phy->is_c45) {
+			dev_err(priv->dev,
+				"Clause 45 PHY detected at internal port %d\n", port);
+			phy_device_free(phy);
+			return -EOPNOTSUPP;
 		}
 		phy->mdio.bus_match = rtl8372n_phy_device_match;
 
@@ -220,7 +243,8 @@ static int rtl8372n_setup_mdio(struct rtl837x_priv *priv)
 	bus->phy_mask = ~0;
 	if (mnp) {
 		device_set_node(&bus->dev, of_fwnode_handle(mnp));
-		bus->reset_delay_us = DEFAULT_GPIO_RESET_DELAY;
+		/* Match the default used by __of_mdiobus_register(). */
+		bus->reset_delay_us = RTL8372N_MDIO_RESET_DELAY_US;
 		of_property_read_u32(mnp, "reset-delay-us", &bus->reset_delay_us);
 		of_property_read_u32(mnp, "reset-post-delay-us", &bus->reset_post_delay_us);
 	}
