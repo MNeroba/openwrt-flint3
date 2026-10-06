@@ -79,7 +79,7 @@ unchanged. No restricted header or vendor patch data is introduced.
 | Revision | Mainline ARM64 module | Full BE9300 image | Hardware |
 | --- | --- | --- | --- |
 | Diagnostic `1b7a32bef2`, release 4 | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255) | Maintainer T0 PASS; T1 FAIL; T2–T8 BLOCKED |
-| Registration correction, release 5 (`614188cff5`) | [FAIL](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769): private kernel macro not visible | In progress at last check | Not run |
+| Registration correction, release 5 (`614188cff5`) | [FAIL](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769): private kernel macro not visible | Cancelled after release-5 module CI failed | Not run |
 | Corrected registration, release 6 (`32d958fe17`) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) | [Queued](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) | Not run |
 
 Release 5 failed compilation because `DEFAULT_GPIO_RESET_DELAY` is private to
