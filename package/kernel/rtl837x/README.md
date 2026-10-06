@@ -20,8 +20,9 @@ The current code provides:
   including per-PHY C22 page selection.
 - A private PHY driver with native MMD access to the actual port, standard
   autonegotiation and published Realtek 2.5G status decoding. Forced 2.5G is
-  explicitly unsupported. Release 6 observed 1G/2.5G links on three connected
-  jacks; full advertisement and plug-cycle coverage is still pending.
+  explicitly unsupported. Release 6 observed 1G/2.5G links on LAN1–LAN3;
+  LAN4 had no peer. Physical unplug/replug and full partner-advertisement
+  coverage remain pending.
 - Phylink plumbing for internal PHY ports 4–7 and the 10GBASE-R SerDes MACs
   on ports 3 and 8.
 - SerDes mode selection and the optional `sds0/1-{rx,tx}-swap` device-tree
@@ -49,13 +50,16 @@ tracked by Issues #47 and #49.
 The SerDes path selects the 10GBASE-R mode and applies the board's optional
 polarity swaps. It does not contain PHY firmware, vendor patch arrays, or the
 full SerDes initialization sequence used by vendor SDKs. Release 6 passed PHY
-binding and observed three LAN links, but full PHY power-control, jack mapping,
-LAN-pair forwarding and physical CPU-link checks remain incomplete. The initial
-diagnostic Flint 3 run failed T1 because the in-tree RTL8224 PHY driver bound
-first. Release 6 fixed this: the maintainer's hardware report passes
-T0/T1/T2/T4/T7; T3 is partial, T5 was not run, and T6 has software
-configuration output only. T8 used the router as the iperf3 endpoint, so it is
-not switching-performance evidence. Release 6 also logged spurious `-EINVAL`
+binding and observed three LAN links, but full PHY power-control, complete jack
+coverage and physical CPU-link checks remain incomplete. The initial diagnostic
+Flint 3 run failed T1 because the in-tree RTL8224 PHY driver bound first. Release
+6 fixed this: the maintainer's hardware report passes T0/T1/T2/T4/T7. Follow-up
+testing makes T3 partial (LAN1–LAN3 link/rate checks; peer-interface cycles on
+LAN2/LAN3; no LAN4 peer or physical cable cycle) and T5 partial (bidirectional
+traffic across the three pairs among LAN1–LAN3; no LAN4 pairs, with 8–10-second
+iperf3 runs rather than the 30-second procedure). T6 has software configuration
+output only. T8 used the router as the iperf3 endpoint, so it is not
+switching-performance evidence. Release 6 also logged spurious `-EINVAL`
 power-down warnings on unsupported ports 0–2; package release 7 now limits
 those callbacks to ports 4–7 and needs new CI/hardware confirmation. See
 [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for the warning causes, evidence and
@@ -94,13 +98,14 @@ BE9300 AP-config OpenWrt package/DTB/image build passed for source revision
 `954a84bd7c46dbbb2412eeddfb300aad8b4cff35` ([module run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390),
 [target image run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177)).
 Diagnostic `1b7a32bef2` passed [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) and
-[image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255), but T1 failed at PHY binding. Release 5 failed module compilation because it referenced a private kernel macro. Release 6 [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) and [image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) passed; its candidate module SHA-256 is `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`. The maintainer's [release-6 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917) passes T0/T1/T2/T4/T7, with T3 partial, T5 not run and T6 unverified in hardware. Package release 7 contains the new callback guard; its builds and hardware check are pending.
+[image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255), but T1 failed at PHY binding. Release 5 failed module compilation because it referenced a private kernel macro. Release 6 [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) and [image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) passed; its candidate module SHA-256 is `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`. The maintainer's [release-6 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917) passes T0/T1/T2/T4/T7; the [T3/T5 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6016542658) adds partial coverage of connected jacks and the three pairs among LAN1–LAN3. T6 remains unverified in hardware. Package release 7 contains the new callback guard; its full image and hardware check are pending.
 
 ## Staged follow-up
 
 1. Build package release 7; confirm the release-6 PHY binding result persists
-   and that the ports 0–2 power-down warnings are gone. Then finish T3 and the
-   six-pair T5 software-forwarding matrix with two hosts.
+   and that the ports 0–2 power-down warnings are gone. Finish T3 with a LAN4
+   peer and physical cable cycles; complete all six T5 pairs with 30-second
+   bidirectional iperf3 runs.
 2. Prepare the shared table engine and resolve VLAN/L2 field meanings and
    source lineage, following [P1-RESEARCH.md](P1-RESEARCH.md). Source design can
    proceed while P0 hardware results are pending.

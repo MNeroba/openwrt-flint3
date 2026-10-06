@@ -1,12 +1,14 @@
 # RTL8372N P0 first-hardware test plan
 
-**Status (2026-10-06):** diagnostic `1b7a32bef2` T0 passed;
-**T1 FAIL; T2–T8 BLOCKED**. The [new report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562) confirms all four
-IDs but RTL8224 binding instead of the private driver; a later boot hang is
-also reported. The release-6 correction needs a new exact-source T0/T1; see
-[PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for the required logs and interpretation.
-See [BUILD-REPORT.md](BUILD-REPORT.md) for build evidence. Start the hardware run
-only after T0 passes for the image revision under test.
+**Status (2026-10-06):** release 6 passed T0/T1/T2/T4/T7. Follow-up T3/T5
+reports link/rate checks on LAN1–LAN3 and bidirectional software-bridge traffic
+across their three pairings. T3/T5 remain partial: LAN4 had no peer, physical
+cable unplug/replug was not tested, and iperf3 runs were 8–10 seconds rather
+than the planned 30 seconds. Release 7's PHY-callback guard still needs a fresh
+image/T1 run. See [P0-STATUS.md](P0-STATUS.md),
+[PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md), and [BUILD-REPORT.md](BUILD-REPORT.md)
+for evidence and remaining gates. Start each run only after T0 passes for the
+exact image revision under test.
 
 This plan is intended for the driver maintainer and the Flint 3 owner running
 the test. It is not a claim that any step has passed.

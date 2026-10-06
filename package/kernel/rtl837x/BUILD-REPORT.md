@@ -159,6 +159,8 @@ Before replacement/merge:
    which was open and unmerged at this check.
 
 Keep the shipping baseline while this Draft is reviewed. Release 6 passed
-T0/T1/T2/T4/T7, but T3 is partial, T5 was not run, hardware T6 is unverified,
-and release-7 CI/hardware remain pending. No full P0 qualification, source-owner
+T0/T1/T2/T4/T7. Follow-up T3/T5 covers link rates on LAN1–LAN3 and bidirectional
+software-bridge traffic across the three pairs among them; LAN4, physical cable
+cycles, 30-second iperf3 runs and hardware T6 readback remain open. Release-7
+image/hardware checks remain pending. No full P0 qualification, source-owner
 sign-off or functional parity is claimed.

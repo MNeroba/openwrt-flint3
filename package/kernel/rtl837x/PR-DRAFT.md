@@ -42,16 +42,16 @@ diagnostic `1b7a32bef2` built successfully, but the diagnostic hardware run
 failed T1 because RTL8224 bound first. Release 5 failed module CI on a private
 kernel macro. Release 6 [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) and [full image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) passed; module SHA-256:
 `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`. The
-[release-6 hardware report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917) passes T0/T1/T2/T4/T7, with T3 partial, T5 not run, T6 software output only and T8 limited to router-endpoint CPU traffic. Package release 7 adds a PHY callback guard; its build/hardware results are pending.
+[release-6 hardware report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917) passes T0/T1/T2/T4/T7. Follow-up testing adds link/rate checks for LAN1–LAN3 and bidirectional software-bridge traffic across their three pairings. T3 remains partial: LAN4 had no peer and cable unplug/replug was not tested. T5 remains partial: only 3/6 pairs were available and iperf3 runs were 8–10 seconds versus the 30-second procedure. T6 has software output only; T8 is router-endpoint CPU traffic. Package release 7 adds a PHY callback guard. Its ARM64 module build passed; the full image build is in progress, and no release-7 hardware result exists yet.
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| ARM64 / Linux 6.18.39 | **Diagnostic PASS; release 5 compile failed; release 6 module PASS** | [Release 4 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) passed. [Release 5 CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769) failed because `DEFAULT_GPIO_RESET_DELAY` is private to `of_mdio.c`. Release 6 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227): all four objects compiled with `W=1`, modpost/link succeeded, and the candidate emitted no compiler warnings. |
+| ARM64 / Linux 6.18.39 | **Diagnostic PASS; release 5 compile failed; release 6 and 7 module PASS** | [Release 4 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) passed. [Release 5 CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769) failed because `DEFAULT_GPIO_RESET_DELAY` is private to `of_mdio.c`. Release 6 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227). Release 7 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454484695): all four objects compiled with `W=1`, modpost/link succeeded, no candidate compiler warnings; module SHA-256 `8163371788badabaf4777f88b24e6de0559634a574c1cc59c3033822df2eeb37`. |
 | BE9300 OpenWrt configuration | **PASS** | AP config, pinned-feed verification and driver/MDIO-devres selection in the [target run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177) |
-| OpenWrt package / DTB / full image | **Release 6 PASS; release 7 pending** | Baseline, diagnostic and release-6 image builds passed; maintainer T0 details for release 6 are in the [bench report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917). The [release-5 image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395426353) was cancelled after its module compile failed. Rebuild for package release 7. |
-| Whitespace | **PASS** | `git diff --check` against the proposed base |
-| checkpatch | **Release-5 patch: 0 checkpatch findings; CI compile failed** | Release-6 patch: 0 errors, warnings or checks; [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) |
-| BE9300 hardware | **Release 6: T0/T1/T2/T4/T7 PASS; T3 PARTIAL; T5 NOT RUN; T6 software output only; T8 recorded** | [Release-6 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917) and [redacted serial logs](https://gist.github.com/perceival/f7abebb5395db63b97d3775ebd2c544a). Release 7 needs a fresh T0/T1 and the missing T3/T5 coverage. |
+| OpenWrt package / DTB / full image | **Release 6 PASS; release 7 in progress** | Baseline, diagnostic and release-6 image builds passed; maintainer T0 details for release 6 are in the [bench report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917). The [release-5 image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395426353) was cancelled after its module compile failed. The [release-7 image build](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524) is running. |
+| Whitespace | **Release 7 PASS** | `git diff --check` passed for the release-6 to release-7 change. |
+| checkpatch | **Release 7: 0 findings** | The release-7 source diff has 0 errors, warnings or checks under strict `checkpatch.pl`. |
+| BE9300 hardware | **Release 6: T0/T1/T2/T4/T7 PASS; T3 PARTIAL; T5 PARTIAL (3/6 pairs); T6 software output only; T8 recorded** | [Initial release-6 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917), [T3/T5 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6016542658) and [redacted raw logs](https://gist.github.com/perceival/f7abebb5395db63b97d3775ebd2c544a). The three available pairs among LAN1–LAN3 pass bidirectional connectivity and short TCP runs in the CPU/software-bridge path. LAN4-dependent pairs, 30-second runs and physical cable cycles remain open. Release 7 needs a fresh T0/T1. |
 
 The [ARM64 artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390/artifacts/11248964933)
 contains the generated config, complete build logs and module. Its module
@@ -68,14 +68,16 @@ The serial log's `failed to power down PHY on port 0/1/2: -22` comes from our
 DSA `port_disable` callback. Release 6 treated all non-SerDes ports as PHYs,
 while the accessor accepts only ports 4–7 and returns `-EINVAL` before any PHY
 transaction. Package release 7 limits both enable and disable callbacks to the
-supported PHY-port mask; CI and hardware confirmation are pending.
+supported PHY-port mask. The release-7 ARM64 module build and source checks
+passed; the full image and fresh T0/T1 hardware confirmation are pending.
 
-The conduit `lan` counter `tx_errors=2^64-2` is a separate Qualcomm PPE stats
-underflow: the existing stats calculation subtracts `tx_frames_g` from
-`tx_packets` using unsigned counters, and the first exceeds the second by two
-in the reported sample. This identifies the display underflow, not the
-hardware counters' meanings or actual packet loss; it is outside this DSA
-change and needs separate raw-MIB validation.
+The conduit `lan` counter `tx_errors=2^64-2` is separate from the switch
+driver. Qualcomm PPE computes it with an unsigned subtraction of
+`tx_frames_g` from `tx_packets`; the displayed value is consistent with a
+two-count underflow. The supplied log has only the aggregate `ip -s link`
+result, not both raw MIB operands, so their exact values and the reason they
+differ remain unverified. This does not establish actual packet loss; it needs
+separate raw-MIB validation.
 
 The `10GBASE-R link not up before USXG_EN` message follows `wan` inband/USXGMII
 setup in the successful release-6 log and does not stop that boot. It is not
@@ -114,15 +116,18 @@ The [failure/fix report](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-
 records the release-6 results and the warning analysis. The PCS line appears
 during WAN setup on the successful release-6 boot, so it does not explain the
 prior log ending. Release-6 module and image CI passed. Its hardware report
-confirms private PHY binding, but T3/T5 and hardware T6 remain incomplete. The
-release-7 PHY-port guard needs fresh CI and a repeat T1 plus remaining matrix.
+confirms private PHY binding and router reachability. Follow-up T3/T5 covers
+link/rate checks on three connected jacks and bidirectional CPU/software-bridge
+traffic across all three pairs among them. LAN4, physical cable cycling, the
+full 30-second/six-pair matrix and hardware T6 readback remain incomplete. The
+release-7 PHY-port guard needs a fresh image and repeat T1.
 P1-A remains separate.
 
 ## Scope and remaining work
 
 | Stage | Scope | Current status |
 | --- | --- | --- |
-| P0 | Probe/reset, register access, internal PHY, 10G CPU PCS, native tags, four LAN jacks and CPU/software forwarding | Release 6 passes T0/T1/T2/T4/T7; T3 is partial, T5 was not run, T6 has software output only and T8 is CPU-endpoint data. Release 7 guard needs fresh build/hardware confirmation and T3/T5 completion |
+| P0 | Probe/reset, register access, internal PHY, 10G CPU PCS, native tags, four LAN jacks and CPU/software forwarding | Release 6 passes T0/T1/T2/T4/T7. T3 is partial (LAN1–LAN3 rates; peer interface cycles on LAN2/LAN3; no LAN4 peer or physical cable cycles). T5 is partial (3/6 pairs among LAN1–LAN3, bidirectional ping and 8–10-second iperf3 runs; procedure calls for 30 seconds). T6 has software output only; T8 is CPU-endpoint data. Release 7 guard needs fresh image/T1. |
 | P1 | Hardware bridge/VLAN, FDB/MDB, STP/BPDU and bridge flags | Not implemented; [source/dependency plan](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/P1-RESEARCH.md) prepared; BPDU/database/table semantics remain gates |
 | P2 | LAG #47 and rate limiting #49 | Not ported; prior feature requirements remain applicable |
 | Other baseline interfaces | MTU/jumbo, alternate tags, mirroring, MIB/ethtool, EEE and GPIO parity | Not established; restore or agree individual deferrals |
@@ -154,8 +159,8 @@ inputs unchanged. The later diagnostic source revision is tracked separately.
 Perceival agrees with the P0 hardware → P1 parity → P2 order and accepts one
 initially offloaded hardware bridge for P1. Multiple bridge domains/MST remain
 deferred pending semantics work; unsupported domains require CPU-only/software
-fallback and isolation tests. Keep #104 and P1-A separate until the P0 hardware
-results exist. Prepare shared table transactions and checked codecs first;
+fallback and isolation tests. Keep P1-A separate until the remaining P0 matrix and provenance gates are
+resolved. Prepare shared table transactions and checked codecs first;
 prove BPDU CPU delivery, CIST and dynamic flush before enabling hardware
 bridge/VLAN/flags; then add FDB/MDB with explicit database/CPU-entry semantics.
 
@@ -180,5 +185,5 @@ Signed-off-by is inferred.
 - [P1 feasibility, source conflicts and staged acceptance matrix](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/P1-RESEARCH.md)
 - [Pre-PR audit and phased remediation plan](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/PRE-PR-PLAN.md)
 
-@perceival, please review the P0 scope and remaining gates. A separate comment
-below lists the requested bench tests and feedback format.
+@perceival, thank you for the release-6 bench report. The follow-up comment
+below records the port-callback fix and requests the remaining T3/T5 checks.
