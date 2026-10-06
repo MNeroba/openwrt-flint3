@@ -41,16 +41,15 @@ Tested source: `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`.
 Documentation through `7be7f8d541` preserves those baseline build inputs. The
 diagnostic `1b7a32bef2` passed both [module](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) and
 [image](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255) builds. Its maintainer T0 passed; T1 failed due to RTL8224
-binding. Release 5 failed module CI on a private kernel macro. Release 6 fixes
-it and needs fresh module/image builds and an exact-source hardware rerun. Earlier passes apply to their own inputs.
+binding. Release 5 failed module CI on a private kernel macro. Release 6 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227); its [image CI is queued](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073). Module SHA-256: `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`. Exact-source T0/T1 remains pending. Earlier passes apply only to their own inputs.
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| ARM64 / Linux 6.18.39 | **Diagnostic PASS; release 5 compile failed; release 6 pending** | [Release 4 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) passed. [Release 5 CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769) failed because `DEFAULT_GPIO_RESET_DELAY` is private to `of_mdio.c`. Release 6 fixes that; [module build running](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227). |
+| ARM64 / Linux 6.18.39 | **Diagnostic PASS; release 5 compile failed; release 6 module PASS** | [Release 4 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) passed. [Release 5 CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769) failed because `DEFAULT_GPIO_RESET_DELAY` is private to `of_mdio.c`. Release 6 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227): all four objects compiled with `W=1`, modpost/link succeeded, and the candidate emitted no compiler warnings. |
 | BE9300 OpenWrt configuration | **PASS** | AP config, pinned-feed verification and driver/MDIO-devres selection in the [target run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177) |
-| OpenWrt package / DTB / full image | **Diagnostic PASS; release 5 image running; release 6 pending** | Baseline and diagnostic image builds passed; maintainer T0 details are [here](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832). The [release-5 image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395426353) is still running; release-6 [exact-revision image CI is queued](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073). |
+| OpenWrt package / DTB / full image | **Diagnostic PASS; release 5 image running; release 6 image queued** | Baseline and diagnostic image builds passed; maintainer T0 details are [here](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832). The [release-5 image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395426353) is still running; release-6 [exact-revision image CI is queued](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073). |
 | Whitespace | **PASS** | `git diff --check` against the proposed base |
-| checkpatch | **Release-5 patch: 0 checkpatch findings; CI compile failed** | Release-6 patch: 0 errors, warnings or checks; [module CI running](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) |
+| checkpatch | **Release-5 patch: 0 checkpatch findings; CI compile failed** | Release-6 patch: 0 errors, warnings or checks; [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) |
 | BE9300 hardware | **T1 FAIL; T2–T8 BLOCKED** | [Diagnostic report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562), `1b7a32bef2`: all four IDs `0x001ccad0`; RTL8224 wins binding. Later boot hang unresolved; release-6 rerun pending |
 
 The [ARM64 artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390/artifacts/11248964933)
@@ -92,7 +91,7 @@ The release-6 correction:
 The [failure/fix report](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/PHY-PROBE-REPORT.md)
 records source evidence and the next bench procedure. The later boot hang
 following the SoC PCS message remains unresolved and is not claimed fixed.
-Release 5 module CI failed on a private macro. Release 6 [module CI is running](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) and [image CI is queued](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073); both builds and T0 must pass before flashing. Repeat T1 with the complete serial log,
+Release 5 module CI failed on a private macro. Release 6 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) with module SHA-256 `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`; [image CI is queued](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073). T0 must pass before flashing. Repeat T1 with the complete serial log,
 all four private binding results and boot progress beyond the former hang
 point; run T2–T8 only after T1 passes. P1-A remains separate.
 

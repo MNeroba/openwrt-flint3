@@ -82,10 +82,10 @@ revisions, artifacts, feature readiness and remaining acceptance gates.
   [image](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255) CI. The [2026-10-06 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562)
   confirms maintainer T0 PASS and T1 FAIL: all four IDs are `0x001ccad0`, but
   the in-tree RTL8224 driver wins binding. A later boot hang is also reported.
-- The release-6 registration correction selects the private driver before
-  adding each PHY device. Its own module/image builds and hardware rerun are
-  pending; earlier passes do not qualify it. The boot hang is unresolved.
-  DTS, feeds, configuration and workflows are unchanged.
+- Release 5 failed compilation on a private kernel macro. Release 6 fixes that;
+  [ARM64 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) passed and [image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) is queued. Exact
+  release-6 T0/T1 and the boot-hang investigation remain pending. Earlier passes
+  qualify only their own inputs. DTS, feeds and workflows are unchanged.
 
 ## P1 research update
 

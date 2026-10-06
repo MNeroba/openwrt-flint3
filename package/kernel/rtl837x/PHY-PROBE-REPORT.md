@@ -1,7 +1,8 @@
 # RTL8372N internal-PHY binding failure and correction
 
 Updated: 2026-10-06. T1's binding failure has an observed cause. Release 5 did
-not compile; release 6 fixes the build error and awaits fresh CI and hardware.
+not compile; release 6 fixes it and passed ARM64 module CI. Full-image CI is
+queued; the hardware rerun has not started.
 The later boot hang remains a separate unresolved observation.
 
 ## Latest hardware evidence
@@ -79,13 +80,15 @@ unchanged. No restricted header or vendor patch data is introduced.
 | --- | --- | --- | --- |
 | Diagnostic `1b7a32bef2`, release 4 | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255) | Maintainer T0 PASS; T1 FAIL; T2–T8 BLOCKED |
 | Registration correction, release 5 (`614188cff5`) | [FAIL](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769): private kernel macro not visible | In progress at last check | Not run |
-| Corrected registration, release 6 (`32d958fe17`) | [Running](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) | [Queued](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) | Not run |
+| Corrected registration, release 6 (`32d958fe17`) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) | [Queued](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) | Not run |
 
 Release 5 failed compilation because `DEFAULT_GPIO_RESET_DELAY` is private to
 kernel `of_mdio.c`. Release 6 uses a named local 10 us constant matching
 `__of_mdiobus_register()` and explicitly reports unsupported PHY package nodes.
-Fresh compilation, modpost, image packaging and exact-source T0 are required.
-Earlier passes apply to their own inputs only.
+Release 6 [ARM64 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) passed with all four objects, `W=1`,
+modpost and link success; candidate compilation has no warnings. Module
+SHA-256: `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`. [Full-image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) is queued. Exact-source T0 is required;
+earlier passes apply to their own inputs only.
 
 ## Requested next bench run
 

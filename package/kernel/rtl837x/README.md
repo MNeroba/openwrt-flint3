@@ -90,7 +90,7 @@ BE9300 AP-config OpenWrt package/DTB/image build passed for source revision
 Diagnostic `1b7a32bef2` also passed [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) and
 [image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255); maintainer T0 passed, but T1 still failed.
 Release 5 failed module compilation because it referenced a private kernel
-macro. Release 6 fixes that error; [module CI is running](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) and [image CI is queued](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073). T0/T1 still needs to pass.
+macro. Release 6 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227); [image CI is queued](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073). The candidate module SHA-256 is `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`. T0/T1 still needs to pass.
 No BE9300 bring-up or traffic check has passed.
 
 ## Staged follow-up

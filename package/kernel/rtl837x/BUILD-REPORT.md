@@ -4,11 +4,11 @@
 
 | Gate | Result | Evidence / scope |
 | --- | --- | --- |
-| Mainline ARM64 compilation | **Diagnostic PASS; release 5 failed; release 6 pending** | Diagnostic `1b7a32bef2` [passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197). Release-5 [build failed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769): `DEFAULT_GPIO_RESET_DELAY` is private to `of_mdio.c`. Release 6 fixes it; [new module CI is running](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227). |
+| Mainline ARM64 compilation | **Diagnostic PASS; release 5 failed; release 6 module PASS** | Diagnostic `1b7a32bef2` [passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197). Release-5 [build failed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769): `DEFAULT_GPIO_RESET_DELAY` is private to `of_mdio.c`. Release 6 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227): all four objects, `W=1`, modpost and module link succeeded with no candidate compiler warnings. |
 | OpenWrt configuration | **PASS** | BE9300 AP configuration; all five pinned feeds verified; driver and MDIO-devres packages selected |
 | OpenWrt package, DTB and image | **Diagnostic PASS; release 5 image pending; release 6 pending** | Baseline and diagnostic builds passed as linked. Release-5 [full image build](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395426353) was in progress at last check. Release 6 [image CI is queued](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073); a passing exact-source image and T0 are required before flashing. |
 | Source whitespace | **PASS** | `git diff --check` against the proposed base |
-| Kernel style review | **Release-5 patch: 0 checkpatch findings; compile failed** | Release 6 source patch checkpatch: 0 errors/warnings/checks. Its [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) is still running. |
+| Kernel style review | **Release-5 patch: 0 checkpatch findings; compile failed** | Release-6 source patch checkpatch: 0 errors, warnings or checks; [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) passed. |
 | BE9300 hardware | **T1 FAIL; T2–T8 BLOCKED** | The [2026-10-06 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562) confirms IDs `0x001ccad0` on all four ports; RTL8224 binds instead of the private driver. Later boot hang unresolved. Release-6 hardware rerun pending after its [image build](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073). |
 | Retained source provenance | **OPEN REVIEW** | Restricted header and patch arrays excluded; SDS field/polarity lineage remains unresolved |
 | Replacement acceptance in #100 | **NOT MET** | Hardware and feature parity, or agreed deferrals, remain required |
@@ -34,8 +34,8 @@ Release 5 suppresses automatic internal-bus discovery and assigns the private
 matcher before PHY registration, but its ARM64 build failed on an inaccessible
 kernel macro. Release 6 replaces it with a local named 10 us value matching
 upstream OF-MDIO behavior and rejects unsupported `ethernet-phy-package` nodes
-with an explicit error. The later boot hang remains unresolved. Release 6 [module CI is running](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) and [image CI is queued](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073).
-Hardware T0/T1 remains pending; traffic tests remain unqualified.
+with an explicit error. The later boot hang remains unresolved. Release 6 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) with module SHA-256 `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`; its [image CI is queued](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073).
+Exact-source hardware T0/T1 remains pending; traffic tests remain unqualified.
 
 Diagnostic release 4 (`1b7a32bef2`) passed [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) and
 [full-image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255); those passes do not qualify releases 5 or 6.
