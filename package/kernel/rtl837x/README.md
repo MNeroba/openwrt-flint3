@@ -20,7 +20,8 @@ The current code provides:
   including per-PHY C22 page selection.
 - A private PHY driver with native MMD access to the actual port, standard
   autonegotiation and published Realtek 2.5G status decoding. Forced 2.5G is
-  explicitly unsupported; actual negotiation remains hardware-unverified.
+  explicitly unsupported. Release 6 observed 1G/2.5G links on three connected
+  jacks; full advertisement and plug-cycle coverage is still pending.
 - Phylink plumbing for internal PHY ports 4–7 and the 10GBASE-R SerDes MACs
   on ports 3 and 8.
 - SerDes mode selection and the optional `sds0/1-{rx,tx}-swap` device-tree
@@ -47,15 +48,19 @@ tracked by Issues #47 and #49.
 
 The SerDes path selects the 10GBASE-R mode and applies the board's optional
 polarity swaps. It does not contain PHY firmware, vendor patch arrays, or the
-full SerDes initialization sequence used by vendor SDKs. Internal PHY
-power-control and link operation, and the 10G CPU link after reset, still need
-hardware validation. The first Flint 3 run returned **T1 FAIL; T2–T8 BLOCKED**
-at internal-PHY binding. [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) documents the
-confirmed RTL8224 binding cause and release-6 registration correction. It also
-rejects C45-only PHYs because this driver's internal PHY operations use C22.
-Release 5 failed module compilation on a private kernel macro; release 6 fixes that and
-requires new module/image builds and T0/T1. The separately reported boot hang
-remains unresolved.
+full SerDes initialization sequence used by vendor SDKs. Release 6 passed PHY
+binding and observed three LAN links, but full PHY power-control, jack mapping,
+LAN-pair forwarding and physical CPU-link checks remain incomplete. The initial
+diagnostic Flint 3 run failed T1 because the in-tree RTL8224 PHY driver bound
+first. Release 6 fixed this: the maintainer's hardware report passes
+T0/T1/T2/T4/T7; T3 is partial, T5 was not run, and T6 has software
+configuration output only. T8 used the router as the iperf3 endpoint, so it is
+not switching-performance evidence. Release 6 also logged spurious `-EINVAL`
+power-down warnings on unsupported ports 0–2; package release 7 now limits
+those callbacks to ports 4–7 and needs new CI/hardware confirmation. See
+[PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for the warning causes, evidence and
+remaining P0 gates. The earlier boot stop was not reproduced, but its cause is
+not proven.
 
 ## Device tree
 
@@ -73,7 +78,8 @@ sds1-tx-swap;
 The P0 driver does not provide a GPIO controller and ignores the legacy
 `rtl837x,sds0mode`, MDI-reverse, and PHY-TX-polarity properties. SerDes mode is
 selected by phylink from the port's `phy-mode`; only `10gbase-r` is accepted
-for ports 3 and 8.
+for ports 3 and 8. PHY enable/disable callbacks are limited to internal PHY
+ports 4–7; the package-release-7 guard still needs CI and hardware confirmation.
 
 ## Build output
 
@@ -87,17 +93,14 @@ the current evidence and remaining gates. The ARM64 module build and full
 BE9300 AP-config OpenWrt package/DTB/image build passed for source revision
 `954a84bd7c46dbbb2412eeddfb300aad8b4cff35` ([module run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390),
 [target image run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177)).
-Diagnostic `1b7a32bef2` also passed [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) and
-[image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255); maintainer T0 passed, but T1 still failed.
-Release 5 failed module compilation because it referenced a private kernel
-macro. Release 6 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227); [image CI is queued](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073). The candidate module SHA-256 is `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`. T0/T1 still needs to pass.
-No BE9300 bring-up or traffic check has passed.
+Diagnostic `1b7a32bef2` passed [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) and
+[image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255), but T1 failed at PHY binding. Release 5 failed module compilation because it referenced a private kernel macro. Release 6 [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) and [image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) passed; its candidate module SHA-256 is `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`. The maintainer's [release-6 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917) passes T0/T1/T2/T4/T7, with T3 partial, T5 not run and T6 unverified in hardware. Package release 7 contains the new callback guard; its builds and hardware check are pending.
 
 ## Staged follow-up
 
-1. Build the exact release-6 correction and repeat T1 with the requested PHY
-   evidence. Resolve probe failure before proceeding to real CPU/PHY links,
-   tags, CPU-only isolation and software forwarding in the P0 matrix.
+1. Build package release 7; confirm the release-6 PHY binding result persists
+   and that the ports 0–2 power-down warnings are gone. Then finish T3 and the
+   six-pair T5 software-forwarding matrix with two hosts.
 2. Prepare the shared table engine and resolve VLAN/L2 field meanings and
    source lineage, following [P1-RESEARCH.md](P1-RESEARCH.md). Source design can
    proceed while P0 hardware results are pending.

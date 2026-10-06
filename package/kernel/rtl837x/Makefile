@@ -3,7 +3,7 @@ include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=rtl837x-dsa
 PKG_VERSION:=0.0.2
-PKG_RELEASE:=6
+PKG_RELEASE:=7
 PKG_MAINTAINER:=air jinkela (air_jinkela@163.com)
 
 include $(INCLUDE_DIR)/package.mk

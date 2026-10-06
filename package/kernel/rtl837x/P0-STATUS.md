@@ -5,6 +5,15 @@ Updated: 2026-10-06. This is a source candidate, not a hardware-qualified driver
 [BUILD-REPORT.md](BUILD-REPORT.md) consolidates publication evidence, exact
 revisions, artifacts, feature readiness and remaining acceptance gates.
 
+## Latest hardware result
+
+Release 6 passed T0/T1/T2/T4/T7 on the GL-BE9300. T3 is partial, T5 was not
+run, T6 has software output only, and T8 recorded router-endpoint CPU traffic.
+The report and warning diagnosis are in [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md).
+Package release 7 limits PHY enable/disable operations to ports 4–7 to remove
+spurious `-EINVAL` warnings observed on ports 0–2; release-7 CI and hardware
+confirmation are still pending. P0 is not fully qualified.
+
 ## Source work completed
 
 - Runtime contiguous-field helpers validate masks and value range. Raw bitmaps
@@ -35,9 +44,11 @@ revisions, artifacts, feature readiness and remaining acceptance gates.
 - DT layout is validated before GPIO reset; one fixed 10G CPU on 3 or 8 and
   internal user ports 4–7 are accepted. Duplicate/unsupported layouts fail.
 - Setup failure and teardown quiesce forwarding/PHYs; managed GPIO reset is
-  asserted on failed probe/removal. Shutdown clears driver data.
-- The module targets Linux 6.18, declares MDIO devres dependency, bumps package
-  release to 6. Selection on the private bus no longer relies on autoload
+  asserted on failed probe/removal. Shutdown clears driver data. PHY
+  `port_enable`/`port_disable` now skip non-PHY ports and issue PHY writes only
+  to internal PHY ports 4–7 (package release 7).
+- The module targets Linux 6.18, declares MDIO devres dependency, and package
+  release is now 7. Selection on the private bus no longer relies on autoload
   priority; the ordinary Realtek driver remains available for external PHYs.
 - BE9300 uses `realtek,rtl8372n`. Legacy BE6500 `realtek,rtl837x` is unsupported
   by this candidate, so it must not replace the shipping package yet.
@@ -83,9 +94,7 @@ revisions, artifacts, feature readiness and remaining acceptance gates.
   confirms maintainer T0 PASS and T1 FAIL: all four IDs are `0x001ccad0`, but
   the in-tree RTL8224 driver wins binding. A later boot hang is also reported.
 - Release 5 failed compilation on a private kernel macro. Release 6 fixes that;
-  [ARM64 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) passed and [image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) is queued. Exact
-  release-6 T0/T1 and the boot-hang investigation remain pending. Earlier passes
-  qualify only their own inputs. DTS, feeds and workflows are unchanged.
+  [ARM64 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) and [full image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) passed. The [release-6 bench report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917) passes T0/T1/T2/T4/T7, with T3 partial, T5 not run, T6 software output only and T8 CPU-endpoint traffic. The earlier stop was not reproduced, but its cause is not established. Release 7's port-callback guard needs fresh CI and hardware confirmation.
 
 ## P1 research update
 
@@ -105,8 +114,10 @@ release 6 fixes it and needs its own build and bench run.
 2. OpenWrt package/DTB/full-image build: **PASS** for the tested source revision
    and pinned inputs linked above. Re-run if source or build inputs change.
 3. Resolve flagged provenance rows, particularly SDS facts/source lineage.
-4. Test PHY binding/AN, real 10G CPU link, cold/warm reset, isolation/fallback,
-   reserved control-frame handling and error recovery on the bench.
+4. Recheck PHY binding and power-down warnings on release 7; complete T3 on
+   all jacks, T5 across all six LAN pairs, and hardware isolation/readback,
+   reserved control-frame and recovery checks. The release-6 warm/cold reset
+   checks passed; physical CPU-link evidence remains incomplete.
 5. Restore P1/P2 behavior or obtain maintainer agreement to a narrower scope.
 6. The Draft remains a source and provenance review candidate. Hardware
    qualification and required source-lineage decisions remain open.

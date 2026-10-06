@@ -519,13 +519,19 @@ static int rtl8372n_port_set_isolation(struct rtl837x_priv *priv, int port,
 	return rtl837x_reg_write(priv, RTL837X_PORT_ISOLATION_REG(port), mask);
 }
 
+static bool rtl8372n_is_internal_phy_port(int port)
+{
+	return port >= 0 && port < RTL8372N_NUM_PORTS &&
+	       (RTL8372N_PHY_PORT_MASK & BIT(port));
+}
+
 static int rtl8372n_port_enable(struct dsa_switch *ds, int port,
 			       struct phy_device *phy)
 {
 	struct rtl837x_priv *priv = ds->priv;
 	int ret;
 
-	if (IS_SERDES_PORT(port))
+	if (!rtl8372n_is_internal_phy_port(port))
 		return 0;
 
 	ret = priv->ops->phy_write_c45(priv, port, 31, 0xa610, 0x2058);
@@ -540,7 +546,7 @@ static void rtl8372n_port_disable(struct dsa_switch *ds, int port)
 	struct rtl837x_priv *priv = ds->priv;
 	int ret;
 
-	if (IS_SERDES_PORT(port))
+	if (!rtl8372n_is_internal_phy_port(port))
 		return;
 
 	ret = priv->ops->phy_write_c45(priv, port, 31, 0xa610, 0x2858);
