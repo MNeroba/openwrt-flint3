@@ -5,8 +5,8 @@ Updated: 2026-10-07. Applies to the dependent
 Stacked on [P0 PR #104](https://github.com/perceival/openwrt-flint3/pull/104),
 parent source 27103b8e6b705e838eada250f33231b2c1a8c045.
 
-Current implementation commit: 40da0af192417ffccc3a4b9e1124e808779ce467.
-Source tree: 8185243d6c00df0e4ce8310017f9f39d5b3bcdb9; package release: 8.
+Current implementation commit: b49b5d7d1e1419337abeb1756700a7d0cf28ca12.
+Source tree: 0715bfec59d7601ea9748b954ebb40acd744bac2; package release: 8.
 These are requested future checks, not completed hardware results.
 
 ## 1. Revision, build and test order
