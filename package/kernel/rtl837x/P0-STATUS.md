@@ -162,7 +162,10 @@ limits, flood masks and VLAN controls. Snapshot mismatches are diagnostic and
 do not fail probe; a VLAN table readback mismatch still fails the bootstrap.
 See [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md) and
 [FIRST-HARDWARE-TEST.md](FIRST-HARDWARE-TEST.md) for scope and acceptance steps.
-The P1-A candidate passed the focused ARM64 module build and full BE9300
-AP-config package/DTB/image build; exact evidence is in its report. No P1-A
-BE9300 hardware result is claimed. The Release-7 evidence above is for the
-parent P0 source only.
+The P1-A source passed focused ARM64 module and full BE9300 AP-config
+package/DTB/image builds before it was rebased onto P0 head
+`7e51247b3882567ce891481395b34e2a2c25f116`; those CI artifacts do not validate
+the current rebased candidate. Its exact-source builds and all P1-A BE9300
+hardware checks remain pending. The Release-7 evidence above is for the parent
+P0 source only. See [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md) for the exact
+candidate revision and gates.

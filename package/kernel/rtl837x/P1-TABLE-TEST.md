@@ -3,10 +3,10 @@
 Updated: 2026-10-07. Applies to the dependent
 [P1-A PR #1](https://github.com/MNeroba/openwrt-flint3/pull/1).
 Stacked on [P0 PR #104](https://github.com/perceival/openwrt-flint3/pull/104),
-parent source 27103b8e6b705e838eada250f33231b2c1a8c045.
+rebased parent source `7e51247b3882567ce891481395b34e2a2c25f116`.
 
-Current implementation commit: 04128d1dbb19b547ab546c6032fbb5143d8c74e7.
-Source tree: bf2b6955bb05ab6c82322d89d1069a733c345204; package release: 8.
+Current rebased implementation: `2f23cf6543af39b9d1d0361dd95009e44c15dbf3`.
+Source tree: `f846d7a517fc4a08a38e9fd56b9f6939546288a9`; package release: 8.
 These are requested future checks, not completed hardware results.
 
 ## 1. Revision, build and test order
@@ -15,13 +15,13 @@ These are requested future checks, not completed hardware results.
    and post its exact-source results under #104. If unavailable, mark baseline
    comparison BLOCKED; the new branch cannot establish a P0-to-P1 regression
    comparison without those results.
-2. The current candidate's focused ARM64 module build and full BE9300
-   AP-config package/DTB/image build have passed in CI for source revision
-   `ad5d1b27a2f8b67cf75c2fa2468c60f5ca1739fd`; see the artifact and checksums
-   in [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md). Before installing, verify the
-   exact artifact and record package release 8. Then confirm the installed
-   module/package and image checksum as the hardware T0 gate. A CI image build
-   alone does not complete T0.
+2. The pre-rebase source passed focused ARM64 module and full BE9300 AP-config
+   package/DTB/image builds, but those artifacts do not validate this rebased
+   candidate. First build the exact rebased source and record the commit and
+   artifacts in [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md). Before installing,
+   verify the exact artifact and record package release 8. Then confirm the
+   installed module/package and image checksum as the hardware T0 gate. A CI
+   image build alone does not complete T0.
 3. Use the documented TFTP/initramfs recovery path, independent management and
    dmesg/pstore collection from the P0 procedure. Keep the known-good image.
    The project does not assume a usable normal UART console on BE9300.
@@ -29,11 +29,10 @@ These are requested future checks, not completed hardware results.
    and additional regression checks on the new image. Record each result
    separately from the P0 baseline.
 
-The current source has passed both the focused ARM64 module build and full
-OpenWrt target package/DTB/image build. These are build gates only: no
-installation, boot, switch initialization, table observation, or forwarding
-test is claimed. The earlier pre-rebase prototype is historical only; see the
-report for its provenance and for the current exact-source CI evidence.
+The current rebased source has not yet passed a focused ARM64 module build or
+full OpenWrt target package/DTB/image build. The earlier pre-rebase builds are
+historical evidence only. No installation, boot, switch initialization, table
+observation, or forwarding test is claimed for P1-A.
 
 
 ## 2. Expected bootstrap values
@@ -68,7 +67,7 @@ If the necessary method is unavailable, mark independent readback BLOCKED.
 
 | ID | Procedure | Expected outcome / evidence |
 | --- | --- | --- |
-| A0 | Record package/image build and installed revision, kernel, config/feed lock and checksums | CI package/DTB/full-image gate passed for the exact code; verify the artifact and capture installed revision/configuration/checksums before boot testing |
+| A0 | Record package/image build and installed revision, kernel, config/feed lock and checksums | Rebased exact-source module and package/DTB/full-image CI must pass first; prior pre-rebase builds do not satisfy this gate. Then verify the artifact and capture installed revision/configuration/checksums before boot testing |
 | A1 | Boot with the documented board layout; collect full dmesg/pstore and DSA/PHY binding | Setup completes; no table timeout, `VLAN ... readback mismatch`, registration error, warning or oops |
 | A2 | Where an agreed method exists, obtain the selected VID 1 word, member/untag masks and PVIDs | Word/masks match section 2; record method and raw values. A last-output register read alone is insufficient independent evidence |
 | A3 | Repeat three warm boots and one full power cycle; repeat A1/A2 and router reachability each time | Same bootstrap result across resets; report each boot separately and record any first failing boot |

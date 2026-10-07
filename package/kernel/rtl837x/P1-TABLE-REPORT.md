@@ -1,12 +1,13 @@
 # RTL8372N P1-A VLAN table foundation
 
 Updated: 2026-10-07. Stacked on [P0 PR #104](https://github.com/perceival/openwrt-flint3/pull/104).
-Current parent source: 27103b8e6b705e838eada250f33231b2c1a8c045.
+Rebased parent source: `7e51247b3882567ce891481395b34e2a2c25f116`.
 The broader plan is [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100)
 and [P1-RESEARCH.md](P1-RESEARCH.md).
 
-Current implementation commit: 04128d1dbb19b547ab546c6032fbb5143d8c74e7.
-Source tree: bf2b6955bb05ab6c82322d89d1069a733c345204. Package release: 8.
+Current rebased implementation: `2f23cf6543af39b9d1d0361dd95009e44c15dbf3`.
+Source tree: `f846d7a517fc4a08a38e9fd56b9f6939546288a9`. Package release: 8.
+The rebased candidate has not yet run CI or BE9300 hardware tests.
 
 ## Implemented scope
 
@@ -18,7 +19,8 @@ Source tree: bf2b6955bb05ab6c82322d89d1069a733c345204. Package release: 8.
 | Port-mask codec | Reject values outside the documented 10-bit fields and untag bits outside membership; preserve every other bit of the input word |
 | Bootstrap integration | VLAN 1 uses the new codec/write path; expected data word and write command match #104; new idle checks and exact readback can fail setup |
 | Setup snapshot | Best-effort reads of VLAN 1, configured PVIDs, isolation, learning limits, flood masks and VLAN controls; logs raw state and known-field mismatches without failing probe |
-| Neutral bit-25 name | Rename `VLAN_DATA_VALID` to `VLAN_BOOTSTRAP_FLAGS`; keep the raw bit set as before, without claiming a proven validity or IVL meaning |
+| Shared diagnostic reads | Existing P0 VLAN readback also uses the table helper, so P0 and P1 setup diagnostics serialize through the same table mutex |
+| Neutral bit-25 name | Retain the parent P0 neutral symbol `RTL837X_VLAN_FIELD25`; preserve the raw bit without claiming a proven validity or IVL meaning |
 | Build plumbing | Add `rtl837x_table.o` to the module; bump package release to 8; enable existing ARM64 build workflow for `rtl8372n-p1-tables` |
 
 This is a concrete first part of P1-A. Snapshot read failures or mismatches are
@@ -45,6 +47,8 @@ the VLAN 1 setup path. No user-facing VLAN offload is advertised.
 Lock order is **table engine → regmap/map lock → parent MDIO lock**. Table
 access does not nest PHY/SDS engine locks or manually hold regmap's map lock
 or the parent MDIO lock. The locked read helper asserts its table-lock contract.
+The existing P0 setup readback also uses this helper; no remaining diagnostic
+path submits a VLAN table command outside the shared lock.
 
 A timeout after command submission can leave a committed or still-busy hardware
 entry. No speculative inverse write is attempted. The bootstrap caller returns
@@ -81,24 +85,26 @@ rather than weakening the comparison without evidence.
 
 | Gate | Status | Scope |
 | --- | --- | --- |
-| Whitespace | PASS | `git diff --check` on this implementation |
-| New source style | PASS | Linux 6.18 `checkpatch.pl --no-tree --strict --file`; 0 errors, warnings or checks |
-| Complete patch style | 0 errors, 1 reviewed warning | New-file MAINTAINERS reminder; this is an OpenWrt package, not a new in-tree Linux registration |
-| First rebased ARM64 attempt | FAIL, fixed in current code | [Run 37632384225](https://github.com/MNeroba/openwrt-flint3/actions/runs/37632384225) found variable-mask FIELD_GET and format warnings in the diagnostic snapshot; corrected in implementation commit 04128d1dbb |
-| Current ARM64 module build | PASS | [Run 37638430759](https://github.com/MNeroba/openwrt-flint3/actions/runs/37638430759) built all five objects with `W=1`, modpost and module link; no candidate warnings/errors |
-| Earlier pre-rebase P1-A prototype build | PASS, historical | [Linux 6.18.39 run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070037416) built the five-object prototype at commit 250f5d469d46ff5de07dfe8a96e3fe90636248ff; this artifact does not cover this rebased source or package release 8 |
+| Whitespace | PASS | `git diff --check current-p0/head...HEAD` on the rebased candidate |
+| New source style | PASS, pre-rebase only | Linux 6.18 `checkpatch.pl --no-tree --strict --file`; 0 findings on the previous source tree; rerun on the rebased candidate |
+| Complete patch style | 0 errors, 1 reviewed warning, pre-rebase only | New-file MAINTAINERS reminder; this is an OpenWrt package, not a new in-tree Linux registration; rerun on the rebased patch |
+| First rebased ARM64 attempt | FAIL, fixed before the previous successful build | [Run 37632384225](https://github.com/MNeroba/openwrt-flint3/actions/runs/37632384225) found variable-mask FIELD_GET and format warnings in the diagnostic snapshot; corrected in implementation commit 04128d1dbb |
+| ARM64 module build | PASS, pre-rebase only | [Run 37638430759](https://github.com/MNeroba/openwrt-flint3/actions/runs/37638430759) built all five objects with `W=1`, modpost and module link; it does not validate the rebased candidate |
+| Rebased ARM64 module build | PENDING | Must build the current rebased candidate against Linux 6.18.39 before it is ready for hardware installation |
+| Earlier pre-rebase P1-A prototype build | PASS, historical | [Linux 6.18.39 run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070037416) built the five-object prototype at commit 250f5d469d46ff5de07dfe8a96e3fe90636248ff; this artifact does not cover the rebased source or package release 8 |
 | Inherited broad CI matrices | CANCELED | Four automatic kernel/package runs for the original feature branch were stopped; no all-target pass is claimed |
-| Current OpenWrt package/DTB/full image | PASS | [Run 37638590756](https://github.com/MNeroba/openwrt-flint3/actions/runs/37638590756) built the BE9300 AP-config image and `kmod-rtl837x-dsa` package for source revision `ad5d1b27a2f8b67cf75c2fa2468c60f5ca1739fd` |
+| OpenWrt package/DTB/full image | PASS, pre-rebase only | [Run 37638590756](https://github.com/MNeroba/openwrt-flint3/actions/runs/37638590756) built the BE9300 AP-config image and `kmod-rtl837x-dsa` package for source revision `ad5d1b27a2f8b67cf75c2fa2468c60f5ca1739fd`; it does not validate the rebased candidate |
+| Rebased OpenWrt package/DTB/full image | PENDING | Required before installing the current candidate on BE9300 |
 | Runtime/codec tests | NOT RUN | No automated suite or fault-injection result is claimed |
 | BE9300 hardware | NOT RUN | No previous SDK-driver or P0 result is attributed to this change |
 
-### Current build inputs and artifacts
+### Previous-source build inputs and artifacts
 
-- CI-tested source revision: `ad5d1b27a2f8b67cf75c2fa2468c60f5ca1739fd`.
-  The code implementation is `04128d1dbb19b547ab546c6032fbb5143d8c74e7`,
-  and `package/kernel/rtl837x/src` has tree
-  `bf2b6955bb05ab6c82322d89d1069a733c345204`. The later changes on top of the
-  CI-tested revision are documentation-only.
+- CI-tested pre-rebase source revision: `ad5d1b27a2f8b67cf75c2fa2468c60f5ca1739fd`.
+  Its `package/kernel/rtl837x/src` tree was
+  `bf2b6955bb05ab6c82322d89d1069a733c345204`. The rebased candidate changes
+  the parent and integrates source edits; the old artifacts cannot be used as
+  its build evidence.
 - Focused module job: GitHub Ubuntu 24.04, AArch64 cross compiler, Linux
   6.18.39; [run 37638430759](https://github.com/MNeroba/openwrt-flint3/actions/runs/37638430759).
   All five objects, `W=1`, modpost and linking passed without candidate
@@ -119,9 +125,10 @@ rather than weakening the comparison without evidence.
   `5d68d53c160a325ea9d03fce393e051573bcc736`, and video
   `816fa8fe0ca759cc5d1ba71af1a716405bf4dda4`.
 
-These results establish compilation and target packaging for the current code;
-they do not establish runtime table behavior, forwarding, or hardware safety.
-No runtime/codec suite, fault injection, or BE9300 boot test has been run. The
+These results establish compilation and target packaging for the previous
+pre-rebase source only; they do not establish those gates for the current
+rebased candidate, runtime table behavior, forwarding, or hardware safety. No
+runtime/codec suite, fault injection, or P1-A BE9300 boot test has been run. The
 broad inherited push/PR kernel and package matrices were canceled deliberately
 for this feature branch:
 [push packages](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070038337),
