@@ -12,6 +12,12 @@
 | Retained source provenance | **OPEN REVIEW** | Restricted header and patch arrays excluded; SDS field/polarity lineage remains unresolved. |
 | Replacement acceptance in #100 | **NOT MET** | P0 needs remaining hardware coverage; P1/P2 parity or maintainer-agreed deferrals remain required. |
 
+The working tree now also contains unbuilt startup readback instrumentation for
+the P0 VLAN/isolation setup. The Release-7 CI and hardware rows above apply to
+the tested commit only; they do not validate this follow-up. Run a new exact-
+source module/image build and repeat the relevant BE9300 checks before using
+its `P0 readback` log lines as T6 evidence.
+
 The CI full target-build run passed on 2026-10-02 for its tested source
 revision. The maintainer's independent `908810c09b` image on 2026-10-04 is a
 historical run: it reached the first T1 failure and did not qualify traffic.

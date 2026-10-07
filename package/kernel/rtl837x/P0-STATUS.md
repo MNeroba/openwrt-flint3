@@ -25,6 +25,14 @@ softirq data. See
 [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for exact evidence and remaining gates.
 P0 is not fully qualified.
 
+The current working tree adds startup readbacks for the VLAN 1 table word,
+PVIDs, isolation matrix, learning limits, flood masks and VLAN filter controls.
+This code postdates tested Release 7 commit
+`79afa2c51a3c2396c33ed511ed092d799c52e1bf`; it has not been built or run on
+hardware. Release-7 T6 therefore remains unverified, and the new revision must
+pass a fresh exact-source build and maintainer bench run before the readbacks
+count as evidence.
+
 ## Source work completed
 
 - Runtime contiguous-field helpers validate masks and value range. Raw bitmaps

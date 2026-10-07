@@ -16,6 +16,12 @@ open. See
 for evidence and remaining gates. Start each run only after T0 passes for the
 exact image revision under test.
 
+The current working-tree follow-up adds one-shot, read-only P0 setup readbacks
+for VLAN 1, PVID, port isolation, learning limits, flood masks, and VLAN filter
+controls. Release-7 results do not include this code. Build and identify the
+exact follow-up revision, then rerun T0 and the applicable hardware checks
+before treating its readback logs as evidence.
+
 This plan is intended for the driver maintainer and the Flint 3 owner running
 the test. It is not a claim that any step has passed.
 
@@ -210,7 +216,7 @@ or command output. A blocked test is not a pass.
 | T3 | Connect one peer to each physical LAN jack, one at a time. For each, record interface carrier and `ethtool` speed/duplex, then unplug and reconnect. | Jack map is LAN1→port 7, LAN2→6, LAN3→5, LAN4→4. Carrier follows the cable; no repeated flap or stuck port. Test 1G and 2.5G only when the peer supports those rates. |
 | T4 | From one directly connected host, obtain the expected LAN address and ping the router's LAN address for at least 100 packets. Record loss and `ip -s link` before/after. | Router CPU path works through the switch; no persistent loss, growing error counters, or DSA/tagger errors. |
 | T5 | Connect two independent hosts directly to two different LAN jacks, on the same untagged LAN. Confirm they are not connected through another bridge. Ping between them, then run `iperf3` for 30 seconds in both directions. Repeat across all six jack pairs; record any unavailable pair as BLOCKED. | ARP and bidirectional untagged LAN-to-LAN traffic work; no link reset, kernel warning, or persistent packet loss. Record rates as observations, not P0 pass thresholds. |
-| T6 | Record `bridge vlan show` and switch VLAN/PVID readbacks using an agreed read-only access method. | Host output records software configuration only. Successful traffic plus hardware readback is needed to confirm the VLAN 1/PVID bootstrap. General VLAN offload is not implemented. |
+| T6 | Record `bridge vlan show` and the driver's `P0 readback` lines from `dmesg`. The readback runs during setup and uses the driver's regmap path; do not issue raw MDIO writes or reads. | Host output records software configuration only. VLAN 1 table word, available-port PVIDs, isolation masks, learning limits, flood destinations and VLAN filter controls must report `PASS`. A mismatch/read error is not a pass. Also run the standalone-port negative forwarding check below. General VLAN offload is not implemented. |
 | T7 | Reboot normally three times, then perform one full power-off/power-on with the verified recovery/management path available. Repeat T1–T4 after each boot. | Probe, link mapping, and basic CPU/LAN traffic remain consistent. No boot relies on stale switch state left by the previous run. |
 | T8 | Optional: after all smoke tests pass, measure `iperf3` through a 2.5G-capable LAN peer in each direction. | Record peer, link speed, command, throughput, loss, and counters. No throughput target is defined for this unvalidated P0 candidate. |
 
@@ -240,11 +246,12 @@ or command output. A blocked test is not a pass.
   single pass.
 - Capture physical switch and SoC PCS state and bidirectional CPU-link traffic.
   A DT fixed-link's 10,000 Mb/s carrier alone is not physical link evidence.
-- After cold and warm boot, read learning limits (`0x5384 + port * 4`), flood
-  masks (`0x5360`–`0x5370`) and isolation (`0x50c0 + port * 4`). Their P0
-  targets are zero learning limits, CPU-only flood destination and isolated
-  user-to-CPU paths. Obtain readbacks only through a method approved for this
-  register transport; do not invent arbitrary raw MDIO commands.
+- After cold and warm boot, capture all driver `P0 readback` lines. Their P0
+  targets are zero learning limits, CPU-only flood destinations, and an
+  isolation matrix that sends user-port traffic only to the CPU port. If a
+  readback line is absent, fails, or reports `MISMATCH`, keep T6 BLOCKED/FAIL
+  and attach the full boot log; do not replace it with guessed raw MDIO
+  commands.
 - Unknown unicast, broadcast, multicast and reserved control-frame handling
   still need negative forwarding tests. Do not connect a physical loop before
   BPDU/RMA behavior has been verified on the isolated bench.
@@ -297,7 +304,7 @@ Chip ID from boot log:
 PHY IDs / bound drivers per port:
 Supported / local / partner advertised link modes per port:
 Physical switch and SoC PCS evidence:
-Isolation / learning / flood readbacks and access method:
+T6 driver P0-readback lines (VLAN/PVID/isolation/learning/flood/filter):
 Standalone / bridge create-remove results:
 Concurrent PHY access / port lifecycle results:
 Reserved control-frame / negative forwarding results:

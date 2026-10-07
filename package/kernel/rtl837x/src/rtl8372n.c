@@ -580,6 +580,147 @@ static int rtl8372n_setup_default_vlan(struct rtl837x_priv *priv,
 						10, 1000);
 }
 
+static int rtl8372n_read_vlan_entry(struct rtl837x_priv *priv, u16 vid,
+				    u32 *data)
+{
+	u32 command;
+	int ret;
+
+	command = FIELD_PREP(RTL837X_TABLE_ADDRESS, vid) |
+		  (RTL837X_TABLE_VLAN << 8) | RTL837X_TABLE_EXECUTE;
+	ret = rtl837x_reg_write(priv, RTL837X_TABLE_CTRL, command);
+	if (ret)
+		return ret;
+
+	ret = regmap_read_poll_timeout(priv->map, RTL837X_TABLE_CTRL, command,
+				       !(command & RTL837X_TABLE_EXECUTE),
+				       10, 1000);
+	if (ret)
+		return ret;
+
+	return rtl837x_reg_read(priv, RTL837X_TABLE_READ_DATA0, data);
+}
+
+static void rtl8372n_report_p0_reg(struct rtl837x_priv *priv,
+				   const char *name, u32 reg, u32 mask,
+				   u32 expected)
+{
+	u32 value;
+	int ret;
+
+	ret = rtl837x_reg_read(priv, reg, &value);
+	if (ret) {
+		dev_warn(priv->dev, "P0 readback %s at %#x failed: %d\n",
+			 name, reg, ret);
+		return;
+	}
+
+	if ((value & mask) == (expected & mask))
+		dev_info(priv->dev,
+			 "P0 readback %s at %#x: value=%#x mask=%#x PASS\n",
+			 name, reg, value, mask);
+	else
+		dev_warn(priv->dev,
+			 "P0 readback %s at %#x: value=%#x expected=%#x mask=%#x MISMATCH\n",
+			 name, reg, value, expected, mask);
+}
+
+static void rtl8372n_report_p0_field(struct rtl837x_priv *priv,
+				     const char *name, u32 reg, u32 mask,
+				     u32 expected)
+{
+	u32 value;
+	int ret;
+
+	ret = rtl837x_reg_bits_read(priv, reg, mask, &value);
+	if (ret) {
+		dev_warn(priv->dev, "P0 readback %s at %#x failed: %d\n",
+			 name, reg, ret);
+		return;
+	}
+
+	if (value == expected)
+		dev_info(priv->dev,
+			 "P0 readback %s at %#x: value=%#x PASS\n",
+			 name, reg, value);
+	else
+		dev_warn(priv->dev,
+			 "P0 readback %s at %#x: value=%#x expected=%#x MISMATCH\n",
+			 name, reg, value, expected);
+}
+
+static const u32 rtl8372n_cpu_flood_regs[] = {
+	RTL837X_L2_UNKNOWN_UC_FLOOD, RTL837X_L2_UNKNOWN_MC_FLOOD,
+	RTL837X_IPV4_UNKNOWN_MC_FLOOD, RTL837X_IPV6_UNKNOWN_MC_FLOOD,
+	RTL837X_L2_BROADCAST_FLOOD,
+};
+
+static void rtl8372n_report_p0_readback(struct dsa_switch *ds, u16 members)
+{
+	struct rtl837x_priv *priv = ds->priv;
+	struct dsa_port *dp;
+	unsigned int cpu_mask = dsa_cpu_ports(ds);
+	unsigned int user_mask = dsa_user_ports(ds);
+	u32 expected_vlan, vlan_data;
+	int port, i, ret;
+
+	/* Compare the raw word programmed by P0; this does not assign semantics
+	 * to the disputed bit 25.
+	 */
+	expected_vlan = RTL837X_VLAN_DATA_VALID |
+		FIELD_PREP(RTL837X_VLAN_MEMBER_MASK, members) |
+		FIELD_PREP(RTL837X_VLAN_UNTAG_MASK, members);
+	ret = rtl8372n_read_vlan_entry(priv, 1, &vlan_data);
+	if (ret) {
+		dev_warn(priv->dev, "P0 readback VLAN 1 table entry failed: %d\n",
+			 ret);
+	} else if ((vlan_data & (RTL837X_VLAN_DATA_VALID |
+				 RTL837X_VLAN_MEMBER_MASK |
+				 RTL837X_VLAN_UNTAG_MASK)) == expected_vlan) {
+		dev_info(priv->dev,
+			 "P0 readback VLAN 1 data0=%#x expected=%#x PASS\n",
+			 vlan_data, expected_vlan);
+	} else {
+		dev_warn(priv->dev,
+			 "P0 readback VLAN 1 data0=%#x expected=%#x MISMATCH\n",
+			 vlan_data, expected_vlan);
+	}
+
+	for (port = 0; port < RTL8372N_NUM_PORTS; port++) {
+		u32 isolation = 0;
+
+		if (user_mask & BIT(port))
+			isolation = cpu_mask;
+		else if (cpu_mask & BIT(port))
+			isolation = user_mask;
+		rtl8372n_report_p0_reg(priv, "port isolation",
+				       RTL837X_PORT_ISOLATION_REG(port),
+				       GENMASK(9, 0), isolation);
+		rtl8372n_report_p0_field(priv, "learning limit",
+					 RTL837X_L2_LEARN_LIMIT_REG(port),
+					 RTL837X_L2_LEARN_LIMIT_MASK, 0);
+	}
+
+	for (i = 0; i < ARRAY_SIZE(rtl8372n_cpu_flood_regs); i++)
+		rtl8372n_report_p0_reg(priv, "CPU flood destination",
+				       rtl8372n_cpu_flood_regs[i],
+				       GENMASK(9, 0), cpu_mask);
+
+	dsa_switch_for_each_available_port(dp, ds)
+		rtl8372n_report_p0_field(priv, "PVID",
+					 RTL837X_PORT_PVID_REG(dp->index),
+					 RTL837X_PORT_PVID_MASK(dp->index), 1);
+
+	rtl8372n_report_p0_reg(priv, "VLAN ingress control",
+			       RTL837X_VLAN_INGRESS_CTRL, U32_MAX, 0);
+	rtl8372n_report_p0_reg(priv, "VLAN ingress filter",
+			       RTL837X_VLAN_INGRESS_FILTER, GENMASK(9, 0), members);
+	rtl8372n_report_p0_reg(priv, "VLAN egress tag control",
+			       RTL837X_VLAN_EGRESS_TAG, U32_MAX, 0);
+	rtl8372n_report_p0_field(priv, "VLAN filter enable",
+				 RTL837X_VLAN_CTRL, RTL837X_VLAN_CTRL_FILTER, 1);
+}
+
 static int rtl8372n_configure_sds_polarity(struct rtl837x_priv *priv)
 {
 	static const char * const rx_swap[] = {
@@ -685,11 +826,6 @@ static void rtl8372n_quiesce(struct dsa_switch *ds)
 
 static int rtl8372n_setup_cpu_forwarding(struct dsa_switch *ds)
 {
-	static const u32 flood_regs[] = {
-		RTL837X_L2_UNKNOWN_UC_FLOOD, RTL837X_L2_UNKNOWN_MC_FLOOD,
-		RTL837X_IPV4_UNKNOWN_MC_FLOOD, RTL837X_IPV6_UNKNOWN_MC_FLOOD,
-		RTL837X_L2_BROADCAST_FLOOD,
-	};
 	struct rtl837x_priv *priv = ds->priv;
 	unsigned int cpu_mask = dsa_cpu_ports(ds);
 	unsigned int user_mask = dsa_user_ports(ds);
@@ -713,8 +849,8 @@ static int rtl8372n_setup_cpu_forwarding(struct dsa_switch *ds)
 		if (ret)
 			return ret;
 	}
-	for (i = 0; i < ARRAY_SIZE(flood_regs); i++) {
-		ret = regmap_update_bits(priv->map, flood_regs[i],
+	for (i = 0; i < ARRAY_SIZE(rtl8372n_cpu_flood_regs); i++) {
+		ret = regmap_update_bits(priv->map, rtl8372n_cpu_flood_regs[i],
 					 RTL837X_L2_FLOOD_MASK, cpu_mask);
 		if (ret)
 			return ret;
@@ -800,6 +936,7 @@ static int rtl8372n_setup(struct dsa_switch *ds)
 				     RTL837X_VLAN_CTRL_FILTER, 1);
 	if (ret)
 		goto fail;
+	rtl8372n_report_p0_readback(ds, members);
 	ret = rtl8372n_set_tag_rtl(ds);
 	if (ret)
 		goto fail;

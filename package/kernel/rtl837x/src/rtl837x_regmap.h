@@ -5,10 +5,13 @@
  * - linux-mainline-zte-zxslc-sr1010, GPL-2.0, commit
  *   07f8687248578d4be6931c665ff5d08bb6cc3d9d
  *
- * SDS indirect-command fields and polarity bits are cross-checked against the
- * public GPL DSA driver and RTLPlayground's MIT register-operation traces.
- * Keep this map limited to definitions used by this driver. Do not add
- * unverified SerDes pages or vendor PHY patch data here.
+ * SDS indirect-command fields and polarity operations are compared with the
+ * public ZTE driver and RTLPlayground's MIT register-operation traces.
+ * RTLPlayground attributes the companion TX bits to OEM firmware, so that is
+ * behavioral corroboration, not independent provenance. Airjinkela's driver
+ * also has disclosed SDK-derived lineage. Keep the map limited to definitions
+ * used here; these comparisons do not establish independent origin.
+ * Do not add unverified SerDes pages or vendor PHY patch data.
  */
 #ifndef __RTL837X_REGMAP_H__
 #define __RTL837X_REGMAP_H__
@@ -100,8 +103,9 @@
 #define RTL837X_SMI_MDIO_WRITE_CMD                  0x19
 
 #define RTL837X_TABLE_CTRL                          0x5cac
-#define RTL837X_TABLE_DATA0                         0x5cb0
+#define RTL837X_TABLE_STATUS_METHOD                 0x5cb0
 #define RTL837X_TABLE_WRITE_DATA0                   0x5cb8
+#define RTL837X_TABLE_READ_DATA0                    0x5ccc
 #define RTL837X_TABLE_VLAN                          0x03
 #define RTL837X_TABLE_WRITE                         BIT(1)
 #define RTL837X_TABLE_EXECUTE                       BIT(0)

@@ -83,6 +83,12 @@ a switching-performance qualification.
 | checkpatch | **Release 7: 0 findings** | The release-7 source diff has 0 errors, warnings or checks under strict `checkpatch.pl`. |
 | BE9300 hardware | **Release 7: T0/T1/T2/T3/T4/T5/T7 PASS; T6 unverified** | [Release-7 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988), [T2/T3/T4 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250) and [raw logs](https://gist.github.com/perceival/145d80ee322c48e88870ec011ae1200d). T3 confirms all four physical jack cycles; T4 is 100/100 with 0% loss; T5 covers six pairs both ways for 30 seconds. The 77 LAN3 RX drops and retransmissions are recorded above. T6 still lacks hardware readback. |
 
+The current working tree has a follow-up that adds one-shot setup readbacks for
+the VLAN 1 table word and P0 isolation/VLAN controls. That source has not been
+built or tested on hardware; the Release-7 CI and bench results above do not
+cover it. Keep T6 open until the exact follow-up revision builds and the
+maintainer reports its readback values and isolation traffic test.
+
 The [ARM64 artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390/artifacts/11248964933)
 contains the generated config, complete build logs and module. Its module
 SHA-256 is `d47c1109ab19c30f81f7a7ccd034d787b1fe2e2684acb99c89389cee1b93f1d6`.

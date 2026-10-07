@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-/* RTL8372N register and internal-PHY accessors. */
+/*
+ * Portions adapted from airjinkela/rtl837x-dsa-driver.
+ * Copyright (C) 2025 StarField Xu <air_jinkela@163.com>
+ *
+ * RTL8372N register and internal-PHY accessors.
+ */
 #include <linux/bitfield.h>
 #include <linux/errno.h>
 #include <linux/bitops.h>

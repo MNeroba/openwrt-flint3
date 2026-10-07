@@ -34,22 +34,33 @@ Target: **`qualcommbe/ipq53xx`**, kernel **6.18**.
 
 ## Status
 
-This branch is being used to prepare a replacement RTL8372N DSA driver. The P0 candidate has not yet completed a successful OpenWrt build or a Flint 3 hardware run. See the [first-hardware test plan](package/kernel/rtl837x/FIRST-HARDWARE-TEST.md) before building or testing it.
+The RTL8372N replacement is at **P0 bring-up**. Release 7 passed the ARM64
+module build and full BE9300 OpenWrt image build. On GL-BE9300 hardware, the
+maintainer reports successful probe, PHY binding, port/link checks, router
+reachability, all six LAN-pair traffic checks through the CPU/software bridge,
+and three warm reboots plus one cold power cycle. This is not full hardware
+qualification: VLAN/isolation register readback, reserved control-frame
+behavior, and recovery/concurrency checks remain open. See the [P0 status](package/kernel/rtl837x/P0-STATUS.md),
+[build and hardware report](package/kernel/rtl837x/BUILD-REPORT.md), and
+[first-hardware test plan](package/kernel/rtl837x/FIRST-HARDWARE-TEST.md).
+The current working tree adds startup readback diagnostics after Release 7;
+that follow-up has not yet been built or hardware-tested, so the Release-7
+results do not qualify the modified source.
 
 | Subsystem | State |
 |---|---|
-| Boot / procd / SSH | working on the previous known-good image; candidate image not hardware-tested |
-| LAN (RTL8372N via DSA + EDMA/PPE) | P0 replacement candidate; build and hardware validation pending |
-| WAN (2.5G, USXGMII) | working on the previous known-good image; candidate regression not checked |
-| VLANs (bridge-vlan on DSA) | P0 seeds VLAN 1/PVID only; general VLAN offload is not implemented |
+| Boot / procd / SSH | Release 7 boots and survives the reported warm/cold reset matrix; candidate recovery path is not qualified |
+| LAN (RTL8372N via DSA + EDMA/PPE) | P0 works on BE9300; six LAN pairs passed bidirectional traffic through CPU/software bridging. Hardware switching is not implemented; drops and TCP retransmissions need follow-up |
+| WAN (2.5G, USXGMII) | Working on the previous known-good image; candidate regression not checked |
+| VLANs (bridge-vlan on DSA) | Candidate seeds VLAN 1/PVID; hardware readback is unverified and general VLAN offload is not implemented |
 | PPE hardware flow offload | Previous-driver baseline: IPv4 LAN→WAN NAT reached ~2.3 Gbit/s at ~1% CPU. Candidate behavior is not yet validated. |
-| Wi-Fi 7, all three bands | working |
-| MLO (AP MLD across 2.4/5/6 GHz) | working |
-| DFS | working, including several BSSes per DFS radio started together |
-| 802.11k / 802.11v | working |
+| Wi-Fi 7, all three bands | Working on the previous known-good image; candidate regression not checked |
+| MLO (AP MLD across 2.4/5/6 GHz) | Working on the previous known-good image; candidate regression not checked |
+| DFS | Working on the previous known-good image; candidate regression not checked |
+| 802.11k / 802.11v | Working on the previous known-good image; candidate regression not checked |
 | eMMC sysupgrade + return to stock | established for the previous known-good image; candidate recovery path not tested |
 
-The **~1.8–1.9 Gbit/s** result was measured with the previous working switch-driver build. It is historical baseline data and does not validate this P0 candidate.
+The **~1.8–1.9 Gbit/s** result was measured with the previous working switch-driver build. It is historical baseline data and does not validate this P0 candidate. The candidate's software-bridge iperf results are recorded in the linked Release-7 report; no P0 throughput threshold has been established.
 
 ## Known issues
 

@@ -70,6 +70,11 @@ boot continues and the switch CPU link is up. See
 [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for the full evidence and remaining
 P0 gates.
 
+The current working tree adds one-shot setup readbacks for the VLAN 1 table
+entry, PVIDs, isolation, learning limits, flood masks and VLAN filter controls.
+These diagnostics are not part of tested Release 7 and need a fresh build and
+hardware run; they do not change the current T6-unverified status.
+
 ## Device tree
 
 The current Flint 3 node uses `compatible = "realtek,rtl8372n"`, `reg = <29>`,
