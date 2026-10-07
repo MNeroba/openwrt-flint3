@@ -126,8 +126,10 @@ jacks and a 100-packet ping with 0% loss. Hardware T6 remains unverified.
 
 ## Staged follow-up
 
-1. Resolve a safe hardware read-only method for T6 VLAN/isolation readback.
-   Preserve the T5 RX-drop/retransmission observations in subsequent runs.
+1. Build and test the new setup-readback instrumentation on BE9300; confirm
+   the VLAN/PVID/isolation/learning/flood values and standalone-port negative
+   forwarding behavior. Preserve the T5 RX-drop/retransmission observations
+   in subsequent runs.
 2. Prepare the shared table engine and resolve VLAN/L2 field meanings and
    source lineage, following [P1-RESEARCH.md](P1-RESEARCH.md). Source design can
    proceed while P0 hardware results are pending.

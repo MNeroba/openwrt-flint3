@@ -110,7 +110,7 @@
 #define RTL837X_TABLE_WRITE                         BIT(1)
 #define RTL837X_TABLE_EXECUTE                       BIT(0)
 #define RTL837X_TABLE_ADDRESS                       GENMASK(31, 16)
-#define RTL837X_VLAN_DATA_VALID                     BIT(25)
+#define RTL837X_VLAN_FIELD25                        BIT(25)
 #define RTL837X_VLAN_MEMBER_MASK                    GENMASK(9, 0)
 #define RTL837X_VLAN_UNTAG_MASK                     GENMASK(19, 10)
 

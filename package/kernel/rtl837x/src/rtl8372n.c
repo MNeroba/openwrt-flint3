@@ -561,7 +561,7 @@ static int rtl8372n_setup_default_vlan(struct rtl837x_priv *priv,
 	u32 vlan_word, command;
 	int ret;
 
-	vlan_word = RTL837X_VLAN_DATA_VALID |
+	vlan_word = RTL837X_VLAN_FIELD25 |
 		    FIELD_PREP(RTL837X_VLAN_MEMBER_MASK, members) |
 		    FIELD_PREP(RTL837X_VLAN_UNTAG_MASK, untagged);
 	ret = rtl837x_reg_write(priv, RTL837X_TABLE_WRITE_DATA0, vlan_word);
@@ -586,6 +586,7 @@ static int rtl8372n_read_vlan_entry(struct rtl837x_priv *priv, u16 vid,
 	u32 command;
 	int ret;
 
+	/* EXECUTE without WRITE reads the VLAN entry into TABLE_READ_DATA0. */
 	command = FIELD_PREP(RTL837X_TABLE_ADDRESS, vid) |
 		  (RTL837X_TABLE_VLAN << 8) | RTL837X_TABLE_EXECUTE;
 	ret = rtl837x_reg_write(priv, RTL837X_TABLE_CTRL, command);
@@ -617,8 +618,8 @@ static void rtl8372n_report_p0_reg(struct rtl837x_priv *priv,
 
 	if ((value & mask) == (expected & mask))
 		dev_info(priv->dev,
-			 "P0 readback %s at %#x: value=%#x mask=%#x PASS\n",
-			 name, reg, value, mask);
+			 "P0 readback %s at %#x: value=%#x expected=%#x mask=%#x PASS\n",
+			 name, reg, value, expected, mask);
 	else
 		dev_warn(priv->dev,
 			 "P0 readback %s at %#x: value=%#x expected=%#x mask=%#x MISMATCH\n",
@@ -641,8 +642,8 @@ static void rtl8372n_report_p0_field(struct rtl837x_priv *priv,
 
 	if (value == expected)
 		dev_info(priv->dev,
-			 "P0 readback %s at %#x: value=%#x PASS\n",
-			 name, reg, value);
+			 "P0 readback %s at %#x: value=%#x expected=%#x mask=%#x PASS\n",
+			 name, reg, value, expected, mask);
 	else
 		dev_warn(priv->dev,
 			 "P0 readback %s at %#x: value=%#x expected=%#x MISMATCH\n",
@@ -667,14 +668,14 @@ static void rtl8372n_report_p0_readback(struct dsa_switch *ds, u16 members)
 	/* Compare the raw word programmed by P0; this does not assign semantics
 	 * to the disputed bit 25.
 	 */
-	expected_vlan = RTL837X_VLAN_DATA_VALID |
+	expected_vlan = RTL837X_VLAN_FIELD25 |
 		FIELD_PREP(RTL837X_VLAN_MEMBER_MASK, members) |
 		FIELD_PREP(RTL837X_VLAN_UNTAG_MASK, members);
 	ret = rtl8372n_read_vlan_entry(priv, 1, &vlan_data);
 	if (ret) {
 		dev_warn(priv->dev, "P0 readback VLAN 1 table entry failed: %d\n",
 			 ret);
-	} else if ((vlan_data & (RTL837X_VLAN_DATA_VALID |
+	} else if ((vlan_data & (RTL837X_VLAN_FIELD25 |
 				 RTL837X_VLAN_MEMBER_MASK |
 				 RTL837X_VLAN_UNTAG_MASK)) == expected_vlan) {
 		dev_info(priv->dev,
