@@ -815,7 +815,7 @@ static void rtl8372n_quiesce(struct dsa_switch *ds)
 }
 
 static bool rtl8372n_snapshot_read(struct rtl837x_priv *priv,
-				  const char *name, u32 reg, u32 *value)
+				   const char *name, u32 reg, u32 *value)
 {
 	int ret;
 
@@ -841,10 +841,14 @@ static void rtl8372n_snapshot_setup(struct rtl837x_priv *priv, u16 members,
 	u32 flood[ARRAY_SIZE(rtl8372n_cpu_flood_regs)];
 	u32 ingress, ingress_filter, egress, vlan_ctrl;
 	unsigned int port, i;
+	int ret;
 	bool all_flood = true;
 
-	if (rtl837x_vlan_read(priv, 1, &vlan)) {
-		dev_warn(priv->dev, "P1-A setup snapshot: VLAN 1 table read failed\n");
+	ret = rtl837x_vlan_read(priv, 1, &vlan);
+	if (ret) {
+		dev_warn(priv->dev,
+			 "P1-A setup snapshot: VLAN 1 table read failed: %d\n",
+			 ret);
 	} else {
 		u32 expected = members |
 			       FIELD_PREP(RTL837X_VLAN_UNTAG_MASK, members);
