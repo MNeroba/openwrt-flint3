@@ -1,6 +1,13 @@
 # RTL8372N P1-A table regression procedure and report
 
-Updated: 2026-10-03. Applies to the [dependent P1-A PR](https://github.com/MNeroba/openwrt-flint3/pull/1), based on [P0 #104](https://github.com/perceival/openwrt-flint3/pull/104). These are requested future checks, not completed hardware results.
+Updated: 2026-10-07. Applies to the dependent
+[P1-A PR #1](https://github.com/MNeroba/openwrt-flint3/pull/1).
+Stacked on [P0 PR #104](https://github.com/perceival/openwrt-flint3/pull/104),
+parent source 27103b8e6b705e838eada250f33231b2c1a8c045.
+
+Current implementation commit: 40da0af192417ffccc3a4b9e1124e808779ce467.
+Source tree: 8185243d6c00df0e4ce8310017f9f39d5b3bcdb9; package release: 8.
+These are requested future checks, not completed hardware results.
 
 ## 1. Revision, build and test order
 
@@ -11,7 +18,7 @@ Updated: 2026-10-03. Applies to the [dependent P1-A PR](https://github.com/MNero
 2. Build the P1-A OpenWrt package, DTB and complete BE9300 image from the exact
    revision to be installed, using the documented AP config and pinned feeds.
    Confirm `rtl8372n_dsa.ko`, `tag_rtl8_4.ko`, package/dependencies and image
-   checksum. Record the release-4 package. This is the P1-A T0 gate.
+   checksum. Record package release 8. This is the P1-A T0 gate.
 3. Use the documented TFTP/initramfs recovery path, independent management and
    dmesg/pstore collection from the P0 procedure. Keep the known-good image.
    The project does not assume a usable normal UART console on BE9300.
@@ -19,13 +26,15 @@ Updated: 2026-10-03. Applies to the [dependent P1-A PR](https://github.com/MNero
    and additional regression checks on the new image. Record each result
    separately from the P0 baseline.
 
-The [successful ARM64 API build](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070037416)
-uses source `250f5d469d46ff5de07dfe8a96e3fe90636248ff` and source-tree ID
-`eefee5ba892bff81e29e269b099867cc67eeb0b3`. Later documentation commits retain
-those build inputs. Its AArch64 module is an API/modpost artifact, **not an
-OpenWrt installation package or a completed T0**. New code changes need a new
-build. Record the actual installed image's revision and checksum even if it
-contains documentation-only changes.
+An earlier P1-A prototype passed the focused ARM64 API build at source
+250f5d469d46ff5de07dfe8a96e3fe90636248ff and source tree
+eefee5ba892bff81e29e269b099867cc67eeb0b3. Its artifact is recorded in
+P1-TABLE-REPORT.md. This build predates the rebase onto the P0 Release-7 source,
+the setup-snapshot code and package release 8; it is historical evidence only
+and does not qualify the current branch. The current source needs fresh ARM64
+and OpenWrt target builds. Even a successful API build is not an OpenWrt
+installation package or a completed T0.
+
 
 ## 2. Expected bootstrap values
 

@@ -1,6 +1,12 @@
 # RTL8372N P1-A VLAN table foundation
 
-Updated: 2026-10-07. This implementation is stacked on [P0 PR #104](https://github.com/perceival/openwrt-flint3/pull/104), current parent source `27103b8e6b705e838eada250f33231b2c1a8c045`. The broader plan remains [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100) and [P1-RESEARCH.md](P1-RESEARCH.md).
+Updated: 2026-10-07. Stacked on [P0 PR #104](https://github.com/perceival/openwrt-flint3/pull/104).
+Current parent source: 27103b8e6b705e838eada250f33231b2c1a8c045.
+The broader plan is [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100)
+and [P1-RESEARCH.md](P1-RESEARCH.md).
+
+Current implementation commit: 40da0af192417ffccc3a4b9e1124e808779ce467.
+Source tree: 8185243d6c00df0e4ce8310017f9f39d5b3bcdb9. Package release: 8.
 
 ## Implemented scope
 
@@ -18,8 +24,8 @@ Updated: 2026-10-07. This implementation is stacked on [P0 PR #104](https://gith
 This is a concrete first part of P1-A. Snapshot read failures or mismatches are
 reported for hardware diagnosis but do not fail probe. The exact table write
 readback is stricter: a mismatch returns -EIO into the existing setup cleanup.
-Neither policy has been tested on the BE9300 yet. It does **not** implement general DSA
-VLAN callbacks, L2 lookup/hit/delete/iteration, FDB/MDB, hardware bridge/STP,
+Neither policy has been tested on the BE9300 yet. It does **not** implement
+general DSA VLAN callbacks, L2 lookup/hit/delete/iteration, FDB/MDB, hardware bridge/STP,
 BPDU trapping, bridge flags, LAG or policing. The only runtime writer remains
 the VLAN 1 setup path. No user-facing VLAN offload is advertised.
 
@@ -100,11 +106,13 @@ rather than weakening the comparison without evidence.
 - The downloaded candidate log contains each of the five object compilations,
   modpost and linking, with no compiler warnings/errors. The downloaded module
   is an ELF64 AArch64 relocatable object.
-- Later documentation-only updates preserve the source, package Makefile,
-  workflow, board DTS, config and pinned feeds from that exact build revision.
+- That build source predates the rebase onto the P0 Release-7 base, the
+  best-effort setup snapshot and package release 8. Its artifact is historical
+  prototype evidence and does not cover the current P1-A source.
 
 This artifact covers APIs/linking, not OpenWrt packaging or switch behavior.
-No runtime/codec test suite was run. The broad inherited push/PR kernel and
+No runtime/codec test suite was run on either that prototype or the current
+branch. The broad inherited push/PR kernel and
 package matrices were canceled deliberately for this feature branch:
 [push packages](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070038337),
 [push kernels](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070038397),
