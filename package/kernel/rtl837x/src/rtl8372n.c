@@ -837,12 +837,9 @@ static bool rtl8372n_snapshot_read(struct rtl837x_priv *priv,
 static void rtl8372n_snapshot_setup(struct rtl837x_priv *priv, u16 members,
 				    u16 cpu_mask, u16 user_mask)
 {
-	u32 vlan, pvid, isolation, learning;
-	u32 flood[ARRAY_SIZE(rtl8372n_cpu_flood_regs)];
-	u32 ingress, ingress_filter, egress, vlan_ctrl;
+	u32 vlan, pvid, value;
 	unsigned int port, i;
 	int ret;
-	bool all_flood = true;
 
 	ret = rtl837x_vlan_read(priv, 1, &vlan);
 	if (ret) {
@@ -895,6 +892,7 @@ static void rtl8372n_snapshot_setup(struct rtl837x_priv *priv, u16 members,
 	}
 
 	for (port = 0; port < RTL8372N_NUM_PORTS; port++) {
+		bool have_isolation, have_learning;
 		u32 expected = 0;
 
 		if (user_mask & BIT(port))
@@ -902,84 +900,93 @@ static void rtl8372n_snapshot_setup(struct rtl837x_priv *priv, u16 members,
 		else if (cpu_mask & BIT(port))
 			expected = user_mask;
 
-		if (!rtl8372n_snapshot_read(priv, "port isolation",
-					    RTL837X_PORT_ISOLATION_REG(port),
-					    &isolation) ||
-		    !rtl8372n_snapshot_read(priv, "learning limit",
-					    RTL837X_L2_LEARN_LIMIT_REG(port),
-					    &learning))
+		have_isolation =
+			rtl8372n_snapshot_read(priv, "port isolation",
+					       RTL837X_PORT_ISOLATION_REG(port),
+					       &value);
+		if (have_isolation) {
+			dev_info(priv->dev,
+				 "P1-A setup snapshot isolation port %u: raw=%#x expected-mask=%#x\n",
+				 port, value, expected);
+			if ((value & RTL837X_L2_FLOOD_MASK) != expected)
+				dev_warn(priv->dev,
+					 "P1-A isolation mismatch port %u: got %#x expected %#x\n",
+					 port, value & RTL837X_L2_FLOOD_MASK,
+					 expected);
+		}
+
+		have_learning =
+			rtl8372n_snapshot_read(priv, "learning limit",
+					       RTL837X_L2_LEARN_LIMIT_REG(port),
+					       &value);
+		if (have_learning) {
+			dev_info(priv->dev,
+				 "P1-A setup snapshot learning limit port %u: raw=%#x\n",
+				 port, value);
+			if (value & RTL837X_L2_LEARN_LIMIT_MASK)
+				dev_warn(priv->dev,
+					 "P1-A learning limit nonzero port %u: raw=%#x\n",
+					 port, value);
+		}
+	}
+
+	for (i = 0; i < ARRAY_SIZE(rtl8372n_cpu_flood_regs); i++) {
+		if (!rtl8372n_snapshot_read(priv, "flood mask",
+					    rtl8372n_cpu_flood_regs[i], &value))
 			continue;
 
 		dev_info(priv->dev,
-			 "P1-A setup snapshot port %u: isolation=%#x learning=%#x\n",
-			 port, isolation, learning);
-		if ((isolation & RTL837X_L2_FLOOD_MASK) != expected)
+			 "P1-A setup snapshot flood reg %#x: raw=%#x\n",
+			 rtl8372n_cpu_flood_regs[i], value);
+		if ((value & RTL837X_L2_FLOOD_MASK) != cpu_mask)
 			dev_warn(priv->dev,
-				 "P1-A isolation mismatch port %u: got %#x expected %#x\n",
-				 port, isolation & RTL837X_L2_FLOOD_MASK, expected);
-		if (learning & RTL837X_L2_LEARN_LIMIT_MASK)
-			dev_warn(priv->dev,
-				 "P1-A learning limit nonzero port %u: raw=%#x\n",
-				 port, learning);
+				 "P1-A flood mask mismatch reg %#x: got %#x expected %#x\n",
+				 rtl8372n_cpu_flood_regs[i],
+				 value & RTL837X_L2_FLOOD_MASK, cpu_mask);
 	}
 
-	for (i = 0; i < ARRAY_SIZE(rtl8372n_cpu_flood_regs); i++)
-		all_flood &= rtl8372n_snapshot_read(priv, "flood mask",
-						    rtl8372n_cpu_flood_regs[i],
-						    &flood[i]);
-	if (all_flood) {
+	if (rtl8372n_snapshot_read(priv, "VLAN ingress control",
+				   RTL837X_VLAN_INGRESS_CTRL, &value)) {
 		dev_info(priv->dev,
-			 "P1-A setup snapshot flood masks: UC=%#x MC=%#x IPv4=%#x IPv6=%#x broadcast=%#x\n",
-			 flood[0], flood[1], flood[2], flood[3], flood[4]);
-		for (i = 0; i < ARRAY_SIZE(rtl8372n_cpu_flood_regs); i++) {
-			if ((flood[i] & RTL837X_L2_FLOOD_MASK) != cpu_mask)
-				dev_warn(priv->dev,
-					 "P1-A flood mask mismatch reg %#x: got %#x expected %#x\n",
-					 rtl8372n_cpu_flood_regs[i],
-					 flood[i] & RTL837X_L2_FLOOD_MASK,
-					 cpu_mask);
-		}
+			 "P1-A setup snapshot VLAN ingress control: raw=%#x\n",
+			 value);
+		if (value)
+			dev_warn(priv->dev,
+				 "P1-A VLAN ingress control nonzero: raw=%#x\n",
+				 value);
 	}
 
-	{
-		bool have_ingress, have_filter, have_egress, have_vlan_ctrl;
+	if (rtl8372n_snapshot_read(priv, "VLAN ingress filter",
+				   RTL837X_VLAN_INGRESS_FILTER, &value)) {
+		dev_info(priv->dev,
+			 "P1-A setup snapshot VLAN ingress filter: raw=%#x\n",
+			 value);
+		if ((value & GENMASK(RTL8372N_NUM_PORTS - 1, 0)) != members)
+			dev_warn(priv->dev,
+				 "P1-A VLAN ingress filter mismatch: got %#x expected %#x\n",
+				 value & GENMASK(RTL8372N_NUM_PORTS - 1, 0),
+				 members);
+	}
 
-		have_ingress = rtl8372n_snapshot_read(priv, "VLAN ingress control",
-						      RTL837X_VLAN_INGRESS_CTRL,
-						      &ingress);
-		have_filter = rtl8372n_snapshot_read(priv, "VLAN ingress filter",
-						     RTL837X_VLAN_INGRESS_FILTER,
-						     &ingress_filter);
-		have_egress = rtl8372n_snapshot_read(priv, "VLAN egress tag",
-						     RTL837X_VLAN_EGRESS_TAG,
-						     &egress);
-		have_vlan_ctrl = rtl8372n_snapshot_read(priv, "VLAN control",
-							RTL837X_VLAN_CTRL,
-							&vlan_ctrl);
-		if (have_ingress && have_filter && have_egress && have_vlan_ctrl) {
-			dev_info(priv->dev,
-				 "P1-A setup snapshot VLAN controls: ingress=%#x filter=%#x egress=%#x ctrl=%#x\n",
-				 ingress, ingress_filter, egress, vlan_ctrl);
-			if (ingress)
-				dev_warn(priv->dev,
-					 "P1-A VLAN ingress control nonzero: raw=%#x\n",
-					 ingress);
-			if ((ingress_filter &
-			     GENMASK(RTL8372N_NUM_PORTS - 1, 0)) != members)
-				dev_warn(priv->dev,
-					 "P1-A VLAN ingress filter mismatch: got %#x expected %#x\n",
-					 ingress_filter &
-					 GENMASK(RTL8372N_NUM_PORTS - 1, 0),
-					 members);
-			if (egress)
-				dev_warn(priv->dev,
-					 "P1-A VLAN egress tag nonzero: raw=%#x\n",
-					 egress);
-			if (!(vlan_ctrl & RTL837X_VLAN_CTRL_FILTER))
-				dev_warn(priv->dev,
-					 "P1-A VLAN filtering is disabled: ctrl=%#x\n",
-					 vlan_ctrl);
-		}
+	if (rtl8372n_snapshot_read(priv, "VLAN egress tag",
+				   RTL837X_VLAN_EGRESS_TAG, &value)) {
+		dev_info(priv->dev,
+			 "P1-A setup snapshot VLAN egress tag: raw=%#x\n",
+			 value);
+		if (value)
+			dev_warn(priv->dev,
+				 "P1-A VLAN egress tag nonzero: raw=%#x\n", value);
+	}
+
+	if (rtl8372n_snapshot_read(priv, "VLAN control",
+				   RTL837X_VLAN_CTRL, &value)) {
+		dev_info(priv->dev,
+			 "P1-A setup snapshot VLAN control: raw=%#x\n",
+			 value);
+		if (!(value & RTL837X_VLAN_CTRL_FILTER))
+			dev_warn(priv->dev,
+				 "P1-A VLAN filtering is disabled: ctrl=%#x\n",
+				 value);
 	}
 }
 
