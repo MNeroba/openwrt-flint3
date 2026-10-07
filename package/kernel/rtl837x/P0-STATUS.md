@@ -10,17 +10,18 @@ revisions, artifacts, feature readiness and remaining acceptance gates.
 Release 6 passed T0/T1/T2/T4/T7. Release 7 (`79afa2c51a3c2396c33ed511ed092d799c52e1bf`)
 passed ARM64 module and full-image CI and has a new [hardware report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988)
 with [raw boot and test logs](https://gist.github.com/perceival/145d80ee322c48e88870ec011ae1200d).
-On release 7, T0/T1/T7 pass: all four PHYs bind to the private driver, the
-port 0–2 power-down warnings are absent, and three warm reboots plus one cold
-cycle preserve link and reachability. T5 passes all six LAN pairs with
-bidirectional 30-second TCP and 20/20 pings; it remains CPU/software-bridge
-traffic. The run recorded 77 new RX drops on LAN3 and TCP retransmissions, but
-no P0 throughput threshold is defined. T3 is reported PASS for all four jacks;
-the attached raw capture visibly shows link-down intervals for LAN2–LAN4 but
-not LAN1, so the LAN1 cycle evidence needs clarification. Release 6 T2/T4
-remain PASS; release 7 logs show DSA setup and pings but do not include a
-separate T2 command report or a new 100-packet T4 run. Hardware T6 remains
-unverified; the release-7 CPU snapshot lacks softirq data. See
+The [Release-7 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250)
+adds T2/T3/T4 evidence: all four DSA ports are attached to `br-lan` and
+forwarding; kernel events confirm physical down/up on all four jacks; and T4
+passes 100/100 pings with 0% loss. The LAN1 sampler gap occurred because its
+SSH session used LAN1 and was interrupted by the unplug. On release 7, T0/T1/T7
+also pass: all four PHYs bind to the private driver, the port 0–2 power-down
+warnings are absent, and three warm reboots plus one cold cycle preserve link
+and reachability. T5 passes all six LAN pairs with bidirectional 30-second TCP
+and 20/20 pings; it remains CPU/software-bridge traffic. The run recorded 77
+new RX drops on LAN3 and TCP retransmissions, but no P0 throughput threshold is
+defined. Hardware T6 remains unverified; the release-7 CPU snapshot lacks
+softirq data. See
 [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for exact evidence and remaining gates.
 P0 is not fully qualified.
 
@@ -135,11 +136,11 @@ release 6 fixes it and needs its own build and bench run.
    passed for source commit `79afa2c51a3c2396c33ed511ed092d799c52e1bf`.
    Re-run if source or build inputs change.
 3. Resolve flagged provenance rows, particularly SDS facts/source lineage.
-4. Clarify LAN1's physical link-cycle evidence in T3 and repeat the full 100-packet
-   T4 check on release 7. T5's six-pair, 30-second run is complete. Hardware
-   T6 VLAN/isolation readback, reserved control-frame behavior and the remaining
-   recovery/concurrency checks are open. Release 7 T7 passed three warm reboots
-   and one cold power cycle; the WAN-side PCS message still appears during boot.
+4. Release-7 T2/T3/T4 evidence is now complete; T5's six-pair, 30-second run is
+   complete. Hardware T6 VLAN/isolation readback, reserved control-frame
+   behavior, and the remaining recovery/concurrency checks are open. Release 7
+   T7 passed three warm reboots and one cold power cycle; the WAN-side PCS
+   message still appears during boot.
 5. Restore P1/P2 behavior or obtain maintainer agreement to a narrower scope.
 6. The Draft remains a source and provenance review candidate. Hardware
    qualification and required source-lineage decisions remain open.

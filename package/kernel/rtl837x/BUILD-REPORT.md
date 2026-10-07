@@ -8,18 +8,19 @@
 | OpenWrt configuration | **PASS** | BE9300 AP configuration; five pinned feeds verified; driver and MDIO-devres packages selected. |
 | OpenWrt package, DTB and image | **Release 6 and 7 PASS** | Release-6 [full BE9300 image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) and release-7 [full image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524) passed. |
 | Source whitespace/style | **Release 6 and 7 PASS** | Release 7 passed `git diff --check` and strict `checkpatch.pl` with 0 findings. |
-| BE9300 hardware | **Release 7: T0/T1/T7 PASS; T5 PASS (6/6); T3 reported PASS, LAN1 evidence unclear; T6 unverified** | [Release-7 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988) and [raw logs](https://gist.github.com/perceival/145d80ee322c48e88870ec011ae1200d). All six LAN pairs passed bidirectional 30-second TCP with 20/20 pings on the CPU/software-bridge path. Attached T3 samples show link-down on LAN2–LAN4 but not LAN1. Counters include 77 new LAN3 RX drops and TCP retransmissions; no throughput threshold is defined. |
+| BE9300 hardware | **Release 7: T0/T1/T2/T3/T4/T5/T7 PASS; T6 unverified** | [Release-7 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988), [T2/T3/T4 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250), and [raw logs](https://gist.github.com/perceival/145d80ee322c48e88870ec011ae1200d). All four physical jack cycles, T2 topology and 100/100 T4 pings are now documented. All six LAN pairs passed bidirectional 30-second TCP with 20/20 pings on the CPU/software-bridge path. The run recorded 77 new LAN3 RX drops and TCP retransmissions; no throughput threshold is defined. Hardware T6 readback remains unverified. |
 | Retained source provenance | **OPEN REVIEW** | Restricted header and patch arrays excluded; SDS field/polarity lineage remains unresolved. |
 | Replacement acceptance in #100 | **NOT MET** | P0 needs remaining hardware coverage; P1/P2 parity or maintainer-agreed deferrals remain required. |
 
 The CI full target-build run passed on 2026-10-02 for its tested source
 revision. The maintainer's independent `908810c09b` image on 2026-10-04 is a
 historical run: it reached the first T1 failure and did not qualify traffic.
-The later release-6 hardware result superseded that status for T0/T1/T2/T4/T7;
-the release-7 report now confirms T0/T1/T7 and the full T5 pair matrix. T3 is
-reported complete but its attached capture does not visibly show the LAN1
-physical cycle. Release-7 hardware T6 readback remains open; the CPU snapshot
-does not include softirq time. See [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md).
+The later release-6 hardware result superseded that status for T0/T1/T2/T4/T7.
+The release-7 report and [follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250)
+confirm T0/T1/T2/T3/T4/T5/T7, including kernel link events for LAN1's physical
+cycle and the full T2 topology and T4 ping evidence. Release-7 hardware T6
+readback remains open; the CPU snapshot does not include softirq time. See
+[PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md).
 
 ## Release-7 hardware result (2026-10-07)
 
@@ -33,19 +34,21 @@ release-6 PHY power-down warnings on ports 0–2 are absent. Three warm reboots
 and one cold power cycle pass with expected PHY bindings, rates and pings.
 
 The report marks T3 PASS for all jacks (LAN1/3 at 2.5G; LAN2/4 at 1G) and
-physical unplug/replug. The raw [T3 log](https://gist.github.com/perceival/145d80ee322c48e88870ec011ae1200d)
-shows explicit link-down intervals for LAN2–LAN4 but no LAN1 transition; that
-piece is awaiting clarification. T5 passes all six directly connected pairs
-with 30-second bidirectional iperf3 runs and 20/20 pings; throughput is about
-0.927–1.56 Gbit/s on the CPU/software-bridge path. The LAN3 RX drop counter
+physical unplug/replug. The [T2/T3/T4 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250)
+explains that the SSH sampler ran over LAN1 and was interrupted during its
+unplug; the kernel link-event excerpt confirms a down/up transition on all
+four jacks. It also confirms four `lanN@lan` netdevs attached to `br-lan` in
+forwarding state and T4 at 100/100 pings with 0% loss. T5 passes all six
+directly connected pairs with 30-second bidirectional iperf3 runs and 20/20
+pings; throughput is about 0.927–1.56 Gbit/s on the CPU/software-bridge path.
+The LAN3 RX drop counter
 rose by 77 across about 9.27 million packets; LAN1 TX drop 1 and LAN3 TX drops
 2 were present before and unchanged after. TCP retransmissions are recorded,
 with no P0 throughput threshold. T6 hardware VLAN/isolation readback remains
-unverified. The release-7 report did not include a new 100-packet T4 run or the
-separate T2 command output; release 6 had passed T2/T4. The `lan` conduit TX
-error counter remained `2^64-1` before and after, with underlying PPE MIB
-operands still unavailable. The boot log's WAN PCS message persists, while the
-DSA CPU link comes up and the tests continue.
+unverified. The `lan` conduit RX/TX error and drop counters were reported as
+zero for T4, while a separate `tx_errors` value still reads `2^64-1`; the raw
+PPE MIB operands needed to interpret it are still unavailable. The boot log's
+WAN PCS message persists, while the DSA CPU link comes up and the tests continue.
 
 ## PHY binding correction and release-6 bench result (2026-10-06)
 
@@ -189,7 +192,7 @@ Before replacement/merge:
    which was open and unmerged at this check.
 
 Keep the shipping baseline while this Draft is reviewed. Release 7 passes
-T0/T1/T7 and the complete T5 matrix; its T3 report says all four physical
-cycles passed, but the attached capture does not show LAN1 down/up. A full
-release-7 T4 run and hardware T6 readback remain open. P0 qualification,
-source-owner sign-off and functional parity are not claimed.
+T0/T1/T2/T3/T4/T5/T7, including the completed T3 link-event evidence, T2
+topology report and T4 ping run. Hardware T6 readback, remaining control-frame,
+recovery and concurrency checks, source-owner sign-off and functional parity
+remain open; P0 qualification is not claimed.

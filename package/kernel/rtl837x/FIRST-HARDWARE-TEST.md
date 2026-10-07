@@ -1,15 +1,16 @@
 # RTL8372N P0 first-hardware test plan
 
 **Status (2026-10-07):** release 7 (`79afa2c51a3c2396c33ed511ed092d799c52e1bf`)
-passed full-image CI and the maintainer reports T0/T1/T7 PASS, T5 PASS (all six
-LAN pairs, bidirectional 30-second TCP and 20/20 pings), and T3 PASS for all
-four rates and physical cycles. The attached [release-7 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988)
-shows no ports 0–2 PHY power-down warnings. The T3 capture shows link-down
-intervals on LAN2–LAN4, but no LAN1 down/up interval; that evidence needs
-clarification. T6 hardware VLAN/isolation readback remains unverified. Release 7
-did not include a new 100-packet T4 run or the separate T2 command output;
-release 6 passed T2 and 100/100 T4. The T5 traffic is CPU/software-bridge
-forwarded, and its counters include 77 new RX drops on LAN3. See
+passed full-image CI. The maintainer reports T0/T1/T2/T3/T4/T5/T7 PASS and T6
+unverified. The [release-7 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988)
+shows no ports 0–2 PHY power-down warnings; the [T2/T3/T4 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250)
+provides full DSA topology, 100/100 T4 pings, and kernel link events for
+physical down/up on all four jacks. LAN1's sampler gap occurred because the
+SSH sampler itself traversed LAN1. T5 covers all six LAN pairs with
+bidirectional 30-second TCP and 20/20 pings on the CPU/software-bridge path;
+the run recorded 77 new RX drops on LAN3. T6 hardware VLAN/isolation readback,
+reserved control-frame behavior and remaining recovery/concurrency checks are
+open. See
 [P0-STATUS.md](P0-STATUS.md),
 [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md), and [BUILD-REPORT.md](BUILD-REPORT.md)
 for evidence and remaining gates. Start each run only after T0 passes for the

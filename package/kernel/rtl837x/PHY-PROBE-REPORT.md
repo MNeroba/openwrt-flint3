@@ -1,14 +1,14 @@
 # RTL8372N internal-PHY binding failure and correction
 
-Updated: 2026-10-07 after the release-7 hardware report. The RTL8224 binding
-blocker is resolved on hardware. Release 7 passes T0/T1/T7 and the full T5
-six-pair software-bridge matrix; the spurious PHY power-down warnings on ports
-0–2 are absent. T3 is reported PASS for all four jacks, but the attached raw
-capture shows link-down samples only for LAN2–LAN4, so LAN1's cable-cycle
-evidence needs clarification. T6 hardware VLAN/isolation readback remains
-unverified. Release 6 passed T2 and 100-packet T4; release 7's logs do not
-include the separate T2 command output or a new full T4 run. The full release-7
-image CI passed. P0 is not yet fully qualified.
+Updated: 2026-10-07 after the release-7 bench follow-up. The RTL8224 binding
+blocker is resolved on hardware. Release 7 passes T0/T1/T2/T3/T4/T5/T7; the
+spurious PHY power-down warnings on ports 0–2 are absent. Perceival's
+[follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250)
+confirms the full DSA topology, 100/100 T4 pings, and kernel link events for
+physical down/up on all four jacks. The LAN1 capture gap occurred because the
+SSH sampler used LAN1 and lost connectivity during the unplug. T5 covers all
+six software-bridge pairs. T6 hardware VLAN/isolation readback remains
+unverified; P0 is not yet fully qualified.
 
 ## Earlier diagnostic hardware failure (release 4)
 
@@ -68,12 +68,12 @@ record all four private PHY bindings and expected LAN rates. T7 passed three
 warm reboots and one cold cycle, with all four bindings and 20/20 router pings
 after each boot.
 
-T3 is reported PASS after physically unplugging/reconnecting each jack. The
-attached five-second link samples visibly show LAN2, LAN3 and LAN4 down, but
-never show LAN1 down; the dmesg link-event section contains no event lines. The
-report's LAN1 rate and recovery are present, but its physical-cycle evidence
-cannot be independently confirmed from this capture. This is an evidence gap,
-not a claim that the test failed.
+T3 is PASS after physically unplugging/reconnecting each jack. The initial
+five-second SSH sampler ran through LAN1, so removing that cable interrupted
+the sampler and left a 20-second hole. Perceival's follow-up provides the
+kernel link-event excerpt: every jack has a down/up event, and each returns at
+the same rate. LAN1/3 return at 2.5G, LAN2/4 at 1G; LAN2 flapped a second time
+during reinsertion before settling at 1G. This resolves the earlier capture gap.
 
 T5 passed all six directly connected LAN pairs, in both directions, with
 30-second TCP runs and 20/20 pings. Rates ranged from 927 Mbit/s to 1.56
@@ -87,9 +87,13 @@ not included, so this counter does not establish packet loss. The aggregate
 CPU snapshot omitted softirq time and cannot estimate forwarding CPU load.
 
 T6 remains unverified because no switch VLAN/isolation register readback was
-provided. Release 7 did not include separate T2 command output or a new
-100-packet T4 run; release 6's T2/T4 results remain the latest complete
-evidence for those checks.
+provided. The release-7 follow-up supplies T2 output: four `lanN@lan` netdevs,
+the `lan` DSA conduit, all four ports attached to `br-lan` in forwarding state,
+and both required modules loaded. It also supplies the release-7 T4 run: 100
+packets transmitted and received, 0% loss, RTT min/avg/max/mdev of
+0.173/0.265/0.407/0.064 ms. The ordinary conduit error/drop counters are
+reported as zero; its separate `tx_errors=2^64-1` value remains uninterpretable
+without the raw PPE MIB operands.
 
 ### Warning diagnosis
 
@@ -97,7 +101,7 @@ evidence for those checks.
 - **Conduit `tx_errors`:** Release 6 reported `18446744073709551614` (`2^64−2`); release 7 reported `2^64−1` both before and after T5. Both values are consistent with unsigned underflow in the existing Qualcomm PPE calculation in `target/linux/qualcommbe/patches-6.18/0342-net-qualcomm-Update-IPQ9574-PPE-driver.patch`, which computes `tx_packets - tx_frames_g`. The raw PPE operands were not included, so this explains the representation but does not establish the hardware-counter semantics or packet loss. This is outside the RTL8372N driver and needs separate raw-MIB validation.
 - **`10GBASE-R link not up before USXG_EN`:** Release 7 still logs this after `qcom_ppe ... wan: configuring for inband/usxgmii`. The boot continues, the DSA CPU link comes up at 10 Gbit/s, and the hardware tests pass. This WAN PCS event is not evidence that the switch-to-SoC CPU link failed and does not explain the earlier release-4 log ending.
 
-Remaining hardware evidence: clarify whether LAN1 was physically cycled and provide a timestamp or link-event excerpt if available; capture the separate T2 command output and rerun the full 100-packet T4 check on release 7 for exact-revision coverage; keep T6 unverified until a safe read-only switch-register method is agreed. Reserved control-frame behavior and the remaining recovery/concurrency checks are also open. T5 is complete for all six pairs on the CPU/software-bridge path.
+Remaining hardware evidence: keep T6 unverified until a safe read-only switch-register method is agreed. Reserved control-frame behavior and the remaining recovery/concurrency checks are also open. T2/T3/T4 and T5 are documented for release 7; T5 covers all six pairs on the CPU/software-bridge path.
 
 ## Why matching the same ID is insufficient
 

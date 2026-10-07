@@ -21,9 +21,9 @@ The current code provides:
 - A private PHY driver with native MMD access to the actual port, standard
   autonegotiation and published Realtek 2.5G status decoding. Forced 2.5G is
   explicitly unsupported. Release 7 observed the expected 2.5G/1G/2.5G/1G
-  rates on LAN1–LAN4. The author reports physical unplug/replug on all jacks;
-  the attached capture shows explicit link-down intervals only for LAN2–LAN4,
-  so LAN1's cycle evidence needs clarification.
+  rates on LAN1–LAN4. The [release-7 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250)
+  provides kernel link events confirming physical down/up on all four jacks;
+  LAN1's sampling gap occurred because the sampler's SSH path used LAN1.
 - Phylink plumbing for internal PHY ports 4–7 and the 10GBASE-R SerDes MACs
   on ports 3 and 8.
 - SerDes mode selection and the optional `sds0/1-{rx,tx}-swap` device-tree
@@ -58,11 +58,13 @@ fixed the binding. Release 7's [ARM64 module CI](https://github.com/MNeroba/open
 and [full-image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524)
 passed. The hardware report confirms all four private PHY bindings, stable
 three-warm/one-cold reset behavior, and no port 0–2 power-down warnings. T3's
-raw evidence for the LAN1 cable cycle needs clarification. T5 passed all six
+follow-up supplies the missing LAN1 link event and confirms T3 physical cycling
+on every jack. Release 7 also passes T2 with all four ports attached to
+`br-lan`, and T4 with 100/100 pings and 0% loss. T5 passed all six
 software-bridge pairs; counters record 77 new LAN3 RX drops and TCP
 retransmissions, without a defined throughput threshold. T6 remains
-unverified in hardware. T4's 100-packet check passed on release 6 but was not
-repeated in full on release 7; the release-7 logs show successful pings. The
+unverified in hardware. The `lan` conduit `tx_errors` value still reads
+`2^64-1`; the raw PPE MIB operands needed to interpret it are unavailable. The
 WAN-side `10GBASE-R link not up before USXG_EN` message still appears, while
 boot continues and the switch CPU link is up. See
 [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for the full evidence and remaining
@@ -109,27 +111,24 @@ passed; its candidate module SHA-256 is
 `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`.
 The maintainer's [release-6 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917)
 passes T0/T1/T2/T4/T7. The [T3/T5 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6016542658)
-adds partial coverage of connected jacks and the three pairs among LAN1–LAN3.
+adds partial release-6 jack and pair coverage.
 Release 7's [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454484695)
 and [full-image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524)
 passed, and the maintainer's [hardware report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988)
-confirms T0/T1/T7 and the full six-pair T5 matrix. The report claims T3 PASS;
-the attached log shows LAN2–LAN4 link-down samples but no LAN1 down/up event,
-so that one evidence item needs clarification. T6 remains unverified in hardware.
+confirms T0/T1/T7 and the full six-pair T5 matrix. The [follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250)
+confirms T2/T3/T4 on release 7, including physical link events on all four
+jacks and a 100-packet ping with 0% loss. Hardware T6 remains unverified.
 
 ## Staged follow-up
 
-1. Clarify the missing LAN1 link-down/up evidence in the release-7 T3 capture.
-   Repeat the release-7 100-packet T4 check and record the separate T2 command
-   output if needed for the exact-source matrix.
-2. Resolve a safe hardware read-only method for T6 VLAN/isolation readback.
+1. Resolve a safe hardware read-only method for T6 VLAN/isolation readback.
    Preserve the T5 RX-drop/retransmission observations in subsequent runs.
-3. Prepare the shared table engine and resolve VLAN/L2 field meanings and
+2. Prepare the shared table engine and resolve VLAN/L2 field meanings and
    source lineage, following [P1-RESEARCH.md](P1-RESEARCH.md). Source design can
    proceed while P0 hardware results are pending.
-4. Prove BPDU CPU delivery, CIST states and dynamic fast-age before enabling
+3. Prove BPDU CPU delivery, CIST states and dynamic fast-age before enabling
    hardware bridge/VLAN/flags; then add database-correct FDB/MDB management.
    Each runtime step needs a build and its documented bench gates.
-5. Reach P1 parity or record agreed deferrals before porting LAG (#47) and
+4. Reach P1 parity or record agreed deferrals before porting LAG (#47) and
    rate limiting (#49). Restore other baseline interfaces in separate, sourced
    and tested changes or obtain explicit maintainer agreement to defer them.

@@ -22,12 +22,12 @@ PHY/SerDes patch payloads; review of the remaining lineage is still pending.
 
 Locations name functions/symbols in the pinned files to keep references stable
 through candidate edits. Hardware qualification remains incomplete for the
-register and feature rows. Release 7 passes T0/T1/T7 and the full six-pair T5
-software-bridge matrix; its T3 report says all four physical cycles passed, but
-the attached capture has no LAN1 link-down sample. Release 6 passed T2 and the
-100-packet T4 check; those checks were not fully repeated on release 7. Hardware
-T6 VLAN/isolation readback and broader register-level qualification remain
-open. See [the release-7 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988)
+register and feature rows. Release 7 passes T0/T1/T2/T3/T4/T5/T7 and the full
+six-pair T5 software-bridge matrix. The [Release-7 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250)
+provides kernel link events confirming physical cycles on all four jacks,
+full T2 topology output and the 100-packet T4 check. Hardware T6
+VLAN/isolation readback and broader register-level qualification remain open.
+See [the release-7 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988)
 and [raw logs](https://gist.github.com/perceival/145d80ee322c48e88870ec011ae1200d).
 
 | Candidate feature/symbols | Specific public source location | Derivation / remaining question |
