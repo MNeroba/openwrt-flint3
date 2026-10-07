@@ -5,8 +5,8 @@ Current parent source: 27103b8e6b705e838eada250f33231b2c1a8c045.
 The broader plan is [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100)
 and [P1-RESEARCH.md](P1-RESEARCH.md).
 
-Current implementation commit: b49b5d7d1e1419337abeb1756700a7d0cf28ca12.
-Source tree: 0715bfec59d7601ea9748b954ebb40acd744bac2. Package release: 8.
+Current implementation commit: 04128d1dbb19b547ab546c6032fbb5143d8c74e7.
+Source tree: bf2b6955bb05ab6c82322d89d1069a733c345204. Package release: 8.
 
 ## Implemented scope
 
@@ -84,10 +84,11 @@ rather than weakening the comparison without evidence.
 | Whitespace | PASS | `git diff --check` on this implementation |
 | New source style | PASS | Linux 6.18 `checkpatch.pl --no-tree --strict --file`; 0 errors, warnings or checks |
 | Complete patch style | 0 errors, 1 reviewed warning | New-file MAINTAINERS reminder; this is an OpenWrt package, not a new in-tree Linux registration |
-| Current ARM64 module build | PENDING | The rebased source includes new setup-snapshot code and the updated P0 Release-7 base; it needs a fresh exact-revision build |
+| First rebased ARM64 attempt | FAIL, fixed in current code | [Run 37632384225](https://github.com/MNeroba/openwrt-flint3/actions/runs/37632384225) found variable-mask FIELD_GET and format warnings in the diagnostic snapshot; corrected in implementation commit 04128d1dbb |
+| Current ARM64 module build | PENDING | Source commit 04128d1dbb19b547ab546c6032fbb5143d8c74e7 contains the fix and needs a new exact-revision build |
 | Earlier pre-rebase P1-A prototype build | PASS, historical | [Linux 6.18.39 run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070037416) built the five-object prototype at commit 250f5d469d46ff5de07dfe8a96e3fe90636248ff; this artifact does not cover this rebased source or package release 8 |
 | Inherited broad CI matrices | CANCELED | Four automatic kernel/package runs for the original feature branch were stopped; no all-target pass is claimed |
-| Current OpenWrt package/image | NOT RUN | Parent workflow/artifacts do not cover the modified source and release 8 |
+| Current OpenWrt package/image | PENDING | The run on the prior source was canceled before image compilation; a new exact-source run is required |
 | Runtime/codec tests | NOT RUN | No automated suite or fault-injection result is claimed |
 | BE9300 hardware | NOT RUN | No previous SDK-driver or P0 result is attributed to this change |
 
