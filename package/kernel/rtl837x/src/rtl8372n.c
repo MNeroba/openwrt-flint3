@@ -851,11 +851,14 @@ static void rtl8372n_snapshot_setup(struct rtl837x_priv *priv, u16 members,
 			       FIELD_PREP(RTL837X_VLAN_UNTAG_MASK, members);
 		u32 mask = RTL837X_VLAN_MEMBER_MASK |
 			   RTL837X_VLAN_UNTAG_MASK;
+		u32 vlan_members = (u32)FIELD_GET(RTL837X_VLAN_MEMBER_MASK,
+						  vlan);
+		u32 vlan_untagged = (u32)FIELD_GET(RTL837X_VLAN_UNTAG_MASK,
+						   vlan);
 
 		dev_info(priv->dev,
 			 "P1-A setup snapshot VLAN1: raw=%#x members=%#x untagged=%#x\n",
-			 vlan, FIELD_GET(RTL837X_VLAN_MEMBER_MASK, vlan),
-			 FIELD_GET(RTL837X_VLAN_UNTAG_MASK, vlan));
+			 vlan, vlan_members, vlan_untagged);
 		if ((vlan & mask) != expected)
 			dev_warn(priv->dev,
 				 "P1-A VLAN1 membership mismatch: raw=%#x expected fields=%#x\n",
@@ -880,7 +883,7 @@ static void rtl8372n_snapshot_setup(struct rtl837x_priv *priv, u16 members,
 
 			if (!(members & BIT(p)))
 				continue;
-			actual = FIELD_GET(RTL837X_PORT_PVID_MASK(p), pvid);
+			actual = (pvid >> ((p & 1) * 12)) & 0x0fff;
 			dev_info(priv->dev,
 				 "P1-A setup snapshot PVID port %u: reg=%#x raw=%#x value=%u\n",
 				 p, reg, pvid, actual);
@@ -905,14 +908,15 @@ static void rtl8372n_snapshot_setup(struct rtl837x_priv *priv, u16 members,
 					       RTL837X_PORT_ISOLATION_REG(port),
 					       &value);
 		if (have_isolation) {
+			u32 observed = (u32)(value & RTL837X_L2_FLOOD_MASK);
+
 			dev_info(priv->dev,
 				 "P1-A setup snapshot isolation port %u: raw=%#x expected-mask=%#x\n",
 				 port, value, expected);
-			if ((value & RTL837X_L2_FLOOD_MASK) != expected)
+			if (observed != expected)
 				dev_warn(priv->dev,
 					 "P1-A isolation mismatch port %u: got %#x expected %#x\n",
-					 port, value & RTL837X_L2_FLOOD_MASK,
-					 expected);
+					 port, observed, expected);
 		}
 
 		have_learning =
@@ -935,14 +939,17 @@ static void rtl8372n_snapshot_setup(struct rtl837x_priv *priv, u16 members,
 					    rtl8372n_cpu_flood_regs[i], &value))
 			continue;
 
-		dev_info(priv->dev,
-			 "P1-A setup snapshot flood reg %#x: raw=%#x\n",
-			 rtl8372n_cpu_flood_regs[i], value);
-		if ((value & RTL837X_L2_FLOOD_MASK) != cpu_mask)
-			dev_warn(priv->dev,
-				 "P1-A flood mask mismatch reg %#x: got %#x expected %#x\n",
-				 rtl8372n_cpu_flood_regs[i],
-				 value & RTL837X_L2_FLOOD_MASK, cpu_mask);
+		{
+			u32 observed = (u32)(value & RTL837X_L2_FLOOD_MASK);
+
+			dev_info(priv->dev,
+				 "P1-A setup snapshot flood reg %#x: raw=%#x\n",
+				 rtl8372n_cpu_flood_regs[i], value);
+			if (observed != cpu_mask)
+				dev_warn(priv->dev,
+					 "P1-A flood mask mismatch reg %#x: got %#x expected %#x\n",
+					 rtl8372n_cpu_flood_regs[i], observed, cpu_mask);
+		}
 	}
 
 	if (rtl8372n_snapshot_read(priv, "VLAN ingress control",
@@ -958,14 +965,16 @@ static void rtl8372n_snapshot_setup(struct rtl837x_priv *priv, u16 members,
 
 	if (rtl8372n_snapshot_read(priv, "VLAN ingress filter",
 				   RTL837X_VLAN_INGRESS_FILTER, &value)) {
+		u32 observed = (u32)(value &
+				     GENMASK(RTL8372N_NUM_PORTS - 1, 0));
+
 		dev_info(priv->dev,
 			 "P1-A setup snapshot VLAN ingress filter: raw=%#x\n",
 			 value);
-		if ((value & GENMASK(RTL8372N_NUM_PORTS - 1, 0)) != members)
+		if (observed != members)
 			dev_warn(priv->dev,
 				 "P1-A VLAN ingress filter mismatch: got %#x expected %#x\n",
-				 value & GENMASK(RTL8372N_NUM_PORTS - 1, 0),
-				 members);
+				 observed, members);
 	}
 
 	if (rtl8372n_snapshot_read(priv, "VLAN egress tag",
