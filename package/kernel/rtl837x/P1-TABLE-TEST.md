@@ -15,10 +15,13 @@ These are requested future checks, not completed hardware results.
    and post its exact-source results under #104. If unavailable, mark baseline
    comparison BLOCKED; the new branch cannot establish a P0-to-P1 regression
    comparison without those results.
-2. Build the P1-A OpenWrt package, DTB and complete BE9300 image from the exact
-   revision to be installed, using the documented AP config and pinned feeds.
-   Confirm `rtl8372n_dsa.ko`, `tag_rtl8_4.ko`, package/dependencies and image
-   checksum. Record package release 8. This is the P1-A T0 gate.
+2. The current candidate's focused ARM64 module build and full BE9300
+   AP-config package/DTB/image build have passed in CI for source revision
+   `ad5d1b27a2f8b67cf75c2fa2468c60f5ca1739fd`; see the artifact and checksums
+   in [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md). Before installing, verify the
+   exact artifact and record package release 8. Then confirm the installed
+   module/package and image checksum as the hardware T0 gate. A CI image build
+   alone does not complete T0.
 3. Use the documented TFTP/initramfs recovery path, independent management and
    dmesg/pstore collection from the P0 procedure. Keep the known-good image.
    The project does not assume a usable normal UART console on BE9300.
@@ -26,14 +29,11 @@ These are requested future checks, not completed hardware results.
    and additional regression checks on the new image. Record each result
    separately from the P0 baseline.
 
-An earlier P1-A prototype passed the focused ARM64 API build at source
-250f5d469d46ff5de07dfe8a96e3fe90636248ff and source tree
-eefee5ba892bff81e29e269b099867cc67eeb0b3. Its artifact is recorded in
-P1-TABLE-REPORT.md. This build predates the rebase onto the P0 Release-7 source,
-the setup-snapshot code and package release 8; it is historical evidence only
-and does not qualify the current branch. The current source needs fresh ARM64
-and OpenWrt target builds. Even a successful API build is not an OpenWrt
-installation package or a completed T0.
+The current source has passed both the focused ARM64 module build and full
+OpenWrt target package/DTB/image build. These are build gates only: no
+installation, boot, switch initialization, table observation, or forwarding
+test is claimed. The earlier pre-rebase prototype is historical only; see the
+report for its provenance and for the current exact-source CI evidence.
 
 
 ## 2. Expected bootstrap values
@@ -68,7 +68,7 @@ If the necessary method is unavailable, mark independent readback BLOCKED.
 
 | ID | Procedure | Expected outcome / evidence |
 | --- | --- | --- |
-| A0 | Record package/image build and installed revision, kernel, config/feed lock and checksums | Exact-source target package/DTB/image gate passes before boot; API artifact is not substituted |
+| A0 | Record package/image build and installed revision, kernel, config/feed lock and checksums | CI package/DTB/full-image gate passed for the exact code; verify the artifact and capture installed revision/configuration/checksums before boot testing |
 | A1 | Boot with the documented board layout; collect full dmesg/pstore and DSA/PHY binding | Setup completes; no table timeout, `VLAN ... readback mismatch`, registration error, warning or oops |
 | A2 | Where an agreed method exists, obtain the selected VID 1 word, member/untag masks and PVIDs | Word/masks match section 2; record method and raw values. A last-output register read alone is insufficient independent evidence |
 | A3 | Repeat three warm boots and one full power cycle; repeat A1/A2 and router reachability each time | Same bootstrap result across resets; report each boot separately and record any first failing boot |

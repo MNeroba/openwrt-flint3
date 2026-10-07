@@ -85,41 +85,52 @@ rather than weakening the comparison without evidence.
 | New source style | PASS | Linux 6.18 `checkpatch.pl --no-tree --strict --file`; 0 errors, warnings or checks |
 | Complete patch style | 0 errors, 1 reviewed warning | New-file MAINTAINERS reminder; this is an OpenWrt package, not a new in-tree Linux registration |
 | First rebased ARM64 attempt | FAIL, fixed in current code | [Run 37632384225](https://github.com/MNeroba/openwrt-flint3/actions/runs/37632384225) found variable-mask FIELD_GET and format warnings in the diagnostic snapshot; corrected in implementation commit 04128d1dbb |
-| Current ARM64 module build | PENDING | Source commit 04128d1dbb19b547ab546c6032fbb5143d8c74e7 contains the fix and needs a new exact-revision build |
+| Current ARM64 module build | PASS | [Run 37638430759](https://github.com/MNeroba/openwrt-flint3/actions/runs/37638430759) built all five objects with `W=1`, modpost and module link; no candidate warnings/errors |
 | Earlier pre-rebase P1-A prototype build | PASS, historical | [Linux 6.18.39 run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070037416) built the five-object prototype at commit 250f5d469d46ff5de07dfe8a96e3fe90636248ff; this artifact does not cover this rebased source or package release 8 |
 | Inherited broad CI matrices | CANCELED | Four automatic kernel/package runs for the original feature branch were stopped; no all-target pass is claimed |
-| Current OpenWrt package/image | PENDING | The run on the prior source was canceled before image compilation; a new exact-source run is required |
+| Current OpenWrt package/DTB/full image | PASS | [Run 37638590756](https://github.com/MNeroba/openwrt-flint3/actions/runs/37638590756) built the BE9300 AP-config image and `kmod-rtl837x-dsa` package for source revision `ad5d1b27a2f8b67cf75c2fa2468c60f5ca1739fd` |
 | Runtime/codec tests | NOT RUN | No automated suite or fault-injection result is claimed |
 | BE9300 hardware | NOT RUN | No previous SDK-driver or P0 result is attributed to this change |
 
-### Exact build inputs and artifact
+### Current build inputs and artifacts
 
-- Source: `250f5d469d46ff5de07dfe8a96e3fe90636248ff`.
-- `package/kernel/rtl837x/src` Git tree:
-  `eefee5ba892bff81e29e269b099867cc67eeb0b3`.
-- Host: GitHub Ubuntu 24.04; `aarch64-linux-gnu-`; checksum-pinned Linux
-  6.18.39, using the inherited kernel tarball checksum in the workflow.
-- Run completed successfully at 2026-10-02 22:05:40 UTC.
-- [Artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070037416/artifacts/11254876693):
-  `.config`, kernel/module logs and AArch64 `rtl8372n_dsa.ko`.
-- Module SHA-256:
-  `a96e62a026ed12b9126158ce6f94bd670220e3b0122f976d2cb25198b243777f`.
-- The downloaded candidate log contains each of the five object compilations,
-  modpost and linking, with no compiler warnings/errors. The downloaded module
-  is an ELF64 AArch64 relocatable object.
-- That build source predates the rebase onto the P0 Release-7 base, the
-  best-effort setup snapshot and package release 8. Its artifact is historical
-  prototype evidence and does not cover the current P1-A source.
+- CI-tested source revision: `ad5d1b27a2f8b67cf75c2fa2468c60f5ca1739fd`.
+  The code implementation is `04128d1dbb19b547ab546c6032fbb5143d8c74e7`,
+  and `package/kernel/rtl837x/src` has tree
+  `bf2b6955bb05ab6c82322d89d1069a733c345204`. The later changes on top of the
+  CI-tested revision are documentation-only.
+- Focused module job: GitHub Ubuntu 24.04, AArch64 cross compiler, Linux
+  6.18.39; [run 37638430759](https://github.com/MNeroba/openwrt-flint3/actions/runs/37638430759).
+  All five objects, `W=1`, modpost and linking passed without candidate
+  warnings/errors. Downloaded `rtl8372n_dsa.ko` is ELF64 AArch64; SHA-256
+  `51f9f78d2fa97d5468bf1f318736d4582f07e63c928ac99665f66acda98dc262`.
+- Full target job: [run 37638590756](https://github.com/MNeroba/openwrt-flint3/actions/runs/37638590756),
+  artifact [11498101189](https://github.com/MNeroba/openwrt-flint3/actions/runs/37638590756/artifacts/11498101189).
+  The BE9300 AP-config package, DTB and full image build passed. The resulting
+  package is `kmod-rtl837x-dsa-6.18.39.0.0.2-r8.apk`; it contains
+  `rtl8372n_dsa.ko` under `/lib/modules/6.18.39/`.
+- Sysupgrade image:
+  `openwrt-qualcommbe-ipq53xx-glinet_gl-be9300-squashfs-sysupgrade.bin`;
+  SHA-256 `408bbd403f3d5fec62ebc736b77c7db0baf1cee66dbbb92e66e61f5d68b3d3cd`.
+- The full-image build used pinned feeds: packages
+  `493b2ae11c3148f43b3ab680ac2b2bb78cc8430c`, LuCI
+  `aa3d48836e90ae0706c8d8f9b46b8371e45cfe1f`, routing
+  `4b9891b9136259f93294a424507ed24c5e8c1cbd`, telephony
+  `5d68d53c160a325ea9d03fce393e051573bcc736`, and video
+  `816fa8fe0ca759cc5d1ba71af1a716405bf4dda4`.
 
-This artifact covers APIs/linking, not OpenWrt packaging or switch behavior.
-No runtime/codec test suite was run on either that prototype or the current
-branch. The broad inherited push/PR kernel and
-package matrices were canceled deliberately for this feature branch:
+These results establish compilation and target packaging for the current code;
+they do not establish runtime table behavior, forwarding, or hardware safety.
+No runtime/codec suite, fault injection, or BE9300 boot test has been run. The
+broad inherited push/PR kernel and package matrices were canceled deliberately
+for this feature branch:
 [push packages](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070038337),
 [push kernels](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070038397),
 [PR packages](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070319023),
 [PR kernels](https://github.com/MNeroba/openwrt-flint3/actions/runs/37070319067).
-The focused ARM64 job above was retained; parent #104 runs were untouched.
+The focused module and full-image jobs were retained; parent #104 runs were
+untouched. Earlier pre-rebase prototype build details remain in the workflow
+history and do not substitute for these current results.
 
 The detailed [table regression procedure and result template](P1-TABLE-TEST.md)
 records expected BE9300 words, test order, A0–A6 evidence and failure triage.
