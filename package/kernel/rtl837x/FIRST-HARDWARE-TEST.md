@@ -1,11 +1,16 @@
 # RTL8372N P0 first-hardware test plan
 
-**Status (2026-10-06):** release 6 passed T0/T1/T2/T4/T7. Follow-up T3/T5
-reports link/rate checks on LAN1–LAN3 and bidirectional software-bridge traffic
-across their three pairings. T3/T5 remain partial: LAN4 had no peer, physical
-cable unplug/replug was not tested, and iperf3 runs were 8–10 seconds rather
-than the planned 30 seconds. Release 7's PHY-callback guard still needs a fresh
-image/T1 run. See [P0-STATUS.md](P0-STATUS.md),
+**Status (2026-10-07):** release 7 (`79afa2c51a3c2396c33ed511ed092d799c52e1bf`)
+passed full-image CI and the maintainer reports T0/T1/T7 PASS, T5 PASS (all six
+LAN pairs, bidirectional 30-second TCP and 20/20 pings), and T3 PASS for all
+four rates and physical cycles. The attached [release-7 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988)
+shows no ports 0–2 PHY power-down warnings. The T3 capture shows link-down
+intervals on LAN2–LAN4, but no LAN1 down/up interval; that evidence needs
+clarification. T6 hardware VLAN/isolation readback remains unverified. Release 7
+did not include a new 100-packet T4 run or the separate T2 command output;
+release 6 passed T2 and 100/100 T4. The T5 traffic is CPU/software-bridge
+forwarded, and its counters include 77 new RX drops on LAN3. See
+[P0-STATUS.md](P0-STATUS.md),
 [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md), and [BUILD-REPORT.md](BUILD-REPORT.md)
 for evidence and remaining gates. Start each run only after T0 passes for the
 exact image revision under test.

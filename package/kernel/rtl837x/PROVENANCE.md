@@ -21,10 +21,14 @@ PHY/SerDes patch payloads; review of the remaining lineage is still pending.
 ## Feature-to-source map
 
 Locations name functions/symbols in the pinned files to keep references stable
-through candidate edits. Full hardware qualification is **pending for every
-row**. The first T1 run reads chip ID `0x83727000` but fails internal-PHY binding.
-The [diagnostic rerun](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6006419562) confirms valid IDs on all four PHYs
-but RTL8224 binding. T2–T8 are blocked; release-6 hardware results are pending.
+through candidate edits. Hardware qualification remains incomplete for the
+register and feature rows. Release 7 passes T0/T1/T7 and the full six-pair T5
+software-bridge matrix; its T3 report says all four physical cycles passed, but
+the attached capture has no LAN1 link-down sample. Release 6 passed T2 and the
+100-packet T4 check; those checks were not fully repeated on release 7. Hardware
+T6 VLAN/isolation readback and broader register-level qualification remain
+open. See [the release-7 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988)
+and [raw logs](https://gist.github.com/perceival/145d80ee322c48e88870ec011ae1200d).
 
 | Candidate feature/symbols | Specific public source location | Derivation / remaining question |
 | --- | --- | --- |

@@ -1,24 +1,28 @@
 # RTL8372N P0 implementation status
 
-Updated: 2026-10-06. This is a source candidate, not a hardware-qualified driver.
+Updated: 2026-10-07. This is a source candidate, not a hardware-qualified driver.
 
 [BUILD-REPORT.md](BUILD-REPORT.md) consolidates publication evidence, exact
 revisions, artifacts, feature readiness and remaining acceptance gates.
 
 ## Latest hardware result
 
-Release 6 passed T0/T1/T2/T4/T7 on the GL-BE9300. The follow-up
-[T3/T5 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6016542658)
-adds LAN1–LAN3 link/rate checks and bidirectional CPU/software-bridge traffic
-across their three pairings. T3 and T5 remain partial: LAN4 had no peer,
-physical cable cycles were not tested, and iperf3 runs were 8–10 seconds
-instead of the 30 seconds in the procedure. T6 has software output only; T8 is
-router-endpoint CPU traffic. The report and warning diagnosis are in
-[PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md).
-Package release 7 limits PHY enable/disable operations to ports 4–7 to remove
-spurious `-EINVAL` warnings observed on ports 0–2. Release-7 ARM64 module CI
-passed; full-image CI is in progress and hardware confirmation is pending. P0
-is not fully qualified.
+Release 6 passed T0/T1/T2/T4/T7. Release 7 (`79afa2c51a3c2396c33ed511ed092d799c52e1bf`)
+passed ARM64 module and full-image CI and has a new [hardware report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988)
+with [raw boot and test logs](https://gist.github.com/perceival/145d80ee322c48e88870ec011ae1200d).
+On release 7, T0/T1/T7 pass: all four PHYs bind to the private driver, the
+port 0–2 power-down warnings are absent, and three warm reboots plus one cold
+cycle preserve link and reachability. T5 passes all six LAN pairs with
+bidirectional 30-second TCP and 20/20 pings; it remains CPU/software-bridge
+traffic. The run recorded 77 new RX drops on LAN3 and TCP retransmissions, but
+no P0 throughput threshold is defined. T3 is reported PASS for all four jacks;
+the attached raw capture visibly shows link-down intervals for LAN2–LAN4 but
+not LAN1, so the LAN1 cycle evidence needs clarification. Release 6 T2/T4
+remain PASS; release 7 logs show DSA setup and pings but do not include a
+separate T2 command report or a new 100-packet T4 run. Hardware T6 remains
+unverified; the release-7 CPU snapshot lacks softirq data. See
+[PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for exact evidence and remaining gates.
+P0 is not fully qualified.
 
 ## Source work completed
 
@@ -37,9 +41,9 @@ is not fully qualified.
   scanning is disabled. Hardware IDs and the external WAN driver are retained.
   The gate checks successful
   device binding under the device lock and both private-driver identities;
-  missing/wrong/unbound PHYs fail probe. ID, binding and read-error diagnostics
-  cover the next run described in [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md).
-  Actual ability/AN behavior needs hardware confirmation. The per-device MDIO
+  missing/wrong/unbound PHYs fail probe. Release 7 confirms private binding and
+  1G/2.5G links on all four jacks. Full partner-advertisement behavior remains
+  unmeasured. The per-device MDIO
   callback runs after OF matching; the BE9300 childless MDIO layout is covered,
   while vendor-specific PHY compatibles need separate review.
 - Incomplete hardware bridge callbacks were removed. P0 uses CPU-only
@@ -85,7 +89,8 @@ is not fully qualified.
   revision checks, and driver/MDIO-devres package selection were verified.
   The [full build artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177/artifacts/11254652883) contains 317 files including the
   generated configuration, logs, packages and target images. This is build
-  evidence only; no hardware result has passed.
+  baseline-build evidence only. Release-7 CI and hardware results are recorded
+  separately below.
 - The maintainer independently reports a T0-equivalent build of #104 revision
   `908810c09bd9adfbbc7d25437a9d50b55b2de940`, using the reference AP
   config with `wsdd2` and vendor `ssdk` stripped. The image revision matches
@@ -105,10 +110,11 @@ is not fully qualified.
   passed. The [release-6 bench report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917)
   passes T0/T1/T2/T4/T7. Its [T3/T5 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6016542658)
   covers connected jacks and all three pairs among LAN1–LAN3; LAN4, physical
-  cable cycling, 30-second traffic runs and hardware T6 remain open. The earlier
-  stop was not reproduced, but its cause is not established. Release 7's
-  port-callback guard passed ARM64 module CI; full-image CI is in progress and
-  hardware confirmation is pending.
+  cable cycling, 30-second traffic runs and hardware T6 remain open for the
+  release-6 follow-up. The earlier stop was not reproduced, but its cause is
+  not established. Release 7's port-callback guard passed ARM64 module and
+  full-image CI and has been exercised on hardware; the port 0–2 warnings are
+  absent in its boot log.
 
 ## P1 research update
 
@@ -123,16 +129,17 @@ release 6 fixes it and needs its own build and bench run.
 
 ## Remaining gates
 
-1. ARM64 compilation/modpost: passed for the revision above. Re-run if source
-   or build inputs change.
-2. OpenWrt package/DTB/full-image build: **PASS** for the tested source revision
-   and pinned inputs linked above. Re-run if source or build inputs change.
+1. ARM64 compilation/modpost: release-7 [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454484695) passed.
+   Re-run if source or build inputs change.
+2. OpenWrt package/DTB/full-image build: release-7 [full-image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524)
+   passed for source commit `79afa2c51a3c2396c33ed511ed092d799c52e1bf`.
+   Re-run if source or build inputs change.
 3. Resolve flagged provenance rows, particularly SDS facts/source lineage.
-4. Recheck PHY binding and power-down warnings on release 7; complete T3 on
-   all jacks including physical cable cycling, T5 across all six LAN pairs
-   with the planned 30-second runs, and hardware isolation/readback,
-   reserved control-frame and recovery checks. The release-6 warm/cold reset
-   checks passed; physical CPU-link evidence remains incomplete.
+4. Clarify LAN1's physical link-cycle evidence in T3 and repeat the full 100-packet
+   T4 check on release 7. T5's six-pair, 30-second run is complete. Hardware
+   T6 VLAN/isolation readback, reserved control-frame behavior and the remaining
+   recovery/concurrency checks are open. Release 7 T7 passed three warm reboots
+   and one cold power cycle; the WAN-side PCS message still appears during boot.
 5. Restore P1/P2 behavior or obtain maintainer agreement to a narrower scope.
 6. The Draft remains a source and provenance review candidate. Hardware
    qualification and required source-lineage decisions remain open.

@@ -1,12 +1,14 @@
 # RTL8372N internal-PHY binding failure and correction
 
-Updated: 2026-10-06 after the release-6 hardware report. The RTL8224 binding
-blocker is resolved on hardware: T0/T1/T2/T4/T7 passed. Follow-up T3 and T5
-are partial (T5 covers 3/6 pairs); T6 is software configuration output only,
-and T8 is CPU-endpoint data, not switch-forwarding evidence. Release-6
-module and full-image CI both passed. A package-release-7 follow-up now limits
-PHY power callbacks to ports 4–7; its module CI passed, full-image CI is in
-progress, and hardware results are pending. P0 is not yet fully qualified.
+Updated: 2026-10-07 after the release-7 hardware report. The RTL8224 binding
+blocker is resolved on hardware. Release 7 passes T0/T1/T7 and the full T5
+six-pair software-bridge matrix; the spurious PHY power-down warnings on ports
+0–2 are absent. T3 is reported PASS for all four jacks, but the attached raw
+capture shows link-down samples only for LAN2–LAN4, so LAN1's cable-cycle
+evidence needs clarification. T6 hardware VLAN/isolation readback remains
+unverified. Release 6 passed T2 and 100-packet T4; release 7's logs do not
+include the separate T2 command output or a new full T4 run. The full release-7
+image CI passed. P0 is not yet fully qualified.
 
 ## Earlier diagnostic hardware failure (release 4)
 
@@ -55,13 +57,47 @@ and [redacted serial logs](https://gist.github.com/perceival/f7abebb5395db63b97d
 | T7 | PASS | Three warm reboots and one cold power cycle; binding, link rates and pings repeated, without the earlier stop. |
 | T8 | RECORDED ONLY | iperf3 used the router as endpoint and was CPU-bound; it is not a switch-forwarding result or acceptance threshold. |
 
+## Release-7 hardware report (2026-10-07)
+
+Perceival's [release-7 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988)
+identifies source `79afa2c51a3c2396c33ed511ed092d799c52e1bf`, image revision
+`r35533+286-3b2bc55dcb`, and flashed-image SHA-256
+`a219c20026965027b425b80181abb362377df5450298f86932246033ed480ac9`.
+The [raw logs](https://gist.github.com/perceival/145d80ee322c48e88870ec011ae1200d)
+record all four private PHY bindings and expected LAN rates. T7 passed three
+warm reboots and one cold cycle, with all four bindings and 20/20 router pings
+after each boot.
+
+T3 is reported PASS after physically unplugging/reconnecting each jack. The
+attached five-second link samples visibly show LAN2, LAN3 and LAN4 down, but
+never show LAN1 down; the dmesg link-event section contains no event lines. The
+report's LAN1 rate and recovery are present, but its physical-cycle evidence
+cannot be independently confirmed from this capture. This is an evidence gap,
+not a claim that the test failed.
+
+T5 passed all six directly connected LAN pairs, in both directions, with
+30-second TCP runs and 20/20 pings. Rates ranged from 927 Mbit/s to 1.56
+Gbit/s on the CPU/software-bridge path; no P0 throughput threshold is defined.
+The LAN3 RX drop counter increased from 0 to 77 across 9,271,560 received
+packets, while LAN1 TX drops stayed at 1 and LAN3 TX drops stayed at 2. Several
+iperf3 directions reported TCP retransmissions, but all transfers completed
+and all pings had zero loss. The `lan` conduit `tx_errors` value was
+`2^64-1` both before and after the matrix; the underlying PPE MIB operands were
+not included, so this counter does not establish packet loss. The aggregate
+CPU snapshot omitted softirq time and cannot estimate forwarding CPU load.
+
+T6 remains unverified because no switch VLAN/isolation register readback was
+provided. Release 7 did not include separate T2 command output or a new
+100-packet T4 run; release 6's T2/T4 results remain the latest complete
+evidence for those checks.
+
 ### Warning diagnosis
 
-- **PHY power-down `-22` on ports 0–2:** Release 6's `port_disable` treated every non-SerDes port as an internal PHY. The PHY accessor explicitly accepts only ports 4–7, so it returned `-EINVAL` before issuing an MDIO/PHY command. Package release 7 now checks the supported PHY-port mask in both `port_enable` and `port_disable`. Its ARM64 module CI passed; full-image CI is in progress. Hardware confirmation that the warnings disappear is still required.
-- **Conduit `tx_errors=18446744073709551614` (`2^64−2`):** This is the unsigned result of an existing Qualcomm PPE statistics calculation in `target/linux/qualcommbe/patches-6.18/0342-net-qualcomm-Update-IPQ9574-PPE-driver.patch`: `tx_packets - tx_frames_g`. At the reported sample the second counter exceeds the first by two. That identifies why the displayed value underflows, but not whether the PPE hardware counters are semantically correct. It is outside the RTL8372N driver and should be handled separately with the raw `lan` PPE MIB/ethtool counters; it is not evidence of RTL8372N packet loss.
-- **`10GBASE-R link not up before USXG_EN`:** In release 6 this follows `qcom_ppe ... wan: configuring for inband/usxgmii`; the log later continues and the router is reachable. It is a WAN PCS event, not evidence that the switch-to-SoC CPU link failed, and it does not explain the earlier release-4 log ending.
+- **PHY power-down `-22` on ports 0–2:** Release 6's `port_disable` treated every non-SerDes port as an internal PHY. The PHY accessor explicitly accepts only ports 4–7, so it returned `-EINVAL` before issuing an MDIO/PHY command. Package release 7 checks the supported PHY-port mask in both `port_enable` and `port_disable`; its module and full-image CI passed. The release-7 boot log confirms the port 0–2 power-down warnings are gone.
+- **Conduit `tx_errors`:** Release 6 reported `18446744073709551614` (`2^64−2`); release 7 reported `2^64−1` both before and after T5. Both values are consistent with unsigned underflow in the existing Qualcomm PPE calculation in `target/linux/qualcommbe/patches-6.18/0342-net-qualcomm-Update-IPQ9574-PPE-driver.patch`, which computes `tx_packets - tx_frames_g`. The raw PPE operands were not included, so this explains the representation but does not establish the hardware-counter semantics or packet loss. This is outside the RTL8372N driver and needs separate raw-MIB validation.
+- **`10GBASE-R link not up before USXG_EN`:** Release 7 still logs this after `qcom_ppe ... wan: configuring for inband/usxgmii`. The boot continues, the DSA CPU link comes up at 10 Gbit/s, and the hardware tests pass. This WAN PCS event is not evidence that the switch-to-SoC CPU link failed and does not explain the earlier release-4 log ending.
 
-The next hardware run should use the package-release-7 image and confirm the three spurious power-down warnings are gone. For T3, test LAN4 with a peer and physically unplug/replug each jack. For T5, add the three LAN4 pairs and repeat traffic in both directions for the procedure's 30 seconds per run. Keep T6 marked unverified unless an agreed read-only hardware readback is available. These release-6 follow-up results use the CPU/software-bridge path; release 7 still needs its own image and T1 check.
+Remaining hardware evidence: clarify whether LAN1 was physically cycled and provide a timestamp or link-event excerpt if available; capture the separate T2 command output and rerun the full 100-packet T4 check on release 7 for exact-revision coverage; keep T6 unverified until a safe read-only switch-register method is agreed. Reserved control-frame behavior and the remaining recovery/concurrency checks are also open. T5 is complete for all six pairs on the CPU/software-bridge path.
 
 ## Why matching the same ID is insufficient
 
@@ -114,27 +150,26 @@ vendor patch data is introduced.
 | Diagnostic `1b7a32bef2`, release 4 | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255) | Maintainer T0 PASS; T1 FAIL; T2–T8 BLOCKED |
 | Registration correction, release 5 (`614188cff5`) | [FAIL](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769): private kernel macro not visible | Cancelled after release-5 module CI failed | Not run |
 | Corrected registration, release 6 (`32d958fe17`) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) | T0/T1/T2/T4/T7 pass; T3 partial; T5 partial (3/6 pairs, short traffic runs); T6 software output only; T8 recorded |
-| PHY callback guard, release 7 | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454484695) | [IN PROGRESS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524) | Pending; retest warnings and remaining T3/T5 |
+| PHY callback guard, release 7 | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454484695) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524) | T0/T1/T7 pass; T5 passes 6/6 pairs; T3 reported pass with LAN1 capture gap; T6 unverified |
 
 Release 5 failed compilation because `DEFAULT_GPIO_RESET_DELAY` is private to
 kernel `of_mdio.c`. Release 6 uses a named local 10 us constant matching
 `__of_mdiobus_register()` and explicitly reports unsupported PHY package nodes.
 Release 6 [ARM64 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) passed with all four objects, `W=1`,
 modpost and link success; candidate compilation has no warnings. Module
-SHA-256: `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`. [Full-image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) also passed, and the author reports exact-source T0/T1 success. Release 7's module build passed; its full-image build is in progress and hardware confirmation is still required.
+SHA-256: `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`. [Full-image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) also passed. Release 7 passed both module and full-image CI, and its hardware report confirms that the port 0–2 power-down warnings are absent.
 
 ## Remaining hardware work
 
-1. After release-7 full-image CI completes, flash that image; record the exact
-   commit, image revision and SHA-256. Confirm T0/T1 still pass and the
-   power-down warnings for ports 0–2 are absent.
-2. Complete T3 with a link partner on each jack, record all supported/local/
-   partner modes, then unplug/replug each link and verify mapping and recovery.
-3. Run T5 across all six directly attached LAN-jack pairs with two hosts,
-   testing both directions while capturing router CPU/conduit and port counters.
-4. Keep T6 as unverified until there is a safe, documented hardware readback;
+1. Clarify the LAN1 physical cycle reported for T3; the attached raw link sample
+   does not show the expected down/up event. Repeat T2/T4 on release 7 if exact-
+   revision qualification is required; release 6's T2/T4 results remain valid
+   for that earlier revision.
+2. Keep T6 unverified until there is a safe, documented hardware readback;
    software `bridge vlan show` output is not a switch-register result.
-5. Keep throughput figures labeled as router-endpoint CPU traffic. To qualify
+3. Test reserved control-frame behavior and complete the remaining recovery and
+   PHY concurrency checks in the first-hardware procedure.
+4. Keep throughput figures labeled as CPU/software-bridge traffic. To qualify
    switching performance, use two hosts with traffic that does not terminate
    on the router and capture both switch-port and CPU/conduit counters.
 

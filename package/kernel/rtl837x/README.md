@@ -20,9 +20,10 @@ The current code provides:
   including per-PHY C22 page selection.
 - A private PHY driver with native MMD access to the actual port, standard
   autonegotiation and published Realtek 2.5G status decoding. Forced 2.5G is
-  explicitly unsupported. Release 6 observed 1G/2.5G links on LAN1–LAN3;
-  LAN4 had no peer. Physical unplug/replug and full partner-advertisement
-  coverage remain pending.
+  explicitly unsupported. Release 7 observed the expected 2.5G/1G/2.5G/1G
+  rates on LAN1–LAN4. The author reports physical unplug/replug on all jacks;
+  the attached capture shows explicit link-down intervals only for LAN2–LAN4,
+  so LAN1's cycle evidence needs clarification.
 - Phylink plumbing for internal PHY ports 4–7 and the 10GBASE-R SerDes MACs
   on ports 3 and 8.
 - SerDes mode selection and the optional `sds0/1-{rx,tx}-swap` device-tree
@@ -30,7 +31,9 @@ The current code provides:
   provenance manifest.
 - Native RTL8_4 CPU tagging, a VLAN 1/PVID 1 bootstrap, and CPU-only port
   isolation/flooding with learning disabled. Hardware bridge offload is omitted;
-  DSA's software bridge fallback is the intended P0 path and needs bench checks.
+  DSA's software bridge fallback is the intended P0 path. Release-7 testing
+  passed bidirectional traffic across all six LAN pairs with 30-second iperf3
+  runs and 20/20 pings; hardware VLAN/isolation readback remains unverified.
 
 The driver currently supports one CPU port and rejects cascaded DSA ports.
 Only RTL8372N is accepted by chip-ID detection. The candidate matches only
@@ -49,24 +52,21 @@ tracked by Issues #47 and #49.
 
 The SerDes path selects the 10GBASE-R mode and applies the board's optional
 polarity swaps. It does not contain PHY firmware, vendor patch arrays, or the
-full SerDes initialization sequence used by vendor SDKs. Release 6 passed PHY
-binding and observed three LAN links, but full PHY power-control, complete jack
-coverage and physical CPU-link checks remain incomplete. The initial diagnostic
-Flint 3 run failed T1 because the in-tree RTL8224 PHY driver bound first. Release
-6 fixed this: the maintainer's hardware report passes T0/T1/T2/T4/T7. Follow-up
-testing makes T3 partial (LAN1–LAN3 link/rate checks; peer-interface cycles on
-LAN2/LAN3; no LAN4 peer or physical cable cycle) and T5 partial (bidirectional
-traffic across the three pairs among LAN1–LAN3; no LAN4 pairs, with 8–10-second
-iperf3 runs rather than the 30-second procedure). T6 has software configuration
-output only. T8 used the router as the iperf3 endpoint, so it is not
-switching-performance evidence. Release 6 also logged spurious `-EINVAL`
-power-down warnings on unsupported ports 0–2; package release 7 now limits
-those callbacks to ports 4–7. Its [ARM64 module build passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454484695);
-the [full image build](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524)
-is in progress, and hardware confirmation is still needed. See
-[PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for the warning causes, evidence and
-remaining P0 gates. The earlier boot stop was not reproduced, but its cause is
-not proven.
+full SerDes initialization sequence used by vendor SDKs. The initial diagnostic
+run failed T1 because the in-tree RTL8224 PHY driver bound first; release 6
+fixed the binding. Release 7's [ARM64 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454484695)
+and [full-image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524)
+passed. The hardware report confirms all four private PHY bindings, stable
+three-warm/one-cold reset behavior, and no port 0–2 power-down warnings. T3's
+raw evidence for the LAN1 cable cycle needs clarification. T5 passed all six
+software-bridge pairs; counters record 77 new LAN3 RX drops and TCP
+retransmissions, without a defined throughput threshold. T6 remains
+unverified in hardware. T4's 100-packet check passed on release 6 but was not
+repeated in full on release 7; the release-7 logs show successful pings. The
+WAN-side `10GBASE-R link not up before USXG_EN` message still appears, while
+boot continues and the switch CPU link is up. See
+[PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for the full evidence and remaining
+P0 gates.
 
 ## Device tree
 
@@ -85,8 +85,8 @@ The P0 driver does not provide a GPIO controller and ignores the legacy
 `rtl837x,sds0mode`, MDI-reverse, and PHY-TX-polarity properties. SerDes mode is
 selected by phylink from the port's `phy-mode`; only `10gbase-r` is accepted
 for ports 3 and 8. PHY enable/disable callbacks are limited to internal PHY
-ports 4–7; release-7 module CI passed, full-image CI is in progress, and a
-hardware check is still required.
+ports 4–7; release-7 module and full-image CI passed, and the hardware log
+confirms the port 0–2 warnings are gone.
 
 ## Build output
 
@@ -110,23 +110,26 @@ passed; its candidate module SHA-256 is
 The maintainer's [release-6 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6014637917)
 passes T0/T1/T2/T4/T7. The [T3/T5 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6016542658)
 adds partial coverage of connected jacks and the three pairs among LAN1–LAN3.
-T6 remains unverified in hardware. Package release 7 contains the new callback
-guard; its module CI passed, the full-image build is running, and a hardware
-check is pending.
+Release 7's [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454484695)
+and [full-image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524)
+passed, and the maintainer's [hardware report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988)
+confirms T0/T1/T7 and the full six-pair T5 matrix. The report claims T3 PASS;
+the attached log shows LAN2–LAN4 link-down samples but no LAN1 down/up event,
+so that one evidence item needs clarification. T6 remains unverified in hardware.
 
 ## Staged follow-up
 
-1. After release-7 full-image CI completes, flash that image and confirm the
-   release-6 PHY binding result persists and that the ports 0–2 power-down
-   warnings are gone. Finish T3 with a LAN4
-   peer and physical cable cycles; complete all six T5 pairs with 30-second
-   bidirectional iperf3 runs.
-2. Prepare the shared table engine and resolve VLAN/L2 field meanings and
+1. Clarify the missing LAN1 link-down/up evidence in the release-7 T3 capture.
+   Repeat the release-7 100-packet T4 check and record the separate T2 command
+   output if needed for the exact-source matrix.
+2. Resolve a safe hardware read-only method for T6 VLAN/isolation readback.
+   Preserve the T5 RX-drop/retransmission observations in subsequent runs.
+3. Prepare the shared table engine and resolve VLAN/L2 field meanings and
    source lineage, following [P1-RESEARCH.md](P1-RESEARCH.md). Source design can
    proceed while P0 hardware results are pending.
-3. Prove BPDU CPU delivery, CIST states and dynamic fast-age before enabling
+4. Prove BPDU CPU delivery, CIST states and dynamic fast-age before enabling
    hardware bridge/VLAN/flags; then add database-correct FDB/MDB management.
    Each runtime step needs a build and its documented bench gates.
-4. Reach P1 parity or record agreed deferrals before porting LAG (#47) and
+5. Reach P1 parity or record agreed deferrals before porting LAG (#47) and
    rate limiting (#49). Restore other baseline interfaces in separate, sourced
    and tested changes or obtain explicit maintainer agreement to defer them.
