@@ -569,28 +569,6 @@ static int rtl8372n_setup_default_vlan(struct rtl837x_priv *priv,
 	return rtl837x_vlan_write(priv, 1, vlan_word);
 }
 
-static int rtl8372n_read_vlan_entry(struct rtl837x_priv *priv, u16 vid,
-				    u32 *data)
-{
-	u32 command;
-	int ret;
-
-	/* EXECUTE without WRITE reads the VLAN entry into TABLE_READ_DATA0. */
-	command = FIELD_PREP(RTL837X_TABLE_ADDRESS, vid) |
-		  (RTL837X_TABLE_VLAN << 8) | RTL837X_TABLE_EXECUTE;
-	ret = rtl837x_reg_write(priv, RTL837X_TABLE_CTRL, command);
-	if (ret)
-		return ret;
-
-	ret = regmap_read_poll_timeout(priv->map, RTL837X_TABLE_CTRL, command,
-				       !(command & RTL837X_TABLE_EXECUTE),
-				       10, 1000);
-	if (ret)
-		return ret;
-
-	return rtl837x_reg_read(priv, RTL837X_TABLE_READ_DATA0, data);
-}
-
 static void rtl8372n_report_p0_reg(struct rtl837x_priv *priv,
 				   const char *name, u32 reg, u32 mask,
 				   u32 expected)
@@ -660,7 +638,7 @@ static void rtl8372n_report_p0_readback(struct dsa_switch *ds, u16 members)
 	expected_vlan = RTL837X_VLAN_FIELD25 |
 		FIELD_PREP(RTL837X_VLAN_MEMBER_MASK, members) |
 		FIELD_PREP(RTL837X_VLAN_UNTAG_MASK, members);
-	ret = rtl8372n_read_vlan_entry(priv, 1, &vlan_data);
+	ret = rtl837x_vlan_read(priv, 1, &vlan_data);
 	if (ret) {
 		dev_warn(priv->dev, "P0 readback VLAN 1 table entry failed: %d\n",
 			 ret);
