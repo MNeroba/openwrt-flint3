@@ -13,9 +13,11 @@
 
 #include "rtl837x.h"
 
-static int rtl837x_table_wait_idle(struct rtl837x_priv *priv)
+int rtl837x_table_wait_idle(struct rtl837x_priv *priv)
 {
 	u32 command;
+
+	lockdep_assert_held(&priv->table_lock);
 
 	return regmap_read_poll_timeout(priv->map, RTL837X_TABLE_CTRL, command,
 					!(command & RTL837X_TABLE_EXECUTE),

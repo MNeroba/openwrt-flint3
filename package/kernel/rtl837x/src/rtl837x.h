@@ -22,6 +22,13 @@
 #define RTL8372N_PHY_PORT_MASK GENMASK(7, 4)
 
 struct rtl837x_ops;
+enum rtl837x_cist_state {
+	RTL837X_CIST_DISABLED,
+	RTL837X_CIST_BLOCKING,
+	RTL837X_CIST_LEARNING,
+	RTL837X_CIST_FORWARDING,
+};
+
 struct rtl837x_priv {
 	struct device *dev;
 	struct gpio_desc *reset;
@@ -70,8 +77,13 @@ int rtl837x_reg_bits_write(struct rtl837x_priv *priv, u32 reg, u32 mask,
 			   u32 val);
 int rtl837x_vlan_set_port_masks(u32 entry, u16 members, u16 untagged,
 				u32 *result);
+int rtl837x_table_wait_idle(struct rtl837x_priv *priv);
 int rtl837x_vlan_read(struct rtl837x_priv *priv, u16 vid, u32 *entry);
 int rtl837x_vlan_write(struct rtl837x_priv *priv, u16 vid, u32 entry);
+int rtl837x_stp_set_state(struct rtl837x_priv *priv, int port,
+			  enum rtl837x_cist_state state);
+int rtl837x_l2_flush_port(struct rtl837x_priv *priv, int port);
+int rtl837x_bpdu_route_set(struct rtl837x_priv *priv, u16 vid, int cpu_port);
 int rtl837x_sds_reg_bits_write(struct rtl837x_priv *priv, u8 sds, u8 page,
 			       u8 reg, u16 mask, bool set);
 int rtl837x_phy_read_ocp(struct rtl837x_priv *priv, u16 phy, int regnum,

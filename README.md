@@ -34,25 +34,28 @@ Target: **`qualcommbe/ipq53xx`**, kernel **6.18**.
 
 ## Status
 
-The RTL8372N replacement is at **P0 bring-up**. Release 7 passed the ARM64
-module build and full BE9300 OpenWrt image build. On GL-BE9300 hardware, the
-maintainer reports successful probe, PHY binding, port/link checks, router
-reachability, all six LAN-pair traffic checks through the CPU/software bridge,
+The confirmed Release 7 RTL8372N replacement is at **P0 bring-up**. Release 7
+passed the ARM64 module build and full BE9300 OpenWrt image build. On GL-BE9300
+hardware, the maintainer reports successful probe, PHY binding, port/link
+checks, router reachability, all six LAN-pair traffic checks through the CPU/software bridge,
 and three warm reboots plus one cold power cycle. This is not full hardware
 qualification: VLAN/isolation register readback, reserved control-frame
 behavior, and recovery/concurrency checks remain open. See the [P0 status](package/kernel/rtl837x/P0-STATUS.md),
 [build and hardware report](package/kernel/rtl837x/BUILD-REPORT.md), and
 [first-hardware test plan](package/kernel/rtl837x/FIRST-HARDWARE-TEST.md).
-The current working tree adds startup readback diagnostics after Release 7;
-that follow-up has not yet been built or hardware-tested, so the Release-7
-results do not qualify the modified source.
+The P1-A/P1-B follow-ups are separate, unmerged candidates. P1-A adds VLAN
+table serialization and setup readback. P1-B adds CIST state and fast-age DSA
+callbacks plus a VLAN 1 CPU-only BPDU route candidate. These follow-ups need
+fresh exact-source builds and maintainer hardware validation; Release-7 results
+do not qualify them.
 
 | Subsystem | State |
 |---|---|
 | Boot / procd / SSH | Release 7 boots and survives the reported warm/cold reset matrix; candidate recovery path is not qualified |
-| LAN (RTL8372N via DSA + EDMA/PPE) | P0 works on BE9300; six LAN pairs passed bidirectional traffic through CPU/software bridging. Hardware switching is not implemented; drops and TCP retransmissions need follow-up |
+| LAN (RTL8372N via DSA + EDMA/PPE) | P0 software bridge passed six LAN-pair traffic checks. P1-B STP/control-frame candidate is unbuilt and untested on hardware; hardware bridge forwarding is not implemented |
 | WAN (2.5G, USXGMII) | Working on the previous known-good image; candidate regression not checked |
-| VLANs (bridge-vlan on DSA) | Candidate seeds VLAN 1/PVID; hardware readback is unverified and general VLAN offload is not implemented |
+| VLANs (bridge-vlan on DSA) | Candidate seeds VLAN 1/PVID and adds serialized table access; hardware readback is unverified and general VLAN offload is not implemented. P1-B routes the STP multicast group to CPU on VLAN 1 only |
+| Bridge / STP / BPDU | P0 uses software bridging. P1-B adds partial CIST/fast-age hooks and an unverified VLAN 1 BPDU route; no hardware bridge offload, test pending |
 | PPE hardware flow offload | Previous-driver baseline: IPv4 LAN→WAN NAT reached ~2.3 Gbit/s at ~1% CPU. Candidate behavior is not yet validated. |
 | Wi-Fi 7, all three bands | Working on the previous known-good image; candidate regression not checked |
 | MLO (AP MLD across 2.4/5/6 GHz) | Working on the previous known-good image; candidate regression not checked |
@@ -83,7 +86,7 @@ The **~1.8–1.9 Gbit/s** result was measured with the previous working switch-d
 
 ## Building
 
-For the RTL8372N P0 package build and first-device test sequence, see [FIRST-HARDWARE-TEST.md](package/kernel/rtl837x/FIRST-HARDWARE-TEST.md). The package has not yet passed that build gate in this worktree.
+For P0 bring-up and P1-A table checks, see [FIRST-HARDWARE-TEST.md](package/kernel/rtl837x/FIRST-HARDWARE-TEST.md) and [P1-TABLE-TEST.md](package/kernel/rtl837x/P1-TABLE-TEST.md). The P1-B maintainer bench procedure is [P1-B-TEST.md](package/kernel/rtl837x/P1-B-TEST.md). Release-7 build results do not validate the P1-A/P1-B source revisions.
 
 ```sh
 git clone -b flint3-be9300 https://github.com/perceival/openwrt-flint3.git
