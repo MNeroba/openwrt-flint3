@@ -2,6 +2,15 @@
 
 Updated: 2026-10-04. Applies to the P0 candidate in [PR #104](https://github.com/perceival/openwrt-flint3/pull/104), with the replacement requirements tracked in [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100).
 
+## P1-A implementation follow-up
+
+This branch now implements the first [VLAN table foundation](P1-TABLE-REPORT.md):
+shared table mutex, bounded waits, checked masks/VIDs, raw read and verified
+VLAN 1 setup. The bit-25 name is neutral and its raw value is preserved. This
+is partial P1-A progress; L2 methods/status and full bridge/VLAN/FDB/MDB/STP
+semantics remain unresolved or unimplemented. The following research plan
+continues to define the wider dependencies and bench gates.
+
 ## 1. Conclusion and current boundary
 
 There is enough public material to design a substantial part of P1: serialized
@@ -66,8 +75,9 @@ work is feasible, not that a feature is implemented or ready to advertise.
 2. **VLAN bit 25:** RTLPlayground prose calls it a validity indicator.
    Air's `rtl837x_vlan_data` calls it `ivl_en`; ZTE calls it `VLAN_IVL`.
    P0 sets that bit through the neutral `RTL837X_VLAN_FIELD25` name and its
-   readback compares the raw programmed bit only. Do not infer general entry
-   validity; resolve the interpretation before building VLAN table APIs.
+   readback compares the raw programmed bit only. P1-A preserves that value
+   and likewise does not infer general entry validity; resolve the
+   interpretation before building validity/IVL/FID behavior around it.
 3. **L2 word B bit 29:** RTLPlayground's older dump explanation calls it
    valid/stale; its multicast encoder and ZTE's FDB decoder identify it as
    **IVL**. Do not discard entries or terminate a dump based solely on that bit.

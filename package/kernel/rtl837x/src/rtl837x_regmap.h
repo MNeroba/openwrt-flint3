@@ -106,6 +106,7 @@
 #define RTL837X_TABLE_STATUS_METHOD                 0x5cb0
 #define RTL837X_TABLE_WRITE_DATA0                   0x5cb8
 #define RTL837X_TABLE_READ_DATA0                    0x5ccc
+#define RTL837X_TABLE_TARGET                        GENMASK(15, 8)
 #define RTL837X_TABLE_VLAN                          0x03
 #define RTL837X_TABLE_WRITE                         BIT(1)
 #define RTL837X_TABLE_EXECUTE                       BIT(0)

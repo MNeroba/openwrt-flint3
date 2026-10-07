@@ -31,6 +31,14 @@ The candidate scope and sources are documented in [README.md](README.md) and
 [PROVENANCE.md](PROVENANCE.md). The board description is
 [`ipq5332-gl-be9300.dts`](../../../target/linux/qualcommbe/dts/ipq5332-gl-be9300.dts).
 
+For the P1-A table branch, [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md) records
+changed build inputs and added idle/readback checks. Use an image built from
+that exact revision; the parent four-object ARM64 artifact does not qualify
+it. Bootstrap readback mismatch is a setup error; include its written/read
+values in the report and repeat the P0 forwarding/reset matrix.
+[P1-TABLE-TEST.md](P1-TABLE-TEST.md) provides the table-specific A0–A6
+procedure, expected BE9300 bootstrap word and a separate result template.
+
 ## 1. What this first test should prove
 
 The first run is a narrow smoke test of the P0 path:
@@ -221,6 +229,26 @@ or command output. A blocked test is not a pass.
 | T6 | Record `bridge vlan show` and the driver's `P0 readback` lines from `dmesg`. The readback runs during setup through the driver's regmap path. Its VLAN-table transaction issues a read command only; do not issue raw MDIO commands. | Host output records software configuration only. VLAN 1 table word, available-port PVIDs, isolation masks, learning limits, flood destinations and VLAN filter controls must report `PASS`. A mismatch/read error is not a pass. Also run the standalone-port negative forwarding check below. General VLAN offload is not implemented. |
 | T7 | Reboot normally three times, then perform one full power-off/power-on with the verified recovery/management path available. Repeat T1–T4 after each boot. | Probe, link mapping, and basic CPU/LAN traffic remain consistent. No boot relies on stale switch state left by the previous run. |
 | T8 | Optional: after all smoke tests pass, measure `iperf3` through a 2.5G-capable LAN peer in each direction. | Record peer, link speed, command, throughput, loss, and counters. No throughput target is defined for this unvalidated P0 candidate. |
+
+### P1-A VLAN table follow-up checks
+
+These checks apply only to an image built from the P1-A branch and do not
+replace the P0 gates above. The parent Release-7 CI and hardware report are not
+evidence for this code.
+
+1. Save the complete boot log. Confirm the VLAN 1 transaction completes without
+a table timeout or VLAN readback mismatch; preserve written/read words if it
+fails. Record silicon revision and exact image/source hashes.
+2. Capture all P1-A setup snapshot lines. Check VLAN 1 member/untag fields,
+PVID 1 on each enabled DSA port, CPU-only isolation, zero learning limits,
+CPU-only flood masks and the documented VLAN-control fields. Record raw values
+and any mismatch. A diagnostic mismatch does not itself fail setup.
+3. Repeat T2–T5 and T7 from this document. Confirm basic forwarding and software
+bridge behavior are unchanged. These packet tests do not prove the raw
+isolation or VLAN semantics; keep the register snapshot as separate evidence.
+4. Do not use unsupported raw MDIO writes or a debug interface to inject table
+busy/readback failures. Fault-injection coverage remains open until a safe,
+reviewed mechanism exists.
 
 ### Additional P0 regression checks
 

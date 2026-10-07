@@ -558,48 +558,15 @@ static void rtl8372n_port_disable(struct dsa_switch *ds, int port)
 static int rtl8372n_setup_default_vlan(struct rtl837x_priv *priv,
 				       u16 members, u16 untagged)
 {
-	u32 vlan_word, command;
+	u32 vlan_word;
 	int ret;
 
-	vlan_word = RTL837X_VLAN_FIELD25 |
-		    FIELD_PREP(RTL837X_VLAN_MEMBER_MASK, members) |
-		    FIELD_PREP(RTL837X_VLAN_UNTAG_MASK, untagged);
-	ret = rtl837x_reg_write(priv, RTL837X_TABLE_WRITE_DATA0, vlan_word);
+	ret = rtl837x_vlan_set_port_masks(RTL837X_VLAN_FIELD25,
+					  members, untagged, &vlan_word);
 	if (ret)
 		return ret;
 
-	command = FIELD_PREP(RTL837X_TABLE_ADDRESS, 1) |
-		  (RTL837X_TABLE_VLAN << 8) |
-		  RTL837X_TABLE_WRITE | RTL837X_TABLE_EXECUTE;
-	ret = rtl837x_reg_write(priv, RTL837X_TABLE_CTRL, command);
-	if (ret)
-		return ret;
-
-	return regmap_read_poll_timeout(priv->map, RTL837X_TABLE_CTRL, command,
-					!(command & RTL837X_TABLE_EXECUTE),
-						10, 1000);
-}
-
-static int rtl8372n_read_vlan_entry(struct rtl837x_priv *priv, u16 vid,
-				    u32 *data)
-{
-	u32 command;
-	int ret;
-
-	/* EXECUTE without WRITE reads the VLAN entry into TABLE_READ_DATA0. */
-	command = FIELD_PREP(RTL837X_TABLE_ADDRESS, vid) |
-		  (RTL837X_TABLE_VLAN << 8) | RTL837X_TABLE_EXECUTE;
-	ret = rtl837x_reg_write(priv, RTL837X_TABLE_CTRL, command);
-	if (ret)
-		return ret;
-
-	ret = regmap_read_poll_timeout(priv->map, RTL837X_TABLE_CTRL, command,
-				       !(command & RTL837X_TABLE_EXECUTE),
-				       10, 1000);
-	if (ret)
-		return ret;
-
-	return rtl837x_reg_read(priv, RTL837X_TABLE_READ_DATA0, data);
+	return rtl837x_vlan_write(priv, 1, vlan_word);
 }
 
 static void rtl8372n_report_p0_reg(struct rtl837x_priv *priv,
@@ -671,7 +638,7 @@ static void rtl8372n_report_p0_readback(struct dsa_switch *ds, u16 members)
 	expected_vlan = RTL837X_VLAN_FIELD25 |
 		FIELD_PREP(RTL837X_VLAN_MEMBER_MASK, members) |
 		FIELD_PREP(RTL837X_VLAN_UNTAG_MASK, members);
-	ret = rtl8372n_read_vlan_entry(priv, 1, &vlan_data);
+	ret = rtl837x_vlan_read(priv, 1, &vlan_data);
 	if (ret) {
 		dev_warn(priv->dev, "P0 readback VLAN 1 table entry failed: %d\n",
 			 ret);
@@ -825,6 +792,191 @@ static void rtl8372n_quiesce(struct dsa_switch *ds)
 		dev_warn(priv->dev, "failed to power down PHYs: %d\n", ret);
 }
 
+static bool rtl8372n_snapshot_read(struct rtl837x_priv *priv,
+				   const char *name, u32 reg, u32 *value)
+{
+	int ret;
+
+	ret = rtl837x_reg_read(priv, reg, value);
+	if (ret) {
+		dev_warn(priv->dev,
+			 "P1-A setup snapshot: failed to read %s at %#x: %d\n",
+			 name, reg, ret);
+		return false;
+	}
+
+	return true;
+}
+
+/*
+ * Capture the setup state for first-device diagnosis. This is deliberately
+ * best-effort: a diagnostic read or mismatch must not fail DSA probe.
+ */
+static void rtl8372n_snapshot_setup(struct rtl837x_priv *priv, u16 members,
+				    u16 cpu_mask, u16 user_mask)
+{
+	u32 vlan, pvid, value;
+	unsigned int port, i;
+	int ret;
+
+	ret = rtl837x_vlan_read(priv, 1, &vlan);
+	if (ret) {
+		dev_warn(priv->dev,
+			 "P1-A setup snapshot: VLAN 1 table read failed: %d\n",
+			 ret);
+	} else {
+		u32 expected = members |
+			       FIELD_PREP(RTL837X_VLAN_UNTAG_MASK, members);
+		u32 mask = RTL837X_VLAN_MEMBER_MASK |
+			   RTL837X_VLAN_UNTAG_MASK;
+		u32 vlan_members = (u32)FIELD_GET(RTL837X_VLAN_MEMBER_MASK,
+						  vlan);
+		u32 vlan_untagged = (u32)FIELD_GET(RTL837X_VLAN_UNTAG_MASK,
+						   vlan);
+
+		dev_info(priv->dev,
+			 "P1-A setup snapshot VLAN1: raw=%#x members=%#x untagged=%#x\n",
+			 vlan, vlan_members, vlan_untagged);
+		if ((vlan & mask) != expected)
+			dev_warn(priv->dev,
+				 "P1-A VLAN1 membership mismatch: raw=%#x expected fields=%#x\n",
+				 vlan, expected);
+	}
+
+	for (port = 0; port < RTL8372N_NUM_PORTS; port += 2) {
+		u32 port_pair = BIT(port);
+		u32 reg = RTL837X_PORT_PVID_REG(port);
+		unsigned int offset;
+
+		if (port + 1 < RTL8372N_NUM_PORTS)
+			port_pair |= BIT(port + 1);
+
+		if (!(members & port_pair) ||
+		    !rtl8372n_snapshot_read(priv, "PVID pair", reg, &pvid))
+			continue;
+
+		for (offset = 0; offset < 2; offset++) {
+			unsigned int p = port + offset;
+			u32 actual;
+
+			if (!(members & BIT(p)))
+				continue;
+			actual = (pvid >> ((p & 1) * 12)) & 0x0fff;
+			dev_info(priv->dev,
+				 "P1-A setup snapshot PVID port %u: reg=%#x raw=%#x value=%u\n",
+				 p, reg, pvid, actual);
+			if (actual != 1)
+				dev_warn(priv->dev,
+					 "P1-A PVID mismatch port %u: got %u expected 1\n",
+					 p, actual);
+		}
+	}
+
+	for (port = 0; port < RTL8372N_NUM_PORTS; port++) {
+		bool have_isolation, have_learning;
+		u32 expected = 0;
+
+		if (user_mask & BIT(port))
+			expected = cpu_mask;
+		else if (cpu_mask & BIT(port))
+			expected = user_mask;
+
+		have_isolation =
+			rtl8372n_snapshot_read(priv, "port isolation",
+					       RTL837X_PORT_ISOLATION_REG(port),
+					       &value);
+		if (have_isolation) {
+			u32 observed = (u32)(value & RTL837X_L2_FLOOD_MASK);
+
+			dev_info(priv->dev,
+				 "P1-A setup snapshot isolation port %u: raw=%#x expected-mask=%#x\n",
+				 port, value, expected);
+			if (observed != expected)
+				dev_warn(priv->dev,
+					 "P1-A isolation mismatch port %u: got %#x expected %#x\n",
+					 port, observed, expected);
+		}
+
+		have_learning =
+			rtl8372n_snapshot_read(priv, "learning limit",
+					       RTL837X_L2_LEARN_LIMIT_REG(port),
+					       &value);
+		if (have_learning) {
+			dev_info(priv->dev,
+				 "P1-A setup snapshot learning limit port %u: raw=%#x\n",
+				 port, value);
+			if (value & RTL837X_L2_LEARN_LIMIT_MASK)
+				dev_warn(priv->dev,
+					 "P1-A learning limit nonzero port %u: raw=%#x\n",
+					 port, value);
+		}
+	}
+
+	for (i = 0; i < ARRAY_SIZE(rtl8372n_cpu_flood_regs); i++) {
+		if (!rtl8372n_snapshot_read(priv, "flood mask",
+					    rtl8372n_cpu_flood_regs[i], &value))
+			continue;
+
+		{
+			u32 observed = (u32)(value & RTL837X_L2_FLOOD_MASK);
+
+			dev_info(priv->dev,
+				 "P1-A setup snapshot flood reg %#x: raw=%#x\n",
+				 rtl8372n_cpu_flood_regs[i], value);
+			if (observed != cpu_mask)
+				dev_warn(priv->dev,
+					 "P1-A flood mask mismatch reg %#x: got %#x expected %#x\n",
+					 rtl8372n_cpu_flood_regs[i], observed, cpu_mask);
+		}
+	}
+
+	if (rtl8372n_snapshot_read(priv, "VLAN ingress control",
+				   RTL837X_VLAN_INGRESS_CTRL, &value)) {
+		dev_info(priv->dev,
+			 "P1-A setup snapshot VLAN ingress control: raw=%#x\n",
+			 value);
+		if (value)
+			dev_warn(priv->dev,
+				 "P1-A VLAN ingress control nonzero: raw=%#x\n",
+				 value);
+	}
+
+	if (rtl8372n_snapshot_read(priv, "VLAN ingress filter",
+				   RTL837X_VLAN_INGRESS_FILTER, &value)) {
+		u32 observed = (u32)(value &
+				     GENMASK(RTL8372N_NUM_PORTS - 1, 0));
+
+		dev_info(priv->dev,
+			 "P1-A setup snapshot VLAN ingress filter: raw=%#x\n",
+			 value);
+		if (observed != members)
+			dev_warn(priv->dev,
+				 "P1-A VLAN ingress filter mismatch: got %#x expected %#x\n",
+				 observed, members);
+	}
+
+	if (rtl8372n_snapshot_read(priv, "VLAN egress tag",
+				   RTL837X_VLAN_EGRESS_TAG, &value)) {
+		dev_info(priv->dev,
+			 "P1-A setup snapshot VLAN egress tag: raw=%#x\n",
+			 value);
+		if (value)
+			dev_warn(priv->dev,
+				 "P1-A VLAN egress tag nonzero: raw=%#x\n", value);
+	}
+
+	if (rtl8372n_snapshot_read(priv, "VLAN control",
+				   RTL837X_VLAN_CTRL, &value)) {
+		dev_info(priv->dev,
+			 "P1-A setup snapshot VLAN control: raw=%#x\n",
+			 value);
+		if (!(value & RTL837X_VLAN_CTRL_FILTER))
+			dev_warn(priv->dev,
+				 "P1-A VLAN filtering is disabled: ctrl=%#x\n",
+				 value);
+	}
+}
+
 static int rtl8372n_setup_cpu_forwarding(struct dsa_switch *ds)
 {
 	struct rtl837x_priv *priv = ds->priv;
@@ -941,6 +1093,8 @@ static int rtl8372n_setup(struct dsa_switch *ds)
 	ret = rtl8372n_set_tag_rtl(ds);
 	if (ret)
 		goto fail;
+	rtl8372n_snapshot_setup(priv, members, dsa_cpu_ports(ds),
+				dsa_user_ports(ds));
 	/* Register PHYs only after forwarding and the PHY power policy are set. */
 	ret = rtl8372n_setup_mdio(priv);
 	if (ret)

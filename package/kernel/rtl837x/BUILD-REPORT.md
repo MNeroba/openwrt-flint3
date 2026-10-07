@@ -1,5 +1,12 @@
 # RTL8372N P0 build and review report
 
+This report's CI and hardware evidence is for the P0 Release-7 source, not the
+separate P1-A VLAN table candidate. P1-A adds a new module object, changes the
+bootstrap transaction and records best-effort register diagnostics. P1-A's
+focused ARM64 module and full BE9300 AP-config package/DTB/image CI builds now
+pass; BE9300 hardware validation remains pending. See
+[P1-TABLE-REPORT.md](P1-TABLE-REPORT.md) for the separate P1-A evidence ledger.
+
 ## Latest result (status checked 2026-10-07)
 
 | Gate | Result | Evidence / scope |

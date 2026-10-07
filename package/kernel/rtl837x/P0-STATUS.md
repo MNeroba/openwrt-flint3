@@ -152,3 +152,20 @@ release 6 fixes it and needs its own build and bench run.
 5. Restore P1/P2 behavior or obtain maintainer agreement to a narrower scope.
 6. The Draft remains a source and provenance review candidate. Hardware
    qualification and required source-lineage decisions remain open.
+
+## P1-A follow-up branch
+
+The separate P1-A candidate adds a mutex-protected VLAN 1 table transaction
+with a bounded busy wait and exact full-word readback. It also logs a
+best-effort setup snapshot of VLAN 1, configured PVIDs, isolation, learning
+limits, flood masks and VLAN controls. Snapshot mismatches are diagnostic and
+do not fail probe; a VLAN table readback mismatch still fails the bootstrap.
+See [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md) and
+[FIRST-HARDWARE-TEST.md](FIRST-HARDWARE-TEST.md) for scope and acceptance steps.
+The P1-A source passed focused ARM64 module and full BE9300 AP-config
+package/DTB/image builds before it was rebased onto P0 head
+`7e51247b3882567ce891481395b34e2a2c25f116`; those CI artifacts do not validate
+the current rebased candidate. Its exact-source builds and all P1-A BE9300
+hardware checks remain pending. The Release-7 evidence above is for the parent
+P0 source only. See [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md) for the exact
+candidate revision and gates.

@@ -29,6 +29,8 @@ struct rtl837x_priv {
 	struct regmap *map;
 	struct mutex map_lock;
 	struct mutex sds_lock;
+	/* Table engine -> regmap -> parent MII bus; no PHY/SDS nesting. */
+	struct mutex table_lock;
 	/* Child MII bus -> PHY/SDS engine -> regmap -> parent MII bus. */
 	struct mutex phy_lock;
 	u16 phy_page[RTL8372N_NUM_PORTS];
@@ -66,6 +68,10 @@ int rtl837x_reg_bits_read(struct rtl837x_priv *priv, u32 reg, u32 mask,
 			  u32 *pval);
 int rtl837x_reg_bits_write(struct rtl837x_priv *priv, u32 reg, u32 mask,
 			   u32 val);
+int rtl837x_vlan_set_port_masks(u32 entry, u16 members, u16 untagged,
+				u32 *result);
+int rtl837x_vlan_read(struct rtl837x_priv *priv, u16 vid, u32 *entry);
+int rtl837x_vlan_write(struct rtl837x_priv *priv, u16 vid, u32 entry);
 int rtl837x_sds_reg_bits_write(struct rtl837x_priv *priv, u8 sds, u8 page,
 			       u8 reg, u16 mask, bool set);
 int rtl837x_phy_read_ocp(struct rtl837x_priv *priv, u16 phy, int regnum,
