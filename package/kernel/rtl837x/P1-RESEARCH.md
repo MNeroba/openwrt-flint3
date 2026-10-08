@@ -1,6 +1,6 @@
 # RTL8372N P1 feasibility and implementation plan
 
-Updated: 2026-10-04. Applies to the P0 candidate in [PR #104](https://github.com/perceival/openwrt-flint3/pull/104), with the replacement requirements tracked in [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100).
+Updated: 2026-10-08. Applies to the P0 candidate in [PR #104](https://github.com/perceival/openwrt-flint3/pull/104), with the replacement requirements tracked in [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100).
 
 ## P1-A implementation follow-up
 
@@ -11,13 +11,27 @@ is partial P1-A progress; L2 methods/status and full bridge/VLAN/FDB/MDB/STP
 semantics remain unresolved or unimplemented. The following research plan
 continues to define the wider dependencies and bench gates.
 
+The current P1-B candidate wires CIST state and dynamic per-port L2 flush to
+DSA callbacks and installs an IVL static-L2 multicast route for the reserved
+STP group on VLAN 1. Its assumptions, limits and hardware tests are recorded in
+[P1-B-REPORT.md](P1-B-REPORT.md) and [P1-B-TEST.md](P1-B-TEST.md). CPU
+delivery, RTL8_4 reason handling and no-egress behavior remain unverified on
+BE9300; this does not enable hardware bridge or general VLAN offload.
+
+The first P1-B run at `61d286b50a` passed setup readbacks but failed Gate 0
+on all-port fast-age timeouts. Its whole-word completion test is corrected to
+BUSY bit 17 with mode/restore verification; exact-source retesting remains
+required before the BPDU, CIST transition and dynamic-entry checks.
+
 ## 1. Conclusion and current boundary
 
 There is enough public material to design a substantial part of P1: serialized
 VLAN/L2 table transactions, VLAN membership/PVID operations, learning/flood
 controls, CIST port states and a static multicast entry encoder. This does not
 establish BE9300 operation, resolve all table semantics or settle source lineage.
-No P1 runtime callbacks are added by this documentation revision.
+The candidate now has partial DSA STP hooks, but no hardware bridge forwarding
+or general VLAN/FDB/MDB offload is enabled. The proposed BPDU route remains a
+hardware-test hypothesis rather than an accepted datapath contract.
 
 Keep the agreed order: **P0 build and hardware bring-up → P1 switching parity →
 P2 LAG/rate limiting**. The maintainer's [scheduling and order comment](https://github.com/perceival/openwrt-flint3/issues/99#issuecomment-5945585992)
@@ -137,15 +151,21 @@ status are also not justified by a matching register address alone.
 
 - Linux bridge owns the STP state machine. Implement CIST state enforcement
   and dynamic fast-age, not the firmware's separate STP daemon.
-- Preferred path: a properly sourced reserved-multicast **trap to external
-  CPU port 3**, with readback and captured tag reason. The existing proposed
+- The P1-B candidate currently uses a static L2 multicast entry limited to
+  the external CPU port, for VLAN 1 only. It is based on the public
+  RTLPlayground layout and has a readback check; it remains unproven on
+  BE9300. Do not extend it to other VLANs until per-VLAN lifecycle and PVID
+  behavior are implemented.
+- A reserved-multicast **trap to external CPU port 3** remains a possible
+  alternative if the static L2 route does not produce correct Linux DSA/STP
+  semantics. The existing proposed
   [Airjinkela BPDU PR #2](https://github.com/airjinkela/rtl837x-dsa-driver/pull/2)
   uses that project's generated-header definitions. It is an unverified
   proposal, not a provenance-cleared implementation to transplant into #104.
-- Alternative: static L2 multicast membership limited to CPU port 3 for each
-  applicable VLAN/PVID. RTLPlayground uses this because its embedded MCU is
-  not the external trap destination. That limitation does not establish that
-  BE9300 needs the same workaround.
+- Airjinkela's latest comment on [PR #2](https://github.com/airjinkela/rtl837x-dsa-driver/pull/2#issuecomment-5968379249)
+  says a short test suggests an L2 multicast route may solve the trap issue;
+  implementation details and Flint3 hardware evidence are still pending. Treat
+  this as a lead, not as a validated route or permission to copy its code.
 - If evaluating the alternative, prove lookup priority relative to reserved
   multicast, delivery from BLOCKING/LISTENING ports, tag/admission handling,
   BPDU visibility to the Linux bridge and the CPU forwarding mark. Maintain
@@ -163,8 +183,8 @@ bench-qualified in the stated dependency order.
 
 | Step | Deliverable | Required gate |
 | --- | --- | --- |
-| P1-A | Narrow register ledger, corrected field meanings, common serialized VLAN/L2 transaction helpers, checked codecs | Explain the three conflicts above; record provenance for every new field; build the exact revision; test P0 again after bootstrap refactoring |
-| P1-B | BPDU delivery decision and per-port CIST/learning/dynamic-flush primitives | P0 CPU/PHY/tag/isolation passes; demonstrate CPU-only BPDU reception without a physical loop; dynamic flush preserves static entries |
+| P1-A | Narrow register ledger, serialized VLAN read/write, checked VID/mask handling and verified VLAN 1 bootstrap | Explain the three field conflicts; record provenance for each retained field; build the exact revision; rerun P0 after bootstrap changes |
+| P1-B | CIST and fast-age DSA callbacks plus a VLAN 1 CPU-only BPDU route candidate | Build exact source; pass P0 gates; demonstrate BPDU is delivered to Linux with correct port semantics and no LAN egress without a loop; verify CIST transitions and static-entry preservation; extend learning/VLAN lifecycle before claiming full P1 |
 | P1-C | One-bridge hardware forwarding plus VLAN add/delete/filter/PVID and supported bridge flags | B is proved; tagged/untagged/no-PVID and filtering changes pass; leave/failure restores CPU-only isolation; database scope is explicit |
 | P1-D | FDB add/delete/dump and MDB membership, including CPU/local entries | Lookup hit, empty/end, deletion, capacity and VID/database semantics established; shared-entry lifecycle and rollback verified |
 | P1-E | Integrated bridge/VLAN/STP regression report and agreed remaining deferrals | Isolated loop test only after non-loop BPDU gate; all bench cases below recorded for the exact revision |

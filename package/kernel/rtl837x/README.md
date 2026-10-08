@@ -9,7 +9,17 @@ The [pre-PR review and remediation plan](PRE-PR-PLAN.md) records blocking
 source findings, build requirements and the staged publication gates.
 The [P1 feasibility and implementation plan](P1-RESEARCH.md) maps public
 VLAN/L2/STP sources, conflicting field descriptions, dependencies and future
-acceptance tests. It does not add P1 runtime support.
+acceptance tests. The [P1-B report](P1-B-REPORT.md) records a test candidate
+for CIST state, per-port fast-age and a VLAN 1 BPDU-to-CPU route. The matching
+[maintainer test procedure](P1-B-TEST.md) defines the hardware checks and
+current limits.
+
+The first P1-B image (`61d286b50a`) built successfully but failed hardware
+Gate 0 with dynamic L2 flush timeouts on every user port. Setup readbacks and
+PHY/link checks passed; BPDU and further STP/fast-age tests were not run. The
+follow-up polls BUSY bit 17 instead of requiring a zero command word, verifies
+flush mode restoration, and records raw register values. Build and retest this
+correction using the narrow Gate 0 procedure before proceeding to Gates 1–3.
 
 ## P1-A VLAN table follow-up
 
@@ -24,15 +34,19 @@ The pre-rebase P1-A source passed the focused ARM64 module build and the full
 BE9300 AP-config package/DTB/image build. Those artifacts used the previous P0
 base and do not validate this rebased source revision. Exact tested revisions,
 CI links and checksums are recorded in the [P1-A report](P1-TABLE-REPORT.md).
-The rebased candidate needs fresh build checks; neither prior CI result is a
-hardware test, and the VLAN bootstrap/readback behavior still needs first-device
-validation.
+The later P1-B image at `61d286b50a` built this rebased table foundation and
+its setup readbacks passed on BE9300, but the run stopped at the flush failure.
+This does not complete P1-A's A0–A6 hardware matrix. The corrected P1-B source
+needs fresh build and Gate 0 checks.
 
-P1-A does not add user-configurable VLAN offload, FDB/MDB, bridge/STP, LAG or
-rate limiting. The rebased source needs fresh module and OpenWrt image builds,
-then first-device tests; Release-7 P0 evidence does not cover these changes. The
-[P1-A table procedure and report template](P1-TABLE-TEST.md) supplements the
-full P0 first-device matrix with the changed bootstrap/readback checks.
+P1-A does not add user-configurable VLAN offload, FDB/MDB, hardware bridge
+forwarding, LAG or rate limiting. P1-B wires CIST state and dynamic fast-age
+callbacks and installs a CPU-only static BPDU entry for VLAN 1. It is not full
+STP/bridge offload: the BPDU route, RTL8_4 reason and Linux bridge reception
+need a fresh exact-source build and first-device validation. Release-7 P0
+evidence does not cover these changes. The [P1-A table procedure and report
+template](P1-TABLE-TEST.md) supplements the P0 test matrix with the changed
+bootstrap/readback checks.
 
 ## P0 scope
 
@@ -67,11 +81,12 @@ branch until board compatibility and feature deferrals have been agreed.
 
 ## Not in P0
 
-The candidate has no DSA VLAN add/delete callbacks, FDB or MDB offload, STP
-offload, LAG, rate limiting, hardware MIB/ethtool counters, GPIO controller,
-or EEE support. The initial VLAN 1 setup only bootstraps the switch; it does
-not provide general VLAN offload. LAG and rate limiting remain the work
-tracked by Issues #47 and #49.
+The candidate has no DSA VLAN add/delete callbacks, FDB or MDB offload,
+hardware bridge forwarding, LAG, rate limiting, hardware MIB/ethtool counters,
+GPIO controller, or EEE support. STP integration is partial: CIST state and
+fast-age callbacks are present, with an unverified CPU-only BPDU route for
+VLAN 1. The VLAN 1 setup does not provide general VLAN offload. LAG and rate
+limiting remain the work tracked by Issues #47 and #49.
 
 The SerDes path selects the 10GBASE-R mode and applies the board's optional
 polarity swaps. It does not contain PHY firmware, vendor patch arrays, or the

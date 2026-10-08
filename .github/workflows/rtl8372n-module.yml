@@ -2,10 +2,11 @@ name: RTL8372N module build
 
 on:
   push:
-    branches: [rtl837x-dsa-port, rtl8372n-p1-tables]
+    branches: [rtl837x-dsa-port, rtl8372n-p1-tables, rtl8372n-p1-b-stp]
     paths:
       - .github/workflows/rtl8372n-module.yml
       - package/kernel/rtl837x/src/**
+      - package/kernel/rtl837x/tests/l2-flush-regression.*
   workflow_dispatch:
 
 permissions:
@@ -21,6 +22,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential gcc-aarch64-linux-gnu bison flex libssl-dev libelf-dev bc xz-utils
+      - name: Check L2 flush regression
+        run: sh package/kernel/rtl837x/tests/l2-flush-regression.sh
       - name: Fetch pinned Linux 6.18.39
         run: |
           curl --fail --location --retry 3 -o linux.tar.xz https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.18.39.tar.xz

@@ -7,13 +7,14 @@
 #include <linux/device.h>
 #include <linux/errno.h>
 #include <linux/ethtool.h>
+#include <linux/if_bridge.h>
 #include <linux/iopoll.h>
 #include <linux/kernel.h>
 #include <linux/mii.h>
 #include <linux/of.h>
+#include <linux/of_net.h>
 #include <linux/phy.h>
 #include <linux/regmap.h>
-#include <linux/of_net.h>
 
 #include "rtl837x.h"
 
@@ -555,6 +556,60 @@ static void rtl8372n_port_disable(struct dsa_switch *ds, int port)
 			 port, ret);
 }
 
+static void rtl8372n_port_stp_state_set(struct dsa_switch *ds, int port, u8 state)
+{
+	struct rtl837x_priv *priv = ds->priv;
+	enum rtl837x_cist_state cist_state;
+	int ret;
+
+	if (!rtl8372n_is_internal_phy_port(port))
+		return;
+
+	switch (state) {
+	case BR_STATE_DISABLED:
+		cist_state = RTL837X_CIST_DISABLED;
+		break;
+	case BR_STATE_LISTENING:
+	case BR_STATE_BLOCKING:
+		/* The ASIC has no listening state; both states block and do not learn. */
+		cist_state = RTL837X_CIST_BLOCKING;
+		break;
+	case BR_STATE_LEARNING:
+		cist_state = RTL837X_CIST_LEARNING;
+		break;
+	case BR_STATE_FORWARDING:
+		cist_state = RTL837X_CIST_FORWARDING;
+		break;
+	default:
+		dev_warn_ratelimited(priv->dev,
+				     "unsupported bridge STP state %u on port %d; blocking port\n",
+				     state, port);
+		cist_state = RTL837X_CIST_BLOCKING;
+		break;
+	}
+
+	ret = rtl837x_stp_set_state(priv, port, cist_state);
+	if (ret)
+		dev_err_ratelimited(priv->dev,
+				    "failed to set CIST state %u on port %d: %d\n",
+				    (unsigned int)cist_state, port, ret);
+}
+
+static void rtl8372n_port_fast_age(struct dsa_switch *ds, int port)
+{
+	struct rtl837x_priv *priv = ds->priv;
+	int ret;
+
+	if (!rtl8372n_is_internal_phy_port(port))
+		return;
+
+	ret = rtl837x_l2_flush_port(priv, port);
+	if (ret)
+		dev_err_ratelimited(priv->dev,
+				    "failed dynamic L2 fast-age on port %d: %d\n",
+				    port, ret);
+}
+
 static int rtl8372n_setup_default_vlan(struct rtl837x_priv *priv,
 				       u16 members, u16 untagged)
 {
@@ -1017,11 +1072,14 @@ static int rtl8372n_setup(struct dsa_switch *ds)
 	struct rtl8372n *chip_data = priv->chip_data;
 	struct dsa_port *dp;
 	u16 members;
+	unsigned int cpu_mask, cpu_port;
 	int port, ret;
 
 	ret = rtl8372n_validate_topology(ds, &members);
 	if (ret)
 		return dev_err_probe(priv->dev, ret, "unsupported P0 topology\n");
+	cpu_mask = dsa_cpu_ports(ds);
+	cpu_port = __ffs(cpu_mask);
 	ret = rtl8372n_soft_reset_chip(priv);
 	if (ret)
 		return dev_err_probe(priv->dev, ret, "failed to reset switch\n");
@@ -1093,6 +1151,17 @@ static int rtl8372n_setup(struct dsa_switch *ds)
 	ret = rtl8372n_set_tag_rtl(ds);
 	if (ret)
 		goto fail;
+	ret = rtl837x_bpdu_route_set(priv, 1, cpu_port);
+	if (ret)
+		goto fail;
+	for (port = 4; port <= 7; port++) {
+		if (!(dsa_user_ports(ds) & BIT(port)))
+			continue;
+		ret = rtl837x_stp_set_state(priv, port,
+					    RTL837X_CIST_FORWARDING);
+		if (ret)
+			goto fail;
+	}
 	rtl8372n_snapshot_setup(priv, members, dsa_cpu_ports(ds),
 				dsa_user_ports(ds));
 	/* Register PHYs only after forwarding and the PHY power policy are set. */
@@ -1114,6 +1183,8 @@ static const struct dsa_switch_ops rtl8372n_switch_ops_mdio = {
 	.phylink_get_caps = rtl8372n_phylink_get_caps,
 	.port_enable = rtl8372n_port_enable,
 	.port_disable = rtl8372n_port_disable,
+	.port_stp_state_set = rtl8372n_port_stp_state_set,
+	.port_fast_age = rtl8372n_port_fast_age,
 };
 
 static const struct rtl837x_ops rtl8372n_ops = {

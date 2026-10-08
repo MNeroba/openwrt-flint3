@@ -21,8 +21,10 @@ PHY/SerDes patch payloads; review of the remaining lineage is still pending.
 ## Code reuse and copyright-risk review
 
 - The P0 implementation does not include Airjinkela's restricted generated
-  register header, `rtk-api`, or the PHY/SerDes patch payloads. The module's
-  object list is limited to the four files listed below.
+  register header, `rtk-api`, or the PHY/SerDes patch payloads. P1-A added
+  `rtl837x_table.c`; P1-B adds `rtl837x_stp.c` and `rtl837x_l2.c`, wires CIST
+  and fast-age DSA callbacks, and installs a VLAN 1 BPDU route candidate.
+  Hardware behavior and full source-lineage disposition remain open.
 - Air-derived portions remain in the candidate. The original Air copyright
   notice is retained in `rtl8372n.c`, `rtl837x_mdio.c` and `rtl837x.h`; the
   shared SDS/register helpers in `rtl837x_common.c` are substantially
@@ -67,27 +69,29 @@ and [raw logs](https://gist.github.com/perceival/145d80ee322c48e88870ec011ae1200
 | SDS mode `0x7b20`, mode `0x1a`, polarity pages 0/6 and bits | RTLPlayground [mode constants](https://github.com/logicog/RTLPlayground/blob/f0aea3dcac056e3274fd39e1c76a7117471c37da/rtl837x_regs.h#L64-L88), [SDS init](https://github.com/logicog/RTLPlayground/blob/f0aea3dcac056e3274fd39e1c76a7117471c37da/rtl837x_init.c#L21-L90), [OEM companion settings](https://github.com/logicog/RTLPlayground/blob/f0aea3dcac056e3274fd39e1c76a7117471c37da/machine_init.c#L60-L77); Air [interface-to-mode mapping](https://github.com/airjinkela/rtl837x-dsa-driver/blob/7f3b64c7f3a37db1866fd80ba815d89974d995fd/src/rtl837x_common.c#L207-L220); ZTE [CPU-port-8 setup](https://github.com/cnjn/linux-mainline-zte-zxslc-sr1010/blob/07f8687248578d4be6931c665ff5d08bb6cc3d9d/drivers/net/ethernet/zte/zx279133-rtl8372n.c#L1986-L2040) | `0x1a` is identified as 10GBASE-R/10GR by Air and RTLPlayground. ZTE's value `0x0d` is used with a different USXGMII CPU-port-8 setup and is not a conflicting Flint3 setting. RTLPlayground documents RX swap at page 0/reg 0 bit 9 and page 6/reg 2 bit 13. For TX, RTLPlayground says OEM firmware sets companion SDS0 polarity bits at page 0 bit 8 and page 6 bit 14 for RTL8221B; ZTE also changes these bits in a board-specific sequence. This corroborates behavior but is not an independent clean source. The candidate applies these settings to both SDS lanes from board properties; lane mapping and each flag's effect have not been independently verified. Release-7 link/traffic tests exercise the board configuration as a whole, not each polarity field independently. Generic reset/patch sequences remain excluded; post-reset and polarity-specific coverage are still open. |
 | RTL8_4 CPU tag `0x603c/0x6720/0x6724` | RTLPlayground `rtl837x_regs.h` CPU tag symbols; Air `set_tag_rtl`; Linux `net/dsa/tag_rtl8_4.c` | Native tagger; no copied tagger or private 802.1Q protocol. Header format, forwarding reasons and port identity need traffic tests. |
 | VLAN 1, table `0x5cac/0x5cb8`, read data `0x5ccc`, PVID `0x4e1c`, filter `0x4e14/0x4e18` | RTLPlayground [`vlan_setup` / `vlan_get`](https://github.com/logicog/RTLPlayground/blob/f0aea3dcac056e3274fd39e1c76a7117471c37da/rtl837x_port.c); ZTE VLAN map | Minimal bootstrap only. The new diagnostic issues the public read transaction and reports the raw word; it does not infer bit-25 semantics. General VLAN callbacks are absent. |
-| VLAN 1, table `0x5cac/0x5cb8`, read data `0x5ccc`, PVID `0x4e1c`, filter `0x4e14/0x4e18` | RTLPlayground [`vlan_setup` / `vlan_get`](https://github.com/logicog/RTLPlayground/blob/f0aea3dcac056e3274fd39e1c76a7117471c37da/rtl837x_port.c); ZTE VLAN map | Minimal bootstrap only. The new diagnostic issues the public read transaction and reports the raw word; it does not infer bit-25 semantics. General VLAN callbacks are absent. |
 | VLAN table read `0x5ccc`, selector-byte mask, checked port masks and serialized write/readback | RTLPlayground `rtl837x_regs.h` table-control comment/data symbols; `rtl837x_port.c::vlan_get/create` | New GPL-2.0-only table layer; selector 3 follows code. Whole-word comparison is a new fail-closed policy requiring bench validation; no L2 status/method semantics are introduced. See [P1-TABLE-REPORT.md](P1-TABLE-REPORT.md). |
+| CIST state `0x5310`, two state bits per port, encodings 0=disabled, 1=blocking, 2=learning, 3=forwarding | RTLPlayground `rtl837x_regs.h::RTL837X_MSTP_STATES` and `rtl837x_stp.c::stp_state_set` at pinned commit `f0aea3dcac056e3274fd39e1c76a7117471c37da` | New field-update/readback helper in `rtl837x_stp.c`, connected to DSA STP state callback. No source function copied. Linux LISTENING maps to ASIC BLOCKING. Port mapping and state transitions need BE9300 tests. See [P1-B-REPORT.md](P1-B-REPORT.md). |
+| Static BPDU L2 multicast entry for `01:80:c2:00:00:00`, VID 1, table 4 (`0x5cac`, data `0x5cb8`–`0x5cc0`, output `0x5ccc`–`0x5cd4`) | RTLPlayground [`doc/l2.md`](https://github.com/logicog/RTLPlayground/blob/f0aea3dcac056e3274fd39e1c76a7117471c37da/doc/l2.md) and `rtl837x_port.c::port_l2mc_set`; ZTE `RTL8372N_L2_LOOKUP_HIT` / method fields at pinned commit `07f8687248578d4be6931c665ff5d08bb6cc3d9d` | New narrow transaction installs a static IVL entry targeting the DSA CPU port, serializes with VLAN operations, checks table hit and exact readback, and restores lookup method. No function body copied. Only VLAN 1 is covered; CPU delivery, tag reason, no-egress behavior and semantics on BE9300 need maintainer hardware validation. See [P1-B-REPORT.md](P1-B-REPORT.md) and [P1-B-TEST.md](P1-B-TEST.md). |
+| Dynamic per-port L2 flush: `0x53d4` BUSY bit 17, START bit 16, port mask; `0x53dc` mode/static fields 2:0 | RTLPlayground `rtl837x_regs.h` / `port_l2_forget_port` at `f0aea3dcac056e3274fd39e1c76a7117471c37da`; public [ZTE map](https://github.com/cnjn/linux-mainline-zte-zxslc-sr1010/blob/07f8687248578d4be6931c665ff5d08bb6cc3d9d/drivers/net/ethernet/zte/zx279133-rtl8372n.c#L141-L150) / flush operation at `07f8687248578d4be6931c665ff5d08bb6cc3d9d` | Original whole-word polling produces false timeout with retained masks; both BE9300 boots failed Gate 0 without raw control evidence. Correction polls BUSY alone, preserves unrelated config fields, verifies dynamic-only mode and restored fields. Real timeout or uncertain command/completion I/O error leaves mode stable. No function body copied or restricted header imported. Exact-source retest, dynamic deletion and static preservation remain open. See [P1-B-REPORT.md](P1-B-REPORT.md). |
 | Isolation `0x50c0 + port * 4` | RTLPlayground isolation register; ZTE isolation operations | CPU-only matrix; unused ports cleared. Hardware bridge join/leave code removed. |
 | Learning limit `0x5384 + port * 4`, mask bits 12:0 | ZTE `RTL8372N_L2_LEARN_LIMIT_*`, bridge-flags learning update; RTLPlayground limit address | Zero limit for P0. Confirm actual disable and limit-exceeded behavior on hardware. |
 | Flood `0x5360`–`0x5370`, mask bits 9:0 | ZTE `RTL8372N_*FLOOD`, `rtl8372n_flood_port_set` | CPU-only unknown unicast/multicast/broadcast targets; reserved RMA/control frames are a separate unresolved bench gate. |
 
 ## P1 research boundary
 
-[P1-RESEARCH.md](P1-RESEARCH.md) maps potential VLAN/L2/CIST/BPDU follow-up
-work to the pinned sources above and the Linux v6.18 DSA contract. Those rows
-are research only: they do not extend the implemented feature-to-source map
-or certify new definitions for import. In particular, conflicting descriptions
-of VLAN bit 25 and L2 bit 29 must be resolved before general table APIs are
-implemented. Every newly retained field/operation needs a ledger entry and
-source disposition; hardware validation remains a separate requirement.
+[P1-RESEARCH.md](P1-RESEARCH.md) maps VLAN/L2/CIST/BPDU follow-up work to the
+pinned sources above and the Linux v6.18 DSA contract. The P1-B callbacks and
+VLAN 1 route remain unverified on BE9300. Conflicting descriptions of VLAN bit
+25 and L2 bit 29 must be resolved before general table APIs are implemented.
+Every newly retained field/operation needs a ledger entry and source
+disposition; hardware validation remains a separate requirement.
 
 ## Excluded material and candidate licensing
 
 The module object list contains `rtl8372n.c`, `rtl837x_common.c`,
-`rtl837x_mdio.c`, `rtl8372n_phy.c` and `rtl837x_table.c`. It excludes `rtk-api`, restricted generated
-headers, all PHY/SerDes patch arrays, GPIO, swconfig and debug SDK interfaces.
+`rtl837x_mdio.c`, `rtl8372n_phy.c`, `rtl837x_table.c` and `rtl837x_stp.c`. It
+excludes `rtk-api`, restricted generated headers, all PHY/SerDes patch arrays,
+GPIO, swconfig and debug SDK interfaces.
 The small register header is confined to used definitions and the ledger above.
 
 The adapted driver files declare GPL-2.0-or-later; the new PHY and table layers
