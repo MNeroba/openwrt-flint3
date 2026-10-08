@@ -1,6 +1,6 @@
 # RTL8372N P1 feasibility and implementation plan
 
-Updated: 2026-10-07. Applies to the P0 candidate in [PR #104](https://github.com/perceival/openwrt-flint3/pull/104), with the replacement requirements tracked in [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100).
+Updated: 2026-10-08. Applies to the P0 candidate in [PR #104](https://github.com/perceival/openwrt-flint3/pull/104), with the replacement requirements tracked in [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100).
 
 ## P1-A implementation follow-up
 
@@ -17,6 +17,11 @@ STP group on VLAN 1. Its assumptions, limits and hardware tests are recorded in
 [P1-B-REPORT.md](P1-B-REPORT.md) and [P1-B-TEST.md](P1-B-TEST.md). CPU
 delivery, RTL8_4 reason handling and no-egress behavior remain unverified on
 BE9300; this does not enable hardware bridge or general VLAN offload.
+
+The first P1-B run at `61d286b50a` passed setup readbacks but failed Gate 0
+on all-port fast-age timeouts. Its whole-word completion test is corrected to
+BUSY bit 17 with mode/restore verification; exact-source retesting remains
+required before the BPDU, CIST transition and dynamic-entry checks.
 
 ## 1. Conclusion and current boundary
 

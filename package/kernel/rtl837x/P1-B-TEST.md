@@ -4,6 +4,11 @@ This procedure is for the P1-B test candidate only. It does not qualify
 general VLAN/bridge offload or approve a physical loop test. Use the exact
 build revision reported by CI and include it with every result.
 
+**Status (2026-10-08):** `61d286b50a` failed Gate 0 with dynamic L2 flush
+timeouts on all four ports. Gates 1–3 were not run. The follow-up polls BUSY
+bit 17 and adds mode/restore readbacks. Start with the narrow retest below on
+the corrected revision. See [P1-B-REPORT.md](P1-B-REPORT.md).
+
 ## Safety and setup
 
 1. Use a spare Flint 3 / GL-BE9300, serial console or another recovery path,
@@ -18,6 +23,35 @@ build revision reported by CI and include it with every result.
    `bridge -d link`, and the boot log before changing bridge state.
 
 ## Gate 0: boot and P0 baseline
+
+### Narrow retest of the reported flush failure
+
+Use the same isolated bench topology and preserve an independent management
+path. Record one cold boot and one warm reboot, including network bring-up:
+
+1. Confirm all 33 P0 readbacks, the BPDU entry, initial CIST states, four
+   private PHY bindings and link rates still pass.
+2. Confirm every fast-age request completes without a per-port one-second
+   stall. The reported bring-up invokes ports 7, 6, 5 and 4. Save each
+   `P1-B dynamic L2 fast-age completed` line: it includes raw control and
+   original/dynamic/restored configuration values.
+3. `ctrl after & 0x00020000` must be zero. Other command fields may remain
+   nonzero. `config dynamic & 0x7` must be zero, and
+   `config restored & 0x7` must equal `config before & 0x7`.
+4. Record any port whose callback was not invoked. Exercise missing callbacks
+   only on isolated test ports using Gate 2/3 transitions, preserving the
+   maintenance path. Do not issue raw MDIO writes or create a loop.
+
+If a timeout recurs, stop and attach its phase and raw `ctrl`: this separates
+actual BUSY from a retained mask. An I/O read error is a separate failure.
+Include CIST transitions, link state, full boot/network logs, exact revision,
+and image/module hashes. Do not increase the timeout or proceed to Gate 1.
+
+After this passes, finish the full Gate 0 baseline below on the same image.
+Successful completion alone does not verify dynamic removal or static BPDU
+preservation; those remain Gate 3.
+
+### Full Gate 0 baseline
 
 After boot, check the driver log for the existing P0 VLAN/PVID/isolation/flood
 readbacks and the new P1-B setup messages:

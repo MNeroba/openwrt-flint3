@@ -1,90 +1,112 @@
-# RTL8372N P1-B source work report
+# RTL8372N P1-B implementation and failure report
 
-Updated: 2026-10-07. This follow-up is based on the rebased P1-A source in
-[PR #1](https://github.com/MNeroba/openwrt-flint3/pull/1), whose parent is
-[P0 PR #104](https://github.com/perceival/openwrt-flint3/pull/104). This is a
-hardware-test candidate, not a BE9300 validation report.
+Updated: 2026-10-08. This candidate is stacked on [P1-A PR #1](https://github.com/MNeroba/openwrt-flint3/pull/1),
+whose parent is [P0 PR #104](https://github.com/perceival/openwrt-flint3/pull/104).
+The first P1-B hardware run failed Gate 0. The correction below needs an
+exact-source build and BE9300 retest before Gates 1–3.
 
-## Implemented source scope
+## Observed hardware failure
 
-The candidate now adds a narrow, testable STP/control-frame path:
+Perceival tested `61d286b50ad945c5db135e226374f7cebd5e1269` on BE9300,
+Linux 6.18.39, image revision `r35533+305-3b2bc55dcb`:
+[bench report](https://github.com/MNeroba/openwrt-flint3/pull/2#issuecomment-6054817334),
+[two boot logs and timeline](https://gist.github.com/perceival/872006f2236bc5bc0ccc313318485336).
 
-| Item | Source behavior | What still needs hardware validation |
+All 33 P0 setup readbacks, the static BPDU-entry readback, initial CIST fields,
+four private PHY bindings and four link rates passed. Both cold and warm
+boots then reported a one-second dynamic L2 fast-age timeout on every user
+port during network bring-up. The first port reported a completion timeout;
+the remaining calls failed in the pre-command wait.
+
+Gate 0 is **FAIL** for that revision. The P0 forwarding/isolation matrix on
+this image and P1-B Gates 1–3 are **NOT RUN**. A correct BPDU-entry readback
+does not establish CPU delivery, Linux STP processing or absence of LAN egress.
+
+## Defect and correction
+
+The previous helper used `!command` for both polls of `0x53d4`, requiring the
+whole register to become zero, including the selected port mask. The public
+ZTE RTL8372N map identifies **BUSY at bit 17**, START at bit 16 and the port
+mask at bits 9:0. Its flush operation tests BUSY alone. RTLPlayground's
+per-port example reads `SFR_DATA_16`, the upper 16-bit half, rather than
+requiring the complete 32-bit word to clear.
+
+The zero-word condition is a confirmed source defect. A retained mask with
+BUSY clear reproduces the first completion timeout and later pre-command
+waits in a register model. The hardware logs contain no raw `0x53d4` values,
+so that precise register state still needs confirmation on BE9300.
+
+The correction polls BUSY alone before and after submission, retaining the
+one-second limit and transaction mutex. It changes only mode/static-selection
+bits 2:0 in `0x53dc`, preserves unrelated bits, and verifies dynamic-only mode
+before submitting a command. After BUSY clears it restores and reads back the
+previous mode fields. Timeout, I/O failure or restore mismatch cannot produce
+a success log. A genuine busy timeout or uncertain command/completion I/O
+error leaves the configuration stable instead of racing an active engine.
+The package release increases from 9 to 10.
+
+Success logs now include pre/post control and original/dynamic/restored config
+words. True timeouts report the phase and last control word; unreadable status
+is reported separately. Completion verifies BUSY and configuration only;
+dynamic-entry removal and static BPDU preservation remain Gate 3 observations.
+
+## Implemented scope
+
+| Item | Source behavior | Hardware evidence / remaining gate |
 | --- | --- | --- |
-| CIST state | Maps Linux disabled/listening/blocking/learning/forwarding to the RTL8372N two-bit port state; reads back each write | Field packing, actual data-path effect, state changes on ports 4–7 |
-| Fast-age | DSA `port_fast_age` calls a serialized, bounded per-port dynamic L2 flush; flush mode is restored after completion | Dynamic entries are removed, static entries survive, and timeout/recovery behavior is safe |
-| BPDU route | Setup installs and reads back an IVL static-L2 multicast entry for `01:80:c2:00:00:00`, VID 1, targeting the single DSA CPU port | CPU RX, ingress-port attribution, RTL8_4 reason/forwarding mark, no LAN egress, delivery while the ingress port is blocking |
-| Startup state | Active user ports are set to CIST forwarding before PHY registration; the P0 CPU-only isolation matrix remains in place | Software-forwarded baseline remains intact and no user-to-user hardware path bypasses the CPU |
+| CIST | Linux states map to the two-bit port field; LISTENING maps to BLOCKING; writes read back | Initial forwarding and network-bring-up disabled-state readbacks observed. Gate 2 and data-path effects untested |
+| Fast-age | Serialized dynamic per-port flush, BUSY polling, mode verification/restoration | Original revision timed out; correction needs Gate 0 retest, then Gate 3 |
+| BPDU | Static IVL entry for `01:80:c2:00:00:00`, VID 1, CPU port only; hit/exact three-word readback | Setup readback passed. CPU RX, source port, RTL8_4 reason, Linux processing, no LAN egress and blocked-port delivery untested |
+| P0 path | Initial CIST forwarding with CPU-only isolation retained | Setup/PHY/link evidence recorded; P0 forwarding/isolation regression on P1-B unrun |
 
-The static L2 multicast route is an **unverified alternative** to a reserved-
-multicast trap. RTLPlayground documents this technique on other boards whose
-CPU is an embedded MCU. That does not establish its behavior with the BE9300's
-external CPU port 3 or the RTL8_4 tagger. See the detailed maintainer procedure
-in [P1-B-TEST.md](P1-B-TEST.md). No physical loop is needed or allowed for the
-first BPDU check. This candidate does not change the global reserved-
-multicast action; its reset default and precedence against the static entry
-must be recorded during the hardware test.
+General hardware bridge/VLAN/PVID callbacks, bridge flags, FDB/MDB offload,
+LAG and rate limiting remain outside this candidate. The reserved-multicast
+global action is unchanged. The VLAN 1 static route remains an unverified
+alternative to a BPDU trap with the BE9300 external CPU and RTL8_4 tagger.
+No physical loop is part of the first test.
 
-This remains a P0-style CPU-forwarding configuration. It does **not** enable
-hardware bridge forwarding, user-configurable VLAN/PVID callbacks, bridge
-join/leave, bridge flags, FDB/MDB offload, LAG or rate limiting. BPDU routing
-is programmed for VLAN 1 only because general VLAN/PVID offload is absent.
-Do not claim full STP or bridge offload from the new DSA hooks.
+## Provenance
 
-## Transaction and failure behavior
+Register facts are compared with [RTLPlayground](https://github.com/logicog/RTLPlayground/tree/f0aea3dcac056e3274fd39e1c76a7117471c37da)
+at `f0aea3dcac056e3274fd39e1c76a7117471c37da` (MIT repository; STP function
+marked public domain). BUSY and mode/static fields are compared with the
+public [ZTE map](https://github.com/cnjn/linux-mainline-zte-zxslc-sr1010/blob/07f8687248578d4be6931c665ff5d08bb6cc3d9d/drivers/net/ethernet/zte/zx279133-rtl8372n.c#L141-L150)
+and [flush operation](https://github.com/cnjn/linux-mainline-zte-zxslc-sr1010/blob/07f8687248578d4be6931c665ff5d08bb6cc3d9d/drivers/net/ethernet/zte/zx279133-rtl8372n.c#L4710-L4758)
+at `07f8687248578d4be6931c665ff5d08bb6cc3d9d` (GPL-2.0 source metadata).
+The transaction code is original; no reference function body or restricted
+header is imported. Existing Air/ZTE lineage and SDS questions remain in
+[PROVENANCE.md](PROVENANCE.md).
 
-L2 table staging, command execution, completion polling, status checks and
-readback share `table_lock` with VLAN-table operations. Polling is bounded.
-The BPDU entry is accepted only if the L2 hit status is set and all three
-readback words match the requested CPU-only entry. The helper restores the
-previous L2 lookup method after the readback; a failed restore is reported.
+## Validation
 
-CIST writes are read back and mismatches return an error. DSA's STP and
-fast-age callbacks are void, so failures are logged. Setup fails closed if the
-BPDU entry or initial CIST state cannot be programmed; its cleanup isolates
-all switch ports.
-
-The dynamic flush helper saves `0x53dc`, requests the documented dynamic-only
-per-port mode, submits one port at `0x53d4`, waits up to one second for command
-completion and restores the prior mode. If the engine may still be active, it
-does not race a restore against that engine; this needs review against actual
-hardware behavior.
-
-## Provenance boundary
-
-The L2 multicast entry layout, table registers and operation facts were
-compared with [RTLPlayground](https://github.com/logicog/RTLPlayground/tree/f0aea3dcac056e3274fd39e1c76a7117471c37da)
-at pinned commit `f0aea3dcac056e3274fd39e1c76a7117471c37da` (MIT repository;
-its STP function is marked public domain). L2 hit/method fields were also
-compared with the public [ZTE RTL8372N driver](https://github.com/cnjn/linux-mainline-zte-zxslc-sr1010/blob/07f8687248578d4be6931c665ff5d08bb6cc3d9d/drivers/net/ethernet/zte/zx279133-rtl8372n.c)
-at pinned commit `07f8687248578d4be6931c665ff5d08bb6cc3d9d`. The new Linux
-transaction code is written for this candidate; no function body was copied.
-The references do not prove independent origin of every fact or BE9300
-semantics. Existing Air/ZTE lineage and SDS questions remain open in
-[PROVENANCE.md](PROVENANCE.md); do not describe the complete candidate as
-provenance-clean.
-
-## Validation status
-
-| Gate | Status |
+| Check | Result and scope |
 | --- | --- |
-| Source review / `git diff --check` / checkpatch | PASS |
-| Exact-source kernel/package build | Not yet run; local build environment is blocked before compilation |
-| P0 T6 VLAN/isolation readback | Not run on BE9300 |
-| BPDU CPU delivery and no-egress capture | Not run on BE9300 |
-| CIST state transitions and readback | Not run on BE9300 |
-| Fast-age removes dynamic entries and preserves static BPDU route | Not run on BE9300 |
+| Driver whitespace / strict checkpatch | PASS, 0 errors/warnings/checks for the correction |
+| Host regression of actual production helper | PASS, 20 register-model cases; also passed with AddressSanitizer and UndefinedBehaviorSanitizer |
+| Replay against `61d286b50a` helper | Expected FAIL: zero initial control plus retained completion mask returns `-ETIMEDOUT` |
+| Original `61d286b50a` module build | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37684900484); does not validate changed source |
+| Original `61d286b50a` BE9300 image | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37684899671); failed hardware Gate 0 |
+| Corrected-source module/image CI | Pending new exact-source runs |
+| Corrected-source Gate 0 | NOT RUN |
+| BPDU reception / egress isolation, Gate 1 | NOT RUN |
+| CIST transition matrix, Gate 2 | NOT RUN |
+| Dynamic removal / static preservation, Gate 3 | NOT RUN |
 
-The local OpenWrt build previously stopped in prerequisite checks: this macOS
-checkout is on a case-insensitive filesystem, lacks required GNU build tools,
-and has no `.config` or target build tree. Apple `make` is too old; `gmake`
-did not pass prerequisite checks. No source compilation was reached. The
-candidate needs an exact-source Linux CI build before installation.
+Reproduce the host check with:
 
-## Next gate
+```sh
+sh package/kernel/rtl837x/tests/l2-flush-regression.sh
+```
 
-Run [P1-B-TEST.md](P1-B-TEST.md) on an isolated BE9300 test setup. First confirm
-P0 initialization/readback, then test BPDU CPU reception without a physical
-loop, STP state callbacks and fast-age. A failed BPDU reason/bridge reception
-or any user-port egress blocks P1-C hardware bridge/VLAN offload. LAG (#47) and
-rate limiting (#49) remain later P2 work.
+The harness compiles actual `rtl837x_stp.c` against scripted registers. It
+covers retained command fields, BUSY transitions, ports 4–7, mode restoration,
+I/O failures, mismatches and invalid inputs. Its bounded poll model does not
+qualify kernel timing, physical MDIO concurrency or ASIC entry semantics.
+
+## Next bench gate
+
+Build and identify the corrected source, then perform the narrow Gate 0
+retest in [P1-B-TEST.md](P1-B-TEST.md): cold boot and warm reboot, including
+network bring-up and raw fast-age/config logs. If it passes, finish the P0
+regression on that image, then proceed through Gates 1–3. Any error stops the
+sequence. A physical loop remains outside the first-device procedure.
