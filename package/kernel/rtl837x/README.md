@@ -33,7 +33,9 @@ The current code provides:
   isolation/flooding with learning disabled. Hardware bridge offload is omitted;
   DSA's software bridge fallback is the intended P0 path. Release-7 testing
   passed bidirectional traffic across all six LAN pairs with 30-second iperf3
-  runs and 20/20 pings; hardware VLAN/isolation readback remains unverified.
+  runs and 20/20 pings. Release 8 passed all 33 setup readbacks and partially
+  verified CPU-only isolation for one standalone port; general VLAN offload is
+  not implemented.
 
 The driver currently supports one CPU port and rejects cascaded DSA ports.
 Only RTL8372N is accepted by chip-ID detection. The candidate matches only
@@ -62,18 +64,24 @@ follow-up supplies the missing LAN1 link event and confirms T3 physical cycling
 on every jack. Release 7 also passes T2 with all four ports attached to
 `br-lan`, and T4 with 100/100 pings and 0% loss. T5 passed all six
 software-bridge pairs; counters record 77 new LAN3 RX drops and TCP
-retransmissions, without a defined throughput threshold. T6 remains
-unverified in hardware. The `lan` conduit `tx_errors` value still reads
+retransmissions, without a defined throughput threshold. Release 8 adds T1
+and partial T6 evidence on tested source commit `7e51247b`: setup readbacks passed
+33/33, and one standalone port did not forward the tested traffic to one bridge
+observer. The reverse-direction counter check lacks a packet capture; broader
+isolation and reserved control-frame behavior remain open. The `lan` conduit `tx_errors` value still reads
 `2^64-1`; the raw PPE MIB operands needed to interpret it are unavailable. The
 WAN-side `10GBASE-R link not up before USXG_EN` message still appears, while
 boot continues and the switch CPU link is up. See
 [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for the full evidence and remaining
 P0 gates.
 
-The current working tree adds one-shot setup readbacks for the VLAN 1 table
-entry, PVIDs, isolation, learning limits, flood masks and VLAN filter controls.
-These diagnostics are not part of tested Release 7 and need a fresh build and
-hardware run; they do not change the current T6-unverified status.
+The setup-readback follow-up covers the VLAN 1 table entry, available PVIDs,
+isolation masks, learning limits, CPU flood destinations and VLAN filter
+controls. Focused ARM64 `W=1` module CI passed for source commit `7e51247b`.
+Release 8 booted an image from that exact commit and reports 33/33 readbacks
+passing. Its one-port negative-forwarding result is partial T6 evidence, not a
+general VLAN/isolation sign-off. The broad OpenWrt PR matrix is not green; see
+[BUILD-REPORT.md](BUILD-REPORT.md).
 
 ## Device tree
 
@@ -122,14 +130,13 @@ and [full-image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454
 passed, and the maintainer's [hardware report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988)
 confirms T0/T1/T7 and the full six-pair T5 matrix. The [follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250)
 confirms T2/T3/T4 on release 7, including physical link events on all four
-jacks and a 100-packet ping with 0% loss. Hardware T6 remains unverified.
+jacks and a 100-packet ping with 0% loss. Release 8 adds partial T6 evidence.
 
 ## Staged follow-up
 
-1. Build and test the new setup-readback instrumentation on BE9300; confirm
-   the VLAN/PVID/isolation/learning/flood values and standalone-port negative
-   forwarding behavior. Preserve the T5 RX-drop/retransmission observations
-   in subsequent runs.
+1. Extend the Release-8 T6 result: capture the reverse direction directly,
+   test other standalone-port/observer combinations that are feasible, and
+   record reserved multicast/BPDU behavior without creating a physical loop.
 2. Prepare the shared table engine and resolve VLAN/L2 field meanings and
    source lineage, following [P1-RESEARCH.md](P1-RESEARCH.md). Source design can
    proceed while P0 hardware results are pending.

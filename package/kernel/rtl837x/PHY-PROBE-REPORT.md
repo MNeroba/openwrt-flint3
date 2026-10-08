@@ -1,14 +1,16 @@
 # RTL8372N internal-PHY binding failure and correction
 
-Updated: 2026-10-07 after the release-7 bench follow-up. The RTL8224 binding
+Updated: 2026-10-08 after the Release-8 bench report. The RTL8224 binding
 blocker is resolved on hardware. Release 7 passes T0/T1/T2/T3/T4/T5/T7; the
 spurious PHY power-down warnings on ports 0–2 are absent. Perceival's
-[follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250)
-confirms the full DSA topology, 100/100 T4 pings, and kernel link events for
-physical down/up on all four jacks. The LAN1 capture gap occurred because the
-SSH sampler used LAN1 and lost connectivity during the unplug. T5 covers all
-six software-bridge pairs. T6 hardware VLAN/isolation readback remains
-unverified; P0 is not yet fully qualified.
+[Release-7 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250)
+confirms the full DSA topology, 100/100 T4 pings, and physical down/up events
+on all four jacks. T5 covers all six software-bridge pairs. Release 8 on exact
+source commit `7e51247b` adds exact-revision T1 and partial T6 evidence: 33/33 setup
+readbacks match expected values, and one detached port did not forward the
+tested traffic to one bridge observer. The reverse-direction check is
+counter-only without endpoint capture. General VLAN/bridge offload and
+reserved-control-frame behavior remain unverified; P0 is not fully qualified.
 
 ## Earlier diagnostic hardware failure (release 4)
 
@@ -86,8 +88,10 @@ and all pings had zero loss. The `lan` conduit `tx_errors` value was
 not included, so this counter does not establish packet loss. The aggregate
 CPU snapshot omitted softirq time and cannot estimate forwarding CPU load.
 
-T6 remains unverified because no switch VLAN/isolation register readback was
-provided. The release-7 follow-up supplies T2 output: four `lanN@lan` netdevs,
+At the time of the Release-7 run, T6 was unverified because no switch
+VLAN/isolation register readback was provided. Release 8 supplies tested-revision
+readback and limited negative-forwarding evidence below. The release-7
+follow-up supplies T2 output: four `lanN@lan` netdevs,
 the `lan` DSA conduit, all four ports attached to `br-lan` in forwarding state,
 and both required modules loaded. It also supplies the release-7 T4 run: 100
 packets transmitted and received, 0% loss, RTT min/avg/max/mdev of
@@ -95,13 +99,44 @@ packets transmitted and received, 0% loss, RTT min/avg/max/mdev of
 reported as zero; its separate `tx_errors=2^64-1` value remains uninterpretable
 without the raw PPE MIB operands.
 
+## Release-8 P0 readback and isolation follow-up (2026-10-08)
+
+Perceival's [Release-8 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6048213461)
+tests exact source commit `7e51247b3882567ce891481395b34e2a2c25f116`, kernel
+6.18.39, image revision `r35533+292-3b2bc55dcb`. The report lists the image
+and module SHA-256 values and links the [raw serial/test logs](https://gist.github.com/perceival/3172215cb83c6ea3866fd55bee0808be).
+The boot log shows all four private PHY bindings, no port 0–2 power-down
+warnings, and LAN link rates of 2.5G/1G/2.5G/1G.
+
+The T6 setup readback file contains **33/33 PASS** entries with matching actual
+and expected values for the VLAN 1 table word, isolation masks, learning
+limits, CPU flood destinations, available PVID fields, and VLAN filter/tag
+controls. This verifies that these registers read back as programmed expected;
+it does not establish general VLAN offload semantics by itself.
+
+For the negative-forwarding test, E8450-to-Cudy traffic was visible at the Cudy
+bridge port with `lan2` in the bridge (control); after `lan2 nomaster`, the
+bench CPU saw E8450 frames but the Cudy observer saw zero E8450-sourced frames
+for the tested ARP broadcast and unicast pings. Restoring `lan2` restored 5/5
+ping. This supports isolation for one detached port, one observer and the
+measured direction. The reverse Cudy-to-E8450 result is reported using an
+interface RX-counter delta equal to an idle-window delta, without endpoint
+packet capture, so it is weaker evidence. The raw v3 test file does not include
+that reverse run.
+
+Record T6 as **PARTIAL**: setup readbacks passed and a single CPU-only
+standalone-port scenario is supported. VLAN-tagged traffic, VLAN-aware bridge
+configuration, all-port combinations, multicast/BPDU/reserved-control frames,
+and general bridge/VLAN offload remain untested. Do not treat this as an STP or
+P1-B result.
+
 ### Warning diagnosis
 
 - **PHY power-down `-22` on ports 0–2:** Release 6's `port_disable` treated every non-SerDes port as an internal PHY. The PHY accessor explicitly accepts only ports 4–7, so it returned `-EINVAL` before issuing an MDIO/PHY command. Package release 7 checks the supported PHY-port mask in both `port_enable` and `port_disable`; its module and full-image CI passed. The release-7 boot log confirms the port 0–2 power-down warnings are gone.
 - **Conduit `tx_errors`:** Release 6 reported `18446744073709551614` (`2^64−2`); release 7 reported `2^64−1` both before and after T5. Both values are consistent with unsigned underflow in the existing Qualcomm PPE calculation in `target/linux/qualcommbe/patches-6.18/0342-net-qualcomm-Update-IPQ9574-PPE-driver.patch`, which computes `tx_packets - tx_frames_g`. The raw PPE operands were not included, so this explains the representation but does not establish the hardware-counter semantics or packet loss. This is outside the RTL8372N driver and needs separate raw-MIB validation.
 - **`10GBASE-R link not up before USXG_EN`:** Release 7 still logs this after `qcom_ppe ... wan: configuring for inband/usxgmii`. The boot continues, the DSA CPU link comes up at 10 Gbit/s, and the hardware tests pass. This WAN PCS event is not evidence that the switch-to-SoC CPU link failed and does not explain the earlier release-4 log ending.
 
-Remaining hardware evidence: keep T6 unverified until a safe read-only switch-register method is agreed. Reserved control-frame behavior and the remaining recovery/concurrency checks are also open. T2/T3/T4 and T5 are documented for release 7; T5 covers all six pairs on the CPU/software-bridge path.
+Remaining hardware evidence: Release 8 resolves the safe read-only readback question for the listed setup registers and partially tests one-port isolation. Extend T6 with direct reverse-direction capture, other feasible port/observer combinations, and reserved control-frame behavior. Recovery/concurrency checks are also open. T2/T3/T4 and T5 are documented for Release 7; T5 covers all six pairs on the CPU/software-bridge path.
 
 ## Why matching the same ID is insufficient
 
@@ -154,7 +189,8 @@ vendor patch data is introduced.
 | Diagnostic `1b7a32bef2`, release 4 | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273960255) | Maintainer T0 PASS; T1 FAIL; T2–T8 BLOCKED |
 | Registration correction, release 5 (`614188cff5`) | [FAIL](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769): private kernel macro not visible | Cancelled after release-5 module CI failed | Not run |
 | Corrected registration, release 6 (`32d958fe17`) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) | T0/T1/T2/T4/T7 pass; T3 partial; T5 partial (3/6 pairs, short traffic runs); T6 software output only; T8 recorded |
-| PHY callback guard, release 7 | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454484695) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524) | T0/T1/T7 pass; T5 passes 6/6 pairs; T3 reported pass with LAN1 capture gap; T6 unverified |
+| PHY callback guard, release 7 | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454484695) | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524) | T0/T1/T7 pass; T5 passes 6/6 pairs; T3 reported pass with LAN1 capture gap; T6 was not instrumented |
+| P0 readback follow-up, source commit `7e51247b` | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37676942253) | Maintainer-built Release-8 image booted | T1 pass; T6 partial: 33/33 readbacks and one standalone-port negative-forwarding scenario; reverse evidence counter-only |
 
 Release 5 failed compilation because `DEFAULT_GPIO_RESET_DELAY` is private to
 kernel `of_mdio.c`. Release 6 uses a named local 10 us constant matching
@@ -169,8 +205,9 @@ SHA-256: `9ccd428ae58f7650d8f7e47455c24250349e840758208e800146663a44037263`. [Fu
    does not show the expected down/up event. Repeat T2/T4 on release 7 if exact-
    revision qualification is required; release 6's T2/T4 results remain valid
    for that earlier revision.
-2. Keep T6 unverified until there is a safe, documented hardware readback;
-   software `bridge vlan show` output is not a switch-register result.
+2. T6 setup readbacks passed 33/33 on Release 8. Keep broader isolation,
+   reverse-direction behavior and reserved control-frame checks open; software
+   `bridge vlan show` output alone is not a switch-register result.
 3. Test reserved control-frame behavior and complete the remaining recovery and
    PHY concurrency checks in the first-hardware procedure.
 4. Keep throughput figures labeled as CPU/software-bridge traffic. To qualify

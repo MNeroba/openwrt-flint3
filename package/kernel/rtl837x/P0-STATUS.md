@@ -1,6 +1,6 @@
 # RTL8372N P0 implementation status
 
-Updated: 2026-10-07. This is a source candidate, not a hardware-qualified driver.
+Updated: 2026-10-08. This is a source candidate, not a hardware-qualified driver.
 
 [BUILD-REPORT.md](BUILD-REPORT.md) consolidates publication evidence, exact
 revisions, artifacts, feature readiness and remaining acceptance gates.
@@ -13,25 +13,31 @@ with [raw boot and test logs](https://gist.github.com/perceival/145d80ee322c48e8
 The [Release-7 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250)
 adds T2/T3/T4 evidence: all four DSA ports are attached to `br-lan` and
 forwarding; kernel events confirm physical down/up on all four jacks; and T4
-passes 100/100 pings with 0% loss. The LAN1 sampler gap occurred because its
-SSH session used LAN1 and was interrupted by the unplug. On release 7, T0/T1/T7
-also pass: all four PHYs bind to the private driver, the port 0–2 power-down
-warnings are absent, and three warm reboots plus one cold cycle preserve link
-and reachability. T5 passes all six LAN pairs with bidirectional 30-second TCP
-and 20/20 pings; it remains CPU/software-bridge traffic. The run recorded 77
-new RX drops on LAN3 and TCP retransmissions, but no P0 throughput threshold is
-defined. Hardware T6 remains unverified; the release-7 CPU snapshot lacks
-softirq data. See
-[PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for exact evidence and remaining gates.
+passes 100/100 pings with 0% loss. Release 7 also passed T0/T1/T7, and T5
+passed all six LAN pairs with bidirectional 30-second TCP and 20/20 pings on
+the CPU/software-bridge path. The run recorded 77 new LAN3 RX drops and TCP
+retransmissions; no P0 throughput threshold is defined.
+
+Release 8 ([report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6048213461),
+[raw logs](https://gist.github.com/perceival/3172215cb83c6ea3866fd55bee0808be))
+tested exact source commit `7e51247b3882567ce891481395b34e2a2c25f116` on
+BE9300, kernel 6.18.39. All 33 reported startup readbacks matched their
+expected values. Four internal PHYs bound to the private driver, no ports 0–2
+power-down warnings appeared, and all four jacks came up at 2.5G/1G/2.5G/1G.
+The standalone `lan2` test showed no E8450-sourced ARP or unicast frames at
+one bridge observer while `lan2` was detached; the reverse-direction check is
+counter-only and has no endpoint packet capture. Record T6 as **PARTIAL**:
+setup readbacks pass, and one CPU-only isolation scenario is supported, but
+there is no general VLAN/bridge-offload or reserved-control-frame sign-off.
 P0 is not fully qualified.
 
-The current working tree adds startup readbacks for the VLAN 1 table word,
-PVIDs, isolation matrix, learning limits, flood masks and VLAN filter controls.
-This code postdates tested Release 7 commit
-`79afa2c51a3c2396c33ed511ed092d799c52e1bf`; it has not been built or run on
-hardware. Release-7 T6 therefore remains unverified, and the new revision must
-pass a fresh exact-source build and maintainer bench run before the readbacks
-count as evidence.
+The focused [ARM64/Linux 6.18.39 module build](https://github.com/MNeroba/openwrt-flint3/actions/runs/37676942253)
+passed for the tested source commit. The Release-8 full image was built and booted by
+the maintainer. The broad PR matrix currently has 198 successful, 29 failed
+and 2 skipped checks, including an `ipq53xx` target build failure; diagnose
+that separately before calling CI fully green. The focused module result and
+Release-8 hardware run do not close the remaining P0/provenance gates. See
+[PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md) for revision-specific evidence.
 
 ## Source work completed
 
@@ -57,7 +63,9 @@ count as evidence.
   while vendor-specific PHY compatibles need separate review.
 - Incomplete hardware bridge callbacks were removed. P0 uses CPU-only
   isolation/flood masks and disabled learning; software bridging is intended.
-  Reserved RMA/BPDU handling and actual isolation still need bench verification.
+  Release 8 confirms readbacks and a one-port standalone isolation case only;
+  the reverse observation is counter-only. General isolation and reserved
+  RMA/BPDU behavior still need testing.
 - The reset writer is separate from ordinary writes, with no completion poll
   immediately after the reset command. PCS failures produce link-down state.
 - DT layout is validated before GPIO reset; one fixed 10G CPU on 3 or 8 and
@@ -144,11 +152,11 @@ release 6 fixes it and needs its own build and bench run.
    passed for source commit `79afa2c51a3c2396c33ed511ed092d799c52e1bf`.
    Re-run if source or build inputs change.
 3. Resolve flagged provenance rows, particularly SDS facts/source lineage.
-4. Release-7 T2/T3/T4 evidence is now complete; T5's six-pair, 30-second run is
-   complete. Hardware T6 VLAN/isolation readback, reserved control-frame
-   behavior, and the remaining recovery/concurrency checks are open. Release 7
-   T7 passed three warm reboots and one cold power cycle; the WAN-side PCS
-   message still appears during boot.
+4. Release-7 T2/T3/T4/T5/T7 results remain documented. Release 8 adds exact-revision
+   T1 and partial T6: 33/33 setup readbacks pass; one detached-port direction is
+   confirmed not to reach one bridge observer, while reverse-direction evidence
+   is counter-only. Broader isolation, reserved control frames, recovery and
+   concurrency remain open. The WAN-side PCS message still appears during boot.
 5. Restore P1/P2 behavior or obtain maintainer agreement to a narrower scope.
 6. The Draft remains a source and provenance review candidate. Hardware
    qualification and required source-lineage decisions remain open.

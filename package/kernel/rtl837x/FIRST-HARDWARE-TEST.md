@@ -1,28 +1,28 @@
 # RTL8372N P0 first-hardware test plan
 
-**Status (2026-10-07):** release 7 (`79afa2c51a3c2396c33ed511ed092d799c52e1bf`)
-passed full-image CI. The maintainer reports T0/T1/T2/T3/T4/T5/T7 PASS and T6
-unverified. The [release-7 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988)
-shows no ports 0–2 PHY power-down warnings; the [T2/T3/T4 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250)
-provides full DSA topology, 100/100 T4 pings, and kernel link events for
-physical down/up on all four jacks. LAN1's sampler gap occurred because the
-SSH sampler itself traversed LAN1. T5 covers all six LAN pairs with
-bidirectional 30-second TCP and 20/20 pings on the CPU/software-bridge path;
-the run recorded 77 new RX drops on LAN3. T6 hardware VLAN/isolation readback,
-reserved control-frame behavior and remaining recovery/concurrency checks are
-open. See
+**Status (2026-10-08):** Release 7 (`79afa2c51a3c2396c33ed511ed092d799c52e1bf`)
+passed T0/T1/T2/T3/T4/T5/T7. Release 8 tested source commit
+`7e51247b3882567ce891481395b34e2a2c25f116` on BE9300. Its
+[report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6048213461)
+and [raw logs](https://gist.github.com/perceival/3172215cb83c6ea3866fd55bee0808be)
+show T1 boot/link evidence and 33/33 expected setup readbacks. The standalone
+`lan2` test found no E8450-sourced ARP or unicast frames at one bridge observer;
+reverse-direction evidence is counter-only. T6 is **PARTIAL**, not a general
+VLAN/isolation sign-off. Reserved control-frame behavior and remaining
+recovery/concurrency checks are open. See
 [P0-STATUS.md](P0-STATUS.md),
 [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md), and [BUILD-REPORT.md](BUILD-REPORT.md)
 for evidence and remaining gates. Start each run only after T0 passes for the
 exact image revision under test.
 
-The current working-tree follow-up adds one-shot P0 setup readbacks for VLAN 1,
-PVID, port isolation, learning limits, flood masks, and VLAN filter controls.
-It uses the driver's register transport; the VLAN table read triggers a read
-command but does not write the table entry or configuration. Release-7 results
-do not include this code. Build and identify the exact follow-up revision, then
-rerun T0 and the applicable hardware checks before treating its readback logs
-as evidence.
+The setup-readback follow-up covers VLAN 1, available PVIDs, port isolation,
+learning limits, flood masks and VLAN-filter controls. It uses the driver's
+register transport; the VLAN-table command reads the table and does not write
+it. Focused module CI passed for tested source commit `7e51247b`. Release 8 then
+reported 33/33 matching readbacks and a one-port negative-forwarding test on
+that exact source commit. Extend T6 with direct reverse-direction capture and broader
+isolation/control-frame cases; do not treat the existing result as general
+VLAN offload qualification.
 
 This plan is intended for the driver maintainer and the Flint 3 owner running
 the test. It is not a claim that any step has passed.

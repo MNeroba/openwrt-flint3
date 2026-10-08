@@ -1,6 +1,6 @@
 # RTL8372N P0 build and review report
 
-## Latest result (status checked 2026-10-07)
+## Latest result (status checked 2026-10-08)
 
 | Gate | Result | Evidence / scope |
 | --- | --- | --- |
@@ -8,15 +8,20 @@
 | OpenWrt configuration | **PASS** | BE9300 AP configuration; five pinned feeds verified; driver and MDIO-devres packages selected. |
 | OpenWrt package, DTB and image | **Release 6 and 7 PASS** | Release-6 [full BE9300 image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397974073) and release-7 [full image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524) passed. |
 | Source whitespace/style | **Release 6 and 7 PASS** | Release 7 passed `git diff --check` and strict `checkpatch.pl` with 0 findings. |
-| BE9300 hardware | **Release 7: T0/T1/T2/T3/T4/T5/T7 PASS; T6 unverified** | [Release-7 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988), [T2/T3/T4 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250), and [raw logs](https://gist.github.com/perceival/145d80ee322c48e88870ec011ae1200d). All four physical jack cycles, T2 topology and 100/100 T4 pings are now documented. All six LAN pairs passed bidirectional 30-second TCP with 20/20 pings on the CPU/software-bridge path. The run recorded 77 new LAN3 RX drops and TCP retransmissions; no throughput threshold is defined. Hardware T6 readback remains unverified. |
+| BE9300 hardware | **Release 8: T0/T1 PASS; T6 PARTIAL** | [Release-8 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6048213461) and [raw logs](https://gist.github.com/perceival/3172215cb83c6ea3866fd55bee0808be). Source commit `7e51247b` was built/flashed on kernel 6.18.39. T1 reports four private PHY bindings and all four jacks up at 2.5G/1G/2.5G/1G. All 33 logged setup readbacks matched expected values. The standalone-port test supports no forwarding from one detached port to one bridge observer; reverse evidence is counter-only. No general VLAN/offload sign-off. Release 7 separately supplies T2/T3/T4/T5/T7. |
 | Retained source provenance | **OPEN REVIEW** | Restricted header and patch arrays excluded; SDS field/polarity lineage remains unresolved. |
 | Replacement acceptance in #100 | **NOT MET** | P0 needs remaining hardware coverage; P1/P2 parity or maintainer-agreed deferrals remain required. |
 
-The working tree now also contains unbuilt startup readback instrumentation for
-the P0 VLAN/isolation setup. The Release-7 CI and hardware rows above apply to
-the tested commit only; they do not validate this follow-up. Run a new exact-
-source module/image build and repeat the relevant BE9300 checks before using
-its `P0 readback` log lines as T6 evidence.
+The startup readback implementation was added in [`e2d5a951`](https://github.com/MNeroba/openwrt-flint3/commit/e2d5a95154c9dce1315a5d888981d400616a5f59);
+its [ARM64 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37676023248)
+passed. Source commit `7e51247b` passed focused [ARM64/Linux 6.18.39 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37676942253).
+The maintainer built and booted an image from that exact commit for Release 8.
+The [Release-8 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6048213461)
+records 33/33 expected readbacks and a partial standalone-port test. The broad
+PR matrix is no longer queued: 198 checks succeeded, 29 failed and 2 were
+skipped; it includes a failed `qualcommbe/ipq53xx` target job and requires
+triage. The successful focused module build and bench image do not make the
+whole PR matrix green or qualify general VLAN/isolation behavior.
 
 The CI full target-build run passed on 2026-10-02 for its tested source
 revision. The maintainer's independent `908810c09b` image on 2026-10-04 is a
@@ -24,8 +29,9 @@ historical run: it reached the first T1 failure and did not qualify traffic.
 The later release-6 hardware result superseded that status for T0/T1/T2/T4/T7.
 The release-7 report and [follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250)
 confirm T0/T1/T2/T3/T4/T5/T7, including kernel link events for LAN1's physical
-cycle and the full T2 topology and T4 ping evidence. Release-7 hardware T6
-readback remains open; the CPU snapshot does not include softirq time. See
+cycle and the full T2 topology and T4 ping evidence. Release 8 adds T6 setup
+readbacks and a one-port negative-forwarding scenario; broader isolation,
+reserved control-frame and CPU-load evidence remain open. See
 [PHY-PROBE-REPORT.md](PHY-PROBE-REPORT.md).
 
 ## Release-7 hardware result (2026-10-07)
@@ -50,8 +56,9 @@ pings; throughput is about 0.927–1.56 Gbit/s on the CPU/software-bridge path.
 The LAN3 RX drop counter
 rose by 77 across about 9.27 million packets; LAN1 TX drop 1 and LAN3 TX drops
 2 were present before and unchanged after. TCP retransmissions are recorded,
-with no P0 throughput threshold. T6 hardware VLAN/isolation readback remains
-unverified. The `lan` conduit RX/TX error and drop counters were reported as
+with no P0 throughput threshold. Release 8 verifies the setup readbacks and
+partially verifies one-port CPU-only isolation; the reverse-direction result
+lacks a packet capture. The `lan` conduit RX/TX error and drop counters were reported as
 zero for T4, while a separate `tx_errors` value still reads `2^64-1`; the raw
 PPE MIB operands needed to interpret it are still unavailable. The boot log's
 WAN PCS message persists, while the DSA CPU link comes up and the tests continue.
@@ -87,7 +94,7 @@ qualification.
 - Proposed base: `perceival/openwrt-flint3:flint3-be9300`,
   `2365932733ca8ec3b346621d9cec2eb3df3b2cf3`.
 - CI source: `954a84bd7c46dbbb2412eeddfb300aad8b4cff35`.
-- Maintainer-side exact-head build report: `908810c09bd9adfbbc7d25437a9d50b55b2de940`
+- Maintainer-side build report for source commit: `908810c09bd9adfbbc7d25437a9d50b55b2de940`
   ([comment](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-5976007832)).
 - Tested `package/kernel/rtl837x/src` Git tree:
   `785d7682936058c86e90af809e16694ac6dc7492`.
@@ -199,6 +206,8 @@ Before replacement/merge:
 
 Keep the shipping baseline while this Draft is reviewed. Release 7 passes
 T0/T1/T2/T3/T4/T5/T7, including the completed T3 link-event evidence, T2
-topology report and T4 ping run. Hardware T6 readback, remaining control-frame,
-recovery and concurrency checks, source-owner sign-off and functional parity
-remain open; P0 qualification is not claimed.
+topology report and T4 ping run. Release 8 adds 33/33 setup readbacks and a
+one-port negative-forwarding result; reverse-direction evidence is counter-only.
+Broader VLAN/isolation and reserved-control-frame behavior, recovery and
+concurrency checks, source-owner sign-off and functional parity remain open;
+P0 qualification is not claimed.

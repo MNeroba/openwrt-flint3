@@ -47,8 +47,11 @@ through candidate edits. Hardware qualification remains incomplete for the
 register and feature rows. Release 7 passes T0/T1/T2/T3/T4/T5/T7 and the full
 six-pair T5 software-bridge matrix. The [Release-7 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250)
 provides kernel link events confirming physical cycles on all four jacks,
-full T2 topology output and the 100-packet T4 check. Hardware T6
-VLAN/isolation readback and broader register-level qualification remain open.
+full T2 topology output and the 100-packet T4 check. Release 8 on source commit `7e51247b` reports 33/33 matching setup
+readbacks and one standalone-port CPU-only isolation case; reverse-direction
+evidence is counter-only. Broader register-level and feature qualification
+remains open. See the [Release-8 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6048213461)
+and [raw logs](https://gist.github.com/perceival/3172215cb83c6ea3866fd55bee0808be).
 See [the release-7 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988)
 and [raw logs](https://gist.github.com/perceival/145d80ee322c48e88870ec011ae1200d).
 

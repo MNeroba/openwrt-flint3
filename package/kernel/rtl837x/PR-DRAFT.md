@@ -27,8 +27,11 @@ Prepare a minimal RTL8372N DSA bring-up candidate for GL-BE9300:
 - Use a dedicated reset writer, fail-closed PCS reads, early topology validation
   and setup-failure/teardown quiescing.
 - Use CPU-only isolation/flood masks with hardware learning disabled. Incomplete
-  hardware bridge callbacks are removed; untagged software bridging is the
-  intended P0 fallback and still needs bench validation.
+  hardware bridge callbacks are removed; DSA software bridging is the P0 path.
+  Release 7 passed all six LAN-pair tests over that path. Release 8 on source
+  commit `7e51247b` passed 33/33 setup readbacks and partially verified isolation
+  for one standalone port; this does not establish general VLAN offload or a
+  throughput target.
 - Target Linux 6.18, declare MDIO devres dependency and build `rtl8372n_dsa.ko`
   with the kernel RTL8_4 tagger. Coordinate BE9300's switch compatible to
   `realtek,rtl8372n` and remove unsupported legacy switch properties.
@@ -65,7 +68,8 @@ the CPU/software-bridge path. The run recorded 77 new RX drops on LAN3 (out of
 about 9.27 million packets) and TCP retransmissions; no throughput threshold is
 defined. LAN1's one TX drop and LAN3's two TX drops were already present before
 the run. The aggregate CPU snapshot omits softirq time and is not a forwarding
-CPU measurement. Hardware VLAN/isolation readback remains unverified.
+CPU measurement. Release 8 now supplies 33/33 setup readbacks and a limited
+one-port negative-forwarding result; reverse-direction evidence is counter-only.
 
 The follow-up confirms Release-7 T2: four `lanN@lan` netdevs in `br-lan`,
 forwarding state, expected DSA modules loaded, and LAN4 linked at 1G/Full.
@@ -76,18 +80,33 @@ a switching-performance qualification.
 
 | Check | Result | Evidence |
 | --- | --- | --- |
-| ARM64 / Linux 6.18.39 | **Diagnostic PASS; release 5 compile failed; release 6 and 7 module PASS** | [Release 4 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) passed. [Release 5 CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769) failed because `DEFAULT_GPIO_RESET_DELAY` is private to `of_mdio.c`. Release 6 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227). Release 7 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454484695): all four objects compiled with `W=1`, modpost/link succeeded, no candidate compiler warnings; module SHA-256 `8163371788badabaf4777f88b24e6de0559634a574c1cc59c3033822df2eeb37`. |
+| ARM64 / Linux 6.18.39 | **Release 6, 7 and Release-8-tested source module CI PASS** | [Release 4 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37273928197) passed. [Release 5 CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395423769) failed because `DEFAULT_GPIO_RESET_DELAY` is private to `of_mdio.c`. Release 6 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37397943227). Release 7 [module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454484695). Source commit `7e51247b` [focused module CI passed](https://github.com/MNeroba/openwrt-flint3/actions/runs/37676942253); the earlier release-7 module SHA-256 is `8163371788badabaf4777f88b24e6de0559634a574c1cc59c3033822df2eeb37`. |
 | BE9300 OpenWrt configuration | **PASS** | AP config, pinned-feed verification and driver/MDIO-devres selection in the [target run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059229177) |
-| OpenWrt package / DTB / full image | **Release 6 and 7 PASS** | Baseline, diagnostic, release-6 and release-7 image builds passed. The [release-7 full-image run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524) built the candidate for the hardware report. The [release-5 image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395426353) was cancelled after its module compile failed. |
+| OpenWrt package / DTB / full image | **Release 6 and 7 CI PASS; Release 8 image for tested source commit built and booted on BE9300** | Baseline, diagnostic, release-6 and release-7 image builds passed. The [release-7 full-image run](https://github.com/MNeroba/openwrt-flint3/actions/runs/37454704524) built the candidate for its hardware report. Perceival's [Release-8 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6048213461) identifies and boots a full image from source commit `7e51247b`; the broad affected-target PR matrix has failures, including `qualcommbe/ipq53xx`, and still needs triage. The [release-5 image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37395426353) was cancelled after its module compile failed. |
 | Whitespace | **Release 7 PASS** | `git diff --check` passed for the release-6 to release-7 change. |
 | checkpatch | **Release 7: 0 findings** | The release-7 source diff has 0 errors, warnings or checks under strict `checkpatch.pl`. |
-| BE9300 hardware | **Release 7: T0/T1/T2/T3/T4/T5/T7 PASS; T6 unverified** | [Release-7 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988), [T2/T3/T4 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250) and [raw logs](https://gist.github.com/perceival/145d80ee322c48e88870ec011ae1200d). T3 confirms all four physical jack cycles; T4 is 100/100 with 0% loss; T5 covers six pairs both ways for 30 seconds. The 77 LAN3 RX drops and retransmissions are recorded above. T6 still lacks hardware readback. |
+| BE9300 hardware | **Release 7: T0/T1/T2/T3/T4/T5/T7 PASS; Release 8: T1 PASS, T6 PARTIAL** | [Release-7 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037094988), [T2/T3/T4 follow-up](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6044579250), and [Release-8 report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6048213461) with [raw logs](https://gist.github.com/perceival/3172215cb83c6ea3866fd55bee0808be). Release 8 tests source commit `7e51247b`: 33/33 setup readbacks pass; one standalone-port test supports CPU-only isolation in the measured direction, while reverse evidence is counter-only. No general VLAN/offload sign-off. |
 
-The current working tree has a follow-up that adds one-shot setup readbacks for
-the VLAN 1 table word and P0 isolation/VLAN controls. That source has not been
-built or tested on hardware; the Release-7 CI and bench results above do not
-cover it. Keep T6 open until the exact follow-up revision builds and the
-maintainer reports its readback values and isolation traffic test.
+### P0 setup readback follow-up (tested source commit `7e51247b`)
+
+The follow-up adds boot-time readbacks for the VLAN 1 table word, available
+PVID fields, isolation masks, learning limits, CPU flood destinations and VLAN
+filter controls. The VLAN table operation issues a read command and does not
+write the table entry. Perceival's Release-8 log reports 33/33 matching
+readbacks. The negative-forwarding test supports CPU-only isolation for one
+detached port and one measured direction; the reverse-direction result is
+counter-only, with no endpoint packet capture. T6 is therefore **PARTIAL**:
+the readback is verified, but this does not establish general VLAN offload,
+all-port isolation, VLAN-aware behavior or reserved control-frame handling.
+
+The implementation commit [`e2d5a951`](https://github.com/MNeroba/openwrt-flint3/commit/e2d5a95154c9dce1315a5d888981d400616a5f59)
+passed [ARM64/Linux 6.18.39 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37676023248).
+Source commit `7e51247b` passed focused [ARM64 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37676942253),
+and its image was built and booted for Release 8. The broad PR
+matrix has 198 successful, 29 failed and 2 skipped checks, including a failed
+`qualcommbe/ipq53xx` target job; this needs separate triage. The focused module
+build and Release-8 image do not make that matrix green. Release-7 results do
+not validate the later source revision.
 
 The [ARM64 artifact](https://github.com/MNeroba/openwrt-flint3/actions/runs/37059225390/artifacts/11248964933)
 contains the generated config, complete build logs and module. Its module
@@ -149,18 +168,17 @@ The release-6 correction:
 - Leaves PHY/SerDes/reset/forwarding register programming unchanged.
 
 The [failure/fix report](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/PHY-PROBE-REPORT.md)
-records both hardware runs and the warning analysis. Release 7 confirms
-private PHY binding, reset repeatability, all six software-bridge pairs,
-T2/T3/T4 and the absence of port 0–2 power-down warnings. Hardware T6 readback
-remains open. The CPU snapshot is not sufficient to estimate softirq forwarding
-load.
-P1-A remains separate.
+records the revision-specific hardware evidence. Release 7 confirms private
+PHY binding, reset repeatability, all six software-bridge pairs, T2/T3/T4 and
+the absence of port 0–2 power-down warnings. Release 8 adds exact-revision T1 and
+partial T6 setup/isolation evidence. Broader VLAN/isolation, reserved control
+frames and the CPU softirq forwarding load remain open. P1-A remains separate.
 
 ## Scope and remaining work
 
 | Stage | Scope | Current status |
 | --- | --- | --- |
-| P0 | Probe/reset, register access, internal PHY, 10G CPU PCS, native tags, four LAN jacks and CPU/software forwarding | Release 7 passes T0/T1/T2/T3/T4/T5/T7. The latest follow-up provides physical link events for all four jacks, T2 topology output and the 100-packet T4 ping check. T5 covers all six pairs with bidirectional 30-second TCP and 20/20 pings. T6 hardware readback is unverified. T5 counters include 77 new LAN3 RX drops; no throughput target is defined. |
+| P0 | Probe/reset, register access, internal PHY, 10G CPU PCS, native tags, four LAN jacks and CPU/software forwarding | Release 7 passes T0/T1/T2/T3/T4/T5/T7, including all six LAN pairs. Release 8 tests source commit `7e51247b`: T1 and T6 setup readbacks pass; the one-port negative-forwarding result is partial, with reverse evidence counter-only. Broader isolation/control-frame behavior remains open. T5 recorded 77 new LAN3 RX drops; no throughput target is defined. |
 | P1 | Hardware bridge/VLAN, FDB/MDB, STP/BPDU and bridge flags | Not implemented; [source/dependency plan](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/P1-RESEARCH.md) prepared; BPDU/database/table semantics remain gates |
 | P2 | LAG #47 and rate limiting #49 | Not ported; prior feature requirements remain applicable |
 | Other baseline interfaces | MTU/jumbo, alternate tags, mirroring, MIB/ethtool, EEE and GPIO parity | Not established; restore or agree individual deferrals |
@@ -171,15 +189,17 @@ Legacy BE6500 `realtek,rtl837x` nodes are unsupported by this candidate.
 
 This Draft is for technical/provenance review and staged hardware bring-up.
 Release 7 confirms T0/T1, reset repeatability and the complete software-bridge
-pair matrix, but P0 qualification still has evidence and readback gaps. Keep the
-shipping baseline until the acceptance criteria in #100 pass or the maintainer
-explicitly agrees the corresponding feature deferrals. PPE/NAT and
-802.11r remain outside this PR. Final official driver and board submissions
-should remain separate; [OpenWrt #23161](https://github.com/openwrt/openwrt/pull/23161)
-was open and unmerged at the previous integration check. The independent `908810c09b` image failed T1 in the earlier diagnostic run.
+pair matrix. Release 8 closes the setup-readback gap for its listed registers
+and partially tests one-port isolation; P0 qualification and provenance review
+remain open. Keep the shipping baseline until the acceptance criteria in #100
+pass or the maintainer explicitly agrees the corresponding feature deferrals.
+PPE/NAT and 802.11r remain outside this PR. Final official driver and board submissions
+should remain separate. OpenWrt [PR #23161](https://github.com/openwrt/openwrt/pull/23161),
+the IPQ53xx prerequisite, remains open and unmerged as of 2026-10-08. The
+independent `908810c09b` image failed T1 in the earlier diagnostic run.
 Release 7 now passes T0/T1/T2/T3/T4/T5/T7 on hardware. Complete remaining P0
 checks and source/provenance gates before the separate P1-A image and A0–A6
-tests; T6 hardware readback remains open.
+tests; broader T6 isolation and reserved-control-frame coverage remain open.
 
 ### P1 research and maintainer scope update (2026-10-04)
 
@@ -219,5 +239,6 @@ Signed-off-by is inferred.
 - [P1 feasibility, source conflicts and staged acceptance matrix](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/P1-RESEARCH.md)
 - [Pre-PR audit and phased remediation plan](https://github.com/MNeroba/openwrt-flint3/blob/rtl837x-dsa-port/package/kernel/rtl837x/PRE-PR-PLAN.md)
 
-@perceival, thank you for the detailed release-7 report. The follow-up
-discussion is linked here: [release-7 results review](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6037551481).
+@perceival, thank you for the detailed Release-7 and Release-8 reports and
+for publishing the raw logs. The latest evidence is linked here:
+[Release-8 bench report](https://github.com/perceival/openwrt-flint3/pull/104#issuecomment-6048213461).
