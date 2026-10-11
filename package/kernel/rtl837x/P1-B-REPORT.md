@@ -160,7 +160,7 @@ Protected debugfs operations are drained before DSA remove/shutdown.
 Status exposes the full CIST word, all nine isolation/learning-limit registers,
 raw flush status/config and a keyed VID 1 BPDU lookup with three raw words and
 exact expected-entry matching. The lookup does not insert/delete/repair any
-entry. Saved lookup method is restored only after confirmed table idle;
+entry. Saved lookup method is restored and read back only after confirmed table idle;
 uncertain busy completion leaves it stable and reports an error. This also
 hardens the existing setup readback restoration after uncertain completion.
 No new register definitions or third-party source bodies are imported.

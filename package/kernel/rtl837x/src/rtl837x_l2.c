@@ -167,11 +167,11 @@ static int rtl837x_l2_restore_method_locked(struct rtl837x_priv *priv,
 		return ret;
 	}
 	ret = rtl837x_reg_bits_write(priv, RTL837X_L2_LOOKUP_STATUS,
-				    RTL837X_L2_LOOKUP_METHOD_MASK, method);
+				     RTL837X_L2_LOOKUP_METHOD_MASK, method);
 	if (ret)
 		return ret;
 	ret = rtl837x_reg_bits_read(priv, RTL837X_L2_LOOKUP_STATUS,
-				   RTL837X_L2_LOOKUP_METHOD_MASK, &restored);
+				    RTL837X_L2_LOOKUP_METHOD_MASK, &restored);
 	if (ret)
 		return ret;
 	if (restored != method) {

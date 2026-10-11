@@ -20,7 +20,7 @@ continues to run the driver but has no diagnostic files.
 There are no arbitrary-register writes, learning-limit changes, L2 entry
 insertion/deletion commands, RMA changes or bridge-join stubs in this interface.
 The BPDU read uses staging/method registers and a read command under the table
-mutex, so it is not a passive raw-register read. It restores the saved lookup
+mutex, so it is not a passive raw-register read. It restores and reads back the saved lookup
 method only after the table engine is idle. Busy/uncertain completion remains
 an error, without speculative mode restoration.
 
