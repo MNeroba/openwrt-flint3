@@ -286,6 +286,7 @@ static int rtl837x_mdio_probe(struct mdio_device *mdiodev)
 	}
 
 	dev_set_drvdata(dev, priv);
+	rtl837x_p1b_init(priv);
 	return 0;
 }
 
@@ -296,6 +297,7 @@ static void rtl837x_mdio_remove(struct mdio_device *mdiodev)
 	if (!priv)
 		return;
 
+	rtl837x_p1b_remove(priv);
 	dsa_unregister_switch(priv->ds);
 	if (priv->reset)
 		gpiod_set_value_cansleep(priv->reset, 1);
@@ -306,6 +308,7 @@ static void rtl837x_mdio_shutdown(struct mdio_device *mdiodev)
 	struct rtl837x_priv *priv = dev_get_drvdata(&mdiodev->dev);
 
 	if (priv) {
+		rtl837x_p1b_remove(priv);
 		dsa_switch_shutdown(priv->ds);
 		dev_set_drvdata(&mdiodev->dev, NULL);
 	}

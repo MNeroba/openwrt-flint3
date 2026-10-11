@@ -33,6 +33,13 @@ there is no hardware FDB inspection. The next bridge lifecycle work must
 supply learning/flood/isolation, leave/fallback and CPU/tagging semantics;
 a no-op bridge join must not be used to bypass this boundary for tests.
 
+The release 12 follow-up adds a restricted standalone debugfs path for direct
+ASIC CIST states and an exact keyed BPDU-entry read before/after flush. This
+helps qualify the existing primitives before bridge lifecycle work, without
+a bridge-join stub or enabling hardware learning. New builds and hardware
+results remain pending; [P1-B-BENCH.md](P1-B-BENCH.md) separates these direct
+checks from bridge integration and the still-missing dynamic FDB fixture.
+
 ## 1. Conclusion and current boundary
 
 There is enough public material to design a substantial part of P1: serialized

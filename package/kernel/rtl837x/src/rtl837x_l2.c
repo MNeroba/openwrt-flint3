@@ -126,21 +126,10 @@ static int rtl837x_l2_lookup_locked(struct rtl837x_priv *priv,
 	return 0;
 }
 
-/*
- * Route the 802.1D bridge group for one VLAN to the external CPU port only.
- * VID 0 is not a usable key for this IVL lookup path. The caller currently
- * installs only VID 1 because general VLAN/PVID offload is not implemented.
- */
-int rtl837x_bpdu_route_set(struct rtl837x_priv *priv, u16 vid, int cpu_port)
+static int rtl837x_bpdu_words(u16 vid, int cpu_port, u32 words[3], u32 key[3])
 {
-	u32 entry[3], key[3], readback[3];
-	u32 old_method;
-	int ret, restore_ret;
-	bool method_changed = false;
-
-	if (!priv || vid < RTL837X_BPDU_VID_MIN ||
-	    vid > RTL837X_BPDU_VID_MAX || cpu_port < 0 ||
-	    cpu_port >= RTL8372N_NUM_PORTS)
+	if (vid < RTL837X_BPDU_VID_MIN || vid > RTL837X_BPDU_VID_MAX ||
+	    cpu_port < 0 || cpu_port >= RTL8372N_NUM_PORTS)
 		return -EINVAL;
 
 	/*
@@ -149,18 +138,50 @@ int rtl837x_bpdu_route_set(struct rtl837x_priv *priv, u16 vid, int cpu_port)
 	 * port is selected from DSA topology rather than assuming another board's
 	 * embedded CPU-port number.
 	 */
-	entry[0] = RTL837X_BPDU_MAC_WORD0;
-	entry[1] = RTL837X_BPDU_MAC_WORD1 |
+	words[0] = RTL837X_BPDU_MAC_WORD0;
+	words[1] = RTL837X_BPDU_MAC_WORD1 |
 		   FIELD_PREP(RTL837X_L2_VID_MASK, vid) |
 		   RTL837X_L2_IVL |
 		   FIELD_PREP(RTL837X_L2_MC_LOW_PORT_MASK,
 			      BIT(cpu_port) & GENMASK(1, 0));
-	entry[2] = (BIT(cpu_port) >> 2) & RTL837X_L2_MC_HIGH_PORT_MASK;
+	words[2] = (BIT(cpu_port) >> 2) & RTL837X_L2_MC_HIGH_PORT_MASK;
 
-	/* Lookup keys include MAC, VID and IVL, but not the multicast port mask. */
-	key[0] = entry[0];
-	key[1] = entry[1] & ~RTL837X_L2_MC_LOW_PORT_MASK;
+	key[0] = words[0];
+	key[1] = words[1] & ~RTL837X_L2_MC_LOW_PORT_MASK;
 	key[2] = 0;
+	return 0;
+}
+
+static int rtl837x_l2_restore_method_locked(struct rtl837x_priv *priv,
+					    u32 method)
+{
+	int ret;
+
+	/* Do not change lookup mode while a possibly submitted command is busy. */
+	ret = rtl837x_table_wait_idle(priv);
+	if (ret) {
+		dev_err(priv->dev,
+			"L2 lookup method restore deferred: table completion unconfirmed: %d\n",
+			ret);
+		return ret;
+	}
+	return rtl837x_reg_bits_write(priv, RTL837X_L2_LOOKUP_STATUS,
+				     RTL837X_L2_LOOKUP_METHOD_MASK, method);
+}
+
+/* Only VLAN 1 is installed by setup; this is not general FDB management. */
+int rtl837x_bpdu_route_set(struct rtl837x_priv *priv, u16 vid, int cpu_port)
+{
+	u32 entry[3], key[3], readback[3];
+	u32 old_method;
+	int ret, restore_ret;
+	bool method_changed = false;
+
+	if (!priv)
+		return -EINVAL;
+	ret = rtl837x_bpdu_words(vid, cpu_port, entry, key);
+	if (ret)
+		return ret;
 
 	mutex_lock(&priv->table_lock);
 	ret = rtl837x_reg_bits_read(priv, RTL837X_L2_LOOKUP_STATUS,
@@ -173,11 +194,12 @@ int rtl837x_bpdu_route_set(struct rtl837x_priv *priv, u16 vid, int cpu_port)
 	if (ret)
 		goto out_unlock;
 
+	/* Even a failed write may have changed the method; restore when idle. */
+	method_changed = true;
 	ret = rtl837x_reg_bits_write(priv, RTL837X_L2_LOOKUP_STATUS,
 				     RTL837X_L2_LOOKUP_METHOD_MASK, 0);
 	if (ret)
-		goto out_unlock;
-	method_changed = true;
+		goto restore_method;
 
 	ret = rtl837x_l2_lookup_locked(priv, key, readback);
 	if (!ret && memcmp(entry, readback, sizeof(entry))) {
@@ -191,11 +213,9 @@ int rtl837x_bpdu_route_set(struct rtl837x_priv *priv, u16 vid, int cpu_port)
 			 "P1-B BPDU multicast entry VID %u routed to CPU port %d (readback PASS)\n",
 			vid, cpu_port);
 
+restore_method:
 	if (method_changed) {
-		restore_ret = rtl837x_reg_bits_write(priv,
-						     RTL837X_L2_LOOKUP_STATUS,
-						     RTL837X_L2_LOOKUP_METHOD_MASK,
-						     old_method);
+		restore_ret = rtl837x_l2_restore_method_locked(priv, old_method);
 		if (restore_ret) {
 			dev_err(priv->dev,
 				"failed to restore L2 lookup method: %d (operation error %d)\n",
@@ -206,6 +226,55 @@ int rtl837x_bpdu_route_set(struct rtl837x_priv *priv, u16 vid, int cpu_port)
 	}
 
 out_unlock:
+	mutex_unlock(&priv->table_lock);
+	return ret;
+}
+
+/*
+ * A keyed lookup of the known BPDU entry only. Staging/method writes are
+ * serialized, but no L2 entry is added, removed or repaired by this operation.
+ */
+int rtl837x_bpdu_route_read(struct rtl837x_priv *priv, u16 vid, int cpu_port,
+			    u32 entry[3], bool *matches)
+{
+	u32 expected[3], key[3], result[3], old_method, flush;
+	int ret, restore_ret;
+
+	if (!priv || !entry || !matches)
+		return -EINVAL;
+	ret = rtl837x_bpdu_words(vid, cpu_port, expected, key);
+	if (ret)
+		return ret;
+
+	mutex_lock(&priv->table_lock);
+	ret = rtl837x_reg_read(priv, RTL837X_L2_TBL_FLUSH_CTRL, &flush);
+	if (ret)
+		goto out;
+	if (flush & RTL837X_L2_TBL_FLUSH_BUSY) {
+		ret = -EBUSY;
+		goto out;
+	}
+	ret = rtl837x_table_wait_idle(priv);
+	if (ret)
+		goto out;
+	ret = rtl837x_reg_bits_read(priv, RTL837X_L2_LOOKUP_STATUS,
+				    RTL837X_L2_LOOKUP_METHOD_MASK, &old_method);
+	if (ret)
+		goto out;
+
+	ret = rtl837x_l2_lookup_locked(priv, key, result);
+	restore_ret = rtl837x_l2_restore_method_locked(priv, old_method);
+	if (restore_ret) {
+		dev_err(priv->dev, "failed to restore BPDU lookup method: %d\n",
+			restore_ret);
+		if (!ret)
+			ret = restore_ret;
+	}
+	if (!ret) {
+		memcpy(entry, result, sizeof(result));
+		*matches = !memcmp(expected, result, sizeof(result));
+	}
+out:
 	mutex_unlock(&priv->table_lock);
 	return ret;
 }

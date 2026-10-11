@@ -14,6 +14,21 @@ counts/full captures are still requested. Gates 2/3 through bridge STP state
 changes are **BLOCKED** by absent bridge offload. Admin down/up covers only
 disabled/forwarding and flush completion. See [P1-B-REPORT.md](P1-B-REPORT.md).
 
+## Release 12: newly available standalone diagnostic path
+
+Release 12 adds opt-in, root-only debugfs controls for a standalone user port,
+with current-DSA-state restoration and raw all-port snapshots. It also reads
+the existing static BPDU entry without adding/repairing it. This makes direct
+ASIC states 1/2 and exact static preservation observable while retaining the
+CPU-only forwarding/learning policy. See [P1-B-BENCH.md](P1-B-BENCH.md) for
+commands and cleanup. These new controls are NOT RUN on hardware; release 11
+builds and earlier corrected bench evidence do not validate them.
+
+Bridge-driven callbacks remain blocked until genuine bridge offload exists;
+standalone diagnostic results must be reported separately. General dynamic
+FDB deletion remains unverified because this interface does not enable
+learning, seed entries or dump the general hardware FDB.
+
 ## Safety and setup
 
 1. Use a spare Flint 3 / GL-BE9300, serial console or another recovery path,

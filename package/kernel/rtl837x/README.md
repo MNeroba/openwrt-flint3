@@ -30,6 +30,12 @@ offload, disabled learning and missing hardware FDB diagnostics. See the
 [corrected procedure](P1-B-TEST.md); the full P0 traffic/isolation regression
 and wider P1 gates remain open.
 
+Release 12 adds optional standalone-port diagnostic controls and a known-BPDU
+entry lookup: see [P1-B-BENCH.md](P1-B-BENCH.md). Controls are disabled by
+default. They make ASIC 1/2 and static-entry preservation testable directly,
+without bridge offload or learning-limit changes. This new code still needs
+its own builds and device checks; previous release 11 results do not cover it.
+
 ## P1-A VLAN table follow-up
 
 The separate [P1-A report](P1-TABLE-REPORT.md) documents the shared VLAN table

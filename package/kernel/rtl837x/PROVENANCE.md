@@ -112,3 +112,14 @@ unchanged.
 - Build for the real OpenWrt target and validate every row on BE9300.
 - No source-owner Signed-off-by is inferred from a repository license or from
   our attribution. Obtain any required records before upstream submission.
+
+## Release 12 bench diagnostics
+
+`rtl837x_p1b.c` is original GPL-2.0-only code using Linux debugfs/DSA APIs and
+existing sourced register primitives. It adds no vendor header, patch payload,
+register fact, learning-limit change or general FDB codec. The keyed BPDU read
+shares the already sourced VID/MAC/port-mask encoder and serializes staging and
+lookup-method restoration. Linux 6.18.39 [protected debugfs file operations](https://github.com/gregkh/linux/blob/v6.18.39/fs/debugfs/file.c)
+provide removal-time operation protection; teardown removes the files before
+unregistering DSA. These implementation choices do not settle pre-existing
+Air/ZTE/SDS lineage questions or establish hardware behavior.

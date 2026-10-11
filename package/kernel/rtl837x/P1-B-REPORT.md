@@ -146,6 +146,36 @@ bridge group locally. This report provides no basis for changing the driver
 to suppress Linux's normal STP-off forwarding policy or for advertising bridge
 offload with a no-op join callback.
 
+## Release 12 standalone diagnostic extension
+
+The next candidate adds `rtl837x_p1b.c`, an original, opt-in debugfs interface.
+Controls default to disabled, require root and initial-namespace NET_ADMIN,
+and accept CIST overrides/flush only for admin-up standalone DSA user ports
+4–7. RTNL serializes controls with DSA administrative transitions; the shared
+table mutex protects snapshots/lookup/flush operations. CPU/unused/bridge
+member ports are rejected. Disable restores every tracked override using the
+current DSA state; a failed restore remains an error and can be retried.
+Protected debugfs operations are drained before DSA remove/shutdown.
+
+Status exposes the full CIST word, all nine isolation/learning-limit registers,
+raw flush status/config and a keyed VID 1 BPDU lookup with three raw words and
+exact expected-entry matching. The lookup does not insert/delete/repair any
+entry. Saved lookup method is restored only after confirmed table idle;
+uncertain busy completion leaves it stable and reports an error. This also
+hardens the existing setup readback restoration after uncertain completion.
+No new register definitions or third-party source bodies are imported.
+
+This can make direct ASIC blocking/learning readbacks, standalone blocked BPDU
+CPU delivery and exact post-flush static-entry preservation testable. It does
+not implement Linux bridge offload, dynamic learning/FDB fixtures or decoded
+tag diagnostics. New hardware checks remain NOT RUN. The focused CI now
+explicitly enables DEBUG_FS to compile its real API path. Release 12 builds
+are pending; release 11 successes apply only to the preceding source.
+
+[P1-B-BENCH.md](P1-B-BENCH.md) supplies the standalone-port commands, cleanup,
+expected words and evidence limits. The diagnostic interface is temporary
+bench tooling, not a stable userspace ABI; review it before an upstream series.
+
 ## Implemented scope
 
 | Item | Source behavior | Hardware evidence / remaining gate |
@@ -189,6 +219,8 @@ header is imported. Existing Air/ZTE lineage and SDS questions remain in
 | Release 11 PR profile | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/38116555421) |
 | Broad inherited CI matrix | Not all green; sampled failures include toolchain GDB, mt76 API errors and kernel-patch refresh checks; separate from focused image/module results |
 | Labelled `c57dba8d11 + local format fix` narrow Gate 0 | PASS cold/warm; does not complete the full P0 matrix |
+| Release 12 module/image CI | Pending new exact-source runs |
+| Release 12 standalone diagnostic hardware | NOT RUN |
 | Exact `5969b4b568` device run | NOT RUN; runtime driver source matches attached bench fix |
 | BPDU reception / egress isolation, Gate 1 | Reported PASS with STP enabled on labelled corrected build; full sender-filtered capture counts requested |
 | CIST transition matrix, Gate 2 | PARTIAL admin 0/3; ASIC blocking/listening/learning via bridge BLOCKED |
