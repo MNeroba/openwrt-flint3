@@ -280,8 +280,8 @@ void rtl837x_p1b_init(struct rtl837x_priv *priv)
 	status = debugfs_create_file("status", 0400, priv->p1b_debugfs, priv,
 				     &rtl837x_p1b_status_fops);
 	if (IS_ERR_OR_NULL(control) || IS_ERR_OR_NULL(status)) {
-		debugfs_remove_recursive(priv->p1b_debugfs);
-		priv->p1b_debugfs = NULL;
+		/* A privileged opener may already have used the control file. */
+		rtl837x_p1b_remove(priv);
 	}
 }
 

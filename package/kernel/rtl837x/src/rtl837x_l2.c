@@ -155,6 +155,7 @@ static int rtl837x_bpdu_words(u16 vid, int cpu_port, u32 words[3], u32 key[3])
 static int rtl837x_l2_restore_method_locked(struct rtl837x_priv *priv,
 					    u32 method)
 {
+	u32 restored;
 	int ret;
 
 	/* Do not change lookup mode while a possibly submitted command is busy. */
@@ -165,8 +166,20 @@ static int rtl837x_l2_restore_method_locked(struct rtl837x_priv *priv,
 			ret);
 		return ret;
 	}
-	return rtl837x_reg_bits_write(priv, RTL837X_L2_LOOKUP_STATUS,
-				     RTL837X_L2_LOOKUP_METHOD_MASK, method);
+	ret = rtl837x_reg_bits_write(priv, RTL837X_L2_LOOKUP_STATUS,
+				    RTL837X_L2_LOOKUP_METHOD_MASK, method);
+	if (ret)
+		return ret;
+	ret = rtl837x_reg_bits_read(priv, RTL837X_L2_LOOKUP_STATUS,
+				   RTL837X_L2_LOOKUP_METHOD_MASK, &restored);
+	if (ret)
+		return ret;
+	if (restored != method) {
+		dev_err(priv->dev, "L2 lookup method restore mismatch: got %u, expected %u\n",
+			restored, method);
+		return -EIO;
+	}
+	return 0;
 }
 
 /* Only VLAN 1 is installed by setup; this is not general FDB management. */
