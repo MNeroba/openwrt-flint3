@@ -14,12 +14,21 @@ for CIST state, per-port fast-age and a VLAN 1 BPDU-to-CPU route. The matching
 [maintainer test procedure](P1-B-TEST.md) defines the hardware checks and
 current limits.
 
-The first P1-B image (`61d286b50a`) built successfully but failed hardware
-Gate 0 with dynamic L2 flush timeouts on every user port. Setup readbacks and
-PHY/link checks passed; BPDU and further STP/fast-age tests were not run. The
-follow-up polls BUSY bit 17 instead of requiring a zero command word, verifies
-flush mode restoration, and records raw register values. Build and retest this
-correction using the narrow Gate 0 procedure before proceeding to Gates 1–3.
+The first P1-B image (`61d286b50a`) failed all-port fast-age with a
+whole-word completion check. The corrected, labelled bench build
+`c57dba8d11 + local format fix` now passes narrow cold/warm Gate 0: all 33
+setup readbacks and ports 7/6/5/4 flushes pass with BUSY clear and retained
+port masks. Release 11 (`5969b4b568`) has matching runtime driver source and
+passing module/image/profile CI; its exact commit is not hardware-tested.
+
+BPDU CPU/software-bridge delivery is observed; STP-enabled consumption and no
+injected egress are reported, with full sender-filtered capture counts still
+requested. STP-off forwarding is Linux's normal policy. ASIC CIST 0/3 and
+flush completion are partially tested through admin down/up; bridge-driven
+blocking/learning and dynamic-entry deletion are blocked by absent bridge
+offload, disabled learning and missing hardware FDB diagnostics. See the
+[corrected procedure](P1-B-TEST.md); the full P0 traffic/isolation regression
+and wider P1 gates remain open.
 
 ## P1-A VLAN table follow-up
 
@@ -36,18 +45,18 @@ base and do not validate this rebased source revision. Exact tested revisions,
 CI links and checksums are recorded in the [P1-A report](P1-TABLE-REPORT.md).
 The later P1-B image at `61d286b50a` built this rebased table foundation and
 its setup readbacks passed on BE9300, but the run stopped at the flush failure.
-This does not complete P1-A's A0–A6 hardware matrix. The corrected P1-B source
-needs fresh build and Gate 0 checks. Release 10 (`c57dba8d11`) failed
-image compilation on a printf type mismatch; its module CI also exposed a
-Linux errno-header defect in the host harness. Release 11 corrects both and
-adds host printf/mask type checking. New kernel/image CI and the narrow
-cold/warm Gate 0 retest remain required; see [P1-B-REPORT.md](P1-B-REPORT.md).
+This does not complete P1-A's A0–A6 hardware matrix. Release 10 had a printf compilation defect and a Linux host errno shim
+failure. Release 11 fixes both; its focused module and image CI passed.
+The corrected labelled bench run validates narrow boot/flush behavior,
+not P1-A's complete A0–A6 matrix. Broad inherited CI is not all green; see
+[P1-B-REPORT.md](P1-B-REPORT.md) for exact revisions and remaining gates.
 
 P1-A does not add user-configurable VLAN offload, FDB/MDB, hardware bridge
 forwarding, LAG or rate limiting. P1-B wires CIST state and dynamic fast-age
 callbacks and installs a CPU-only static BPDU entry for VLAN 1. It is not full
 STP/bridge offload: the BPDU route, RTL8_4 reason and Linux bridge reception
-need a fresh exact-source build and first-device validation. Release-7 P0
+have partial labelled bench evidence; decoded reason and blocked-port
+delivery remain unverified. Release-7 P0
 evidence does not cover these changes. The [P1-A table procedure and report
 template](P1-TABLE-TEST.md) supplements the P0 test matrix with the changed
 bootstrap/readback checks.

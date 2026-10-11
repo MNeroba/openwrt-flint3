@@ -1,9 +1,12 @@
-# RTL8372N P1-B implementation and failure report
+# RTL8372N P1-B implementation and bench report
 
 Updated: 2026-10-11. This candidate is stacked on [P1-A PR #1](https://github.com/MNeroba/openwrt-flint3/pull/1),
 whose parent is [P0 PR #104](https://github.com/perceival/openwrt-flint3/pull/104).
-The first P1-B hardware run failed Gate 0. The correction below needs an
-exact-source build and BE9300 retest before Gates 1–3.
+The first P1-B hardware run failed Gate 0. A subsequent, explicitly labelled
+`c57dba8d11 + local format fix` run passes the narrow cold/warm retest.
+Release 11 (`5969b4b568`) has matching runtime driver source and passing
+focused module/image CI. Its exact commit has not been run on the device.
+Bridge-driven Gates 2/3 are blocked by the deliberately CPU-only bridge path.
 
 ## Observed hardware failure
 
@@ -33,8 +36,8 @@ requiring the complete 32-bit word to clear.
 
 The zero-word condition is a confirmed source defect. A retained mask with
 BUSY clear reproduces the first completion timeout and later pre-command
-waits in a register model. The hardware logs contain no raw `0x53d4` values,
-so that precise register state still needs confirmation on BE9300.
+waits in a register model. The original logs contain no raw `0x53d4` values. The follow-up below
+confirms retained masks with BUSY clear on BE9300.
 
 The correction polls BUSY alone before and after submission, retaining the
 one-second limit and transaction mutex. It changes only mode/static-selection
@@ -71,27 +74,91 @@ so its passing cases did not catch the kernel type mismatch. The shim now
 uses unsigned-long BIT/GENMASK semantics and checks the log wrapper's printf
 arguments. With this strengthened harness, the unmodified release 10 helper
 fails compilation on the reported diagnostic; release 11 passes all 20 cases,
-also with ASan/UBSan. Linux GCC and actual ARM64 kernel/image builds still
-need the new CI results. A local host pass is not a kernel build result.
+also with ASan/UBSan. The Linux host regression, ARM64 module build and
+BE9300 image build subsequently passed on `5969b4b568`; see Validation.
 
 Results from `c57dba8d11 + local format fix` can be kept as separately labelled
 bench evidence. For the exact-source retest, use release 11 and record its
-commit and image/module hashes. No corrected-source hardware result has yet
-been received.
+commit and image/module hashes. The follow-up below uses the labelled local
+format correction; it is not attributed to the exact release 11 commit.
+
+## 2026-10-11 corrected-source bench retest
+
+[Perceival's follow-up](https://github.com/MNeroba/openwrt-flint3/pull/2#issuecomment-6111966505)
+and [evidence gist](https://gist.github.com/perceival/f53a90c6ccf441040401926a968ab1f3)
+identify `c57dba8d11 + local format fix`, Linux 6.18.39, module revision
+`r35533+306-3b2bc55dcb`. The attached patch changes only `%#x` to `%#lx`,
+matching the release 11 driver correction. Release 11 also changes the host
+harness, documentation and package release, so this remains separately
+labelled device evidence. Image SHA-256 prefixes supplied in the comment are
+factory `11984cf88dd3`, sysupgrade `5edc6cfb8991`, initramfs `231449123865`;
+full image hashes and a module hash were not supplied in that follow-up.
+
+Both cold/warm logs contain 33/33 passing P0 readbacks, the BPDU-entry
+readback and all four fast-age completions. The successive completion values
+are `0x80`, `0x40`, `0x20`, `0x10` for ports 7/6/5/4, with BUSY clear. These
+values directly explain why requiring the entire command word to clear was
+wrong. Configuration before/dynamic/restored is zero in every shown case:
+restoration of a nonzero original mode remains untested. The narrow Gate 0 is
+**PASS**; the complete P0 traffic/isolation matrix on this image is not
+recorded as completed.
+
+Gate 1 is **reported PASS**: BPDUs reach the CPU/software bridge; STP off
+allows software forwarding, while STP on consumes the injected BPDUs without
+copies on other ports. The STP-off text captures contain 30 sender frames;
+the STP-on user-port captures expose only their first 40 packets, which are
+the router's own BPDUs. The bridge-interface STP-on capture is empty, which
+alone does not establish packet loss or delivery failure for this link-local
+path. Sender-filtered full counts/captures and Linux STP processing evidence
+are requested to independently substantiate no injected egress; generated
+router BPDUs must be counted separately. Decoded RTL8_4 reason/forwarding mark
+and CPU delivery with ASIC CIST BLOCKING remain unverified.
+CPU reception alone does not distinguish use of the static L2 entry from
+reset-default reserved-multicast handling or P0 CPU-only forwarding; that
+causal register/path question also remains open.
+
+The attempted `bridge link set state` tests did not reach ASIC callbacks.
+The user-STP log does retain the requested software states, including
+blocking and learning, but still has no matching ASIC readbacks. This is a
+DSA offload boundary, not a PHY, BUSY or STP register failure:
+
+- [Linux DSA bridge join](https://github.com/gregkh/linux/blob/v6.18.39/net/dsa/switch.c#L82-L97)
+  returns `-EOPNOTSUPP` when the driver has no `port_bridge_join`.
+- [DSA STP attribute handling](https://github.com/gregkh/linux/blob/v6.18.39/net/dsa/user.c#L584-L607)
+  rejects attributes for a bridge port that DSA does not offload.
+- [Administrative port transitions](https://github.com/gregkh/linux/blob/v6.18.39/net/dsa/port.c#L213-L260)
+  still set standalone CIST forwarding/disabled.
+- [Manual bridge state control](https://github.com/gregkh/linux/blob/v6.18.39/net/bridge/br_netlink.c#L907-L926)
+  returns `EBUSY` with kernel STP. Changing to userspace STP does not bypass
+  the separate DSA offload check.
+
+The lan4 administrative down/up log verifies ASIC CIST 0 then 3, flush
+completion/configuration readback, and recovery to 1 Gbit/s after about
+four seconds. It does not verify ASIC states 1/2 or dynamic entry deletion.
+P0 disables hardware learning, and there is no hardware FDB dump; a software
+bridge FDB entry is not a suitable ASIC deletion fixture. Full Gates 2/3 are
+**BLOCKED**, with administrative-transition/flush evidence recorded as partial.
+The test procedure is corrected to express those reachable and deferred gates.
+
+[Linux bridge BPDU receive policy](https://github.com/gregkh/linux/blob/v6.18.39/net/bridge/br_input.c#L383-L393)
+explicitly permits forwarding with STP off and otherwise delivers the default
+bridge group locally. This report provides no basis for changing the driver
+to suppress Linux's normal STP-off forwarding policy or for advertising bridge
+offload with a no-op join callback.
 
 ## Implemented scope
 
 | Item | Source behavior | Hardware evidence / remaining gate |
 | --- | --- | --- |
-| CIST | Linux states map to the two-bit port field; LISTENING maps to BLOCKING; writes read back | Initial forwarding and network-bring-up disabled-state readbacks observed. Gate 2 and data-path effects untested |
-| Fast-age | Serialized dynamic per-port flush, BUSY polling, mode verification/restoration | Original revision timed out; correction needs Gate 0 retest, then Gate 3 |
-| BPDU | Static IVL entry for `01:80:c2:00:00:00`, VID 1, CPU port only; hit/exact three-word readback | Setup readback passed. CPU RX, source port, RTL8_4 reason, Linux processing, no LAN egress and blocked-port delivery untested |
-| P0 path | Initial CIST forwarding with CPU-only isolation retained | Setup/PHY/link evidence recorded; P0 forwarding/isolation regression on P1-B unrun |
+| CIST | Linux states map to the two-bit port field; LISTENING maps to BLOCKING; writes read back | CIST 0/3 readbacks and lan4 admin recovery observed on labelled corrected build. ASIC 1/2 and bridge-driven state enforcement BLOCKED |
+| Fast-age | Serialized dynamic per-port flush, BUSY polling, mode verification/restoration | Corrected cold/warm ports 7/6/5/4 and lan4 admin flush complete with retained masks. Nonzero-mode restore, dynamic deletion and exact static readback after flush unverified |
+| BPDU | Static IVL entry for `01:80:c2:00:00:00`, VID 1, CPU port only; hit/exact three-word readback | Setup readback and software-path CPU RX observed; STP-enabled consumption/no injected egress reported. Full sender-filtered counts requested; decoded tag reason and ASIC-blocked delivery unverified |
+| P0 path | Initial CIST forwarding with CPU-only isolation retained | 33/33 cold/warm setup readbacks and link recovery observed; full P0 traffic/isolation regression on corrected P1-B not supplied |
 
 General hardware bridge/VLAN/PVID callbacks, bridge flags, FDB/MDB offload,
 LAG and rate limiting remain outside this candidate. The reserved-multicast
-global action is unchanged. The VLAN 1 static route remains an unverified
-alternative to a BPDU trap with the BE9300 external CPU and RTL8_4 tagger.
+global action is unchanged. The VLAN 1 static route has partial BE9300 external-CPU/software-bridge
+evidence; trap-reason semantics and ASIC-blocked delivery remain unverified.
 No physical loop is part of the first test.
 
 ## Provenance
@@ -117,11 +184,15 @@ header is imported. Existing Air/ZTE lineage and SDS questions remain in
 | Original `61d286b50a` module build | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37684900484); does not validate changed source |
 | Original `61d286b50a` BE9300 image | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37684899671); failed hardware Gate 0 |
 | Release 10 `c57dba8d11` module/image CI | FAIL: host Linux errno shim / driver printf type, respectively; see links above |
-| Release 11 module/image CI | Pending new exact-source runs |
-| Corrected-source Gate 0 | NOT RUN |
-| BPDU reception / egress isolation, Gate 1 | NOT RUN |
-| CIST transition matrix, Gate 2 | NOT RUN |
-| Dynamic removal / static preservation, Gate 3 | NOT RUN |
+| Release 11 `5969b4b568` Linux host / ARM64 module | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/38116485074), including `W=1` / modpost |
+| Release 11 `5969b4b568` BE9300 image | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/38116487791) |
+| Release 11 PR profile | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/38116555421) |
+| Broad inherited CI matrix | Not all green; sampled failures include toolchain GDB, mt76 API errors and kernel-patch refresh checks; separate from focused image/module results |
+| Labelled `c57dba8d11 + local format fix` narrow Gate 0 | PASS cold/warm; does not complete the full P0 matrix |
+| Exact `5969b4b568` device run | NOT RUN; runtime driver source matches attached bench fix |
+| BPDU reception / egress isolation, Gate 1 | Reported PASS with STP enabled on labelled corrected build; full sender-filtered capture counts requested |
+| CIST transition matrix, Gate 2 | PARTIAL admin 0/3; ASIC blocking/listening/learning via bridge BLOCKED |
+| Dynamic removal / static preservation, Gate 3 | Flush completion PASS on labelled corrected build; dynamic deletion BLOCKED, post-flush static-entry/path evidence incomplete |
 
 Reproduce the host check with:
 
@@ -134,10 +205,24 @@ covers retained command fields, BUSY transitions, ports 4–7, mode restoration,
 I/O failures, mismatches and invalid inputs. Its bounded poll model does not
 qualify kernel timing, physical MDIO concurrency or ASIC entry semantics.
 
-## Next bench gate
+## Next bench and development steps
 
-Build and identify the corrected source, then perform the narrow Gate 0
-retest in [P1-B-TEST.md](P1-B-TEST.md): cold boot and warm reboot, including
-network bring-up and raw fast-age/config logs. If it passes, finish the P0
-regression on that image, then proceed through Gates 1–3. Any error stops the
-sequence. A physical loop remains outside the first-device procedure.
+1. Keep the tested identity as `c57dba8d11 + local format fix`; use exact release
+   11 for the next build and supply full image/module hashes. A docs-only
+   follow-up does not invalidate either identity's recorded evidence.
+2. Complete the outstanding P0 forwarding/standalone-port regression on the
+   corrected P1-B image, with an independent management/capture path.
+3. Supply complete sender-filtered ingress/observer counts for both STP states,
+   topology/time window and STP processing evidence. Reuse saved full pcaps if
+   available; a fresh run is needed only where the capture was interrupted.
+4. Use admin down/up on an isolated port as the limited CIST/flush check, then
+   repeat the STP-enabled BPDU path test after recovery. Do not retry the
+   inaccessible bridge-driven ASIC states on this CPU-only build.
+5. Implement the separately staged bridge lifecycle, learning/flood/isolation
+   and fallback work before full bridge-controlled ASIC STP tests. Dynamic
+   deletion needs controlled learning and hardware entry observation; keep
+   this unverified until that fixture exists. Do not open learning or hardware
+   forwarding simply to make a test pass.
+
+A physical loop and STP convergence remain outside this stage. No new
+production-driver defect is established by the bridge-state test blockage.

@@ -14,17 +14,24 @@ continues to define the wider dependencies and bench gates.
 The current P1-B candidate wires CIST state and dynamic per-port L2 flush to
 DSA callbacks and installs an IVL static-L2 multicast route for the reserved
 STP group on VLAN 1. Its assumptions, limits and hardware tests are recorded in
-[P1-B-REPORT.md](P1-B-REPORT.md) and [P1-B-TEST.md](P1-B-TEST.md). CPU
-delivery, RTL8_4 reason handling and no-egress behavior remain unverified on
-BE9300; this does not enable hardware bridge or general VLAN offload.
+[P1-B-REPORT.md](P1-B-REPORT.md) and [P1-B-TEST.md](P1-B-TEST.md). A
+labelled `c57dba8d11 + local format fix` run now passes narrow cold/warm
+Gate 0 and provides CPU/software-bridge BPDU evidence. STP-enabled consumption
+and no injected egress are reported; full sender-filtered counts remain
+requested. Decoded RTL8_4 reason and ASIC-blocked delivery remain unverified.
+Release 11 (`5969b4b568`) has matching runtime driver source and passed focused
+module/image/profile CI, with no exact-commit device run yet.
 
-The first P1-B run at `61d286b50a` passed setup readbacks but failed Gate 0
-on all-port fast-age timeouts. Its whole-word completion test is corrected to
-BUSY bit 17 with mode/restore verification; exact-source retesting remains
-required before the BPDU, CIST transition and dynamic-entry checks. Release
-10 had a confirmed printf type compilation error; release 11 corrects it and
-the Linux host errno shim, without changing the register sequence. New CI
-and hardware results are pending.
+ASIC CIST disabled/forwarding and lan4 flush completion are observed through
+admin down/up. Bridge-driven blocking/learning/fast-age tests are blocked:
+there is no `port_bridge_join`, so Linux DSA rejects STP attributes for this
+non-offloaded bridge. A userspace-STP software state does not change that
+boundary. The original `bridge link set state` procedure was incorrect and
+is replaced with a limited admin-transition check and explicit deferred gates.
+Dynamic ASIC deletion is also unverified: hardware learning is disabled and
+there is no hardware FDB inspection. The next bridge lifecycle work must
+supply learning/flood/isolation, leave/fallback and CPU/tagging semantics;
+a no-op bridge join must not be used to bypass this boundary for tests.
 
 ## 1. Conclusion and current boundary
 
