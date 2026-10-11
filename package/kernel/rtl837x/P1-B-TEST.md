@@ -4,10 +4,14 @@ This procedure is for the P1-B test candidate only. It does not qualify
 general VLAN/bridge offload or approve a physical loop test. Use the exact
 build revision reported by CI and include it with every result.
 
-**Status (2026-10-08):** `61d286b50a` failed Gate 0 with dynamic L2 flush
+**Status (2026-10-11):** `61d286b50a` failed Gate 0 with dynamic L2 flush
 timeouts on all four ports. Gates 1–3 were not run. The follow-up polls BUSY
 bit 17 and adds mode/restore readbacks. Start with the narrow retest below on
-the corrected revision. See [P1-B-REPORT.md](P1-B-REPORT.md).
+release 11: release 10 (`c57dba8d11`) has a confirmed printf type build
+error, corrected in release 11. Build results and hardware results are separate
+gates. Label any `c57dba8d11 + local format fix` run separately; record the
+exact commit and image/module hashes for release 11. See
+[P1-B-REPORT.md](P1-B-REPORT.md).
 
 ## Safety and setup
 

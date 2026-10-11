@@ -37,7 +37,11 @@ CI links and checksums are recorded in the [P1-A report](P1-TABLE-REPORT.md).
 The later P1-B image at `61d286b50a` built this rebased table foundation and
 its setup readbacks passed on BE9300, but the run stopped at the flush failure.
 This does not complete P1-A's A0–A6 hardware matrix. The corrected P1-B source
-needs fresh build and Gate 0 checks.
+needs fresh build and Gate 0 checks. Release 10 (`c57dba8d11`) failed
+image compilation on a printf type mismatch; its module CI also exposed a
+Linux errno-header defect in the host harness. Release 11 corrects both and
+adds host printf/mask type checking. New kernel/image CI and the narrow
+cold/warm Gate 0 retest remain required; see [P1-B-REPORT.md](P1-B-REPORT.md).
 
 P1-A does not add user-configurable VLAN offload, FDB/MDB, hardware bridge
 forwarding, LAG or rate limiting. P1-B wires CIST state and dynamic fast-age

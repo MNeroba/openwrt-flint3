@@ -1,6 +1,6 @@
 # RTL8372N P1-B implementation and failure report
 
-Updated: 2026-10-08. This candidate is stacked on [P1-A PR #1](https://github.com/MNeroba/openwrt-flint3/pull/1),
+Updated: 2026-10-11. This candidate is stacked on [P1-A PR #1](https://github.com/MNeroba/openwrt-flint3/pull/1),
 whose parent is [P0 PR #104](https://github.com/perceival/openwrt-flint3/pull/104).
 The first P1-B hardware run failed Gate 0. The correction below needs an
 exact-source build and BE9300 retest before Gates 1–3.
@@ -43,12 +43,41 @@ before submitting a command. After BUSY clears it restores and reads back the
 previous mode fields. Timeout, I/O failure or restore mismatch cannot produce
 a success log. A genuine busy timeout or uncertain command/completion I/O
 error leaves the configuration stable instead of racing an active engine.
-The package release increases from 9 to 10.
+This BUSY correction was published as package release 10; release 11 fixes
+the compilation and host-harness defects below without changing its register
+sequence or timeout policy.
 
 Success logs now include pre/post control and original/dynamic/restored config
 words. True timeouts report the phase and last control word; unreadable status
 is reported separately. Completion verifies BUSY and configuration only;
 dynamic-entry removal and static BPDU preservation remain Gate 3 observations.
+
+## Release 10 build failure and release 11 correction
+
+[Perceival reported](https://github.com/MNeroba/openwrt-flint3/pull/2#issuecomment-6105564587)
+that `c57dba8d11` does not compile with Linux 6.18.39, aarch64 and
+`-Werror=format`. `GENMASK(2, 0)` has type `unsigned long`, so the masked
+old configuration passed to `%#x` also has that type. The diagnostic now
+uses `%#lx`. Register writes, polling and restoration behavior are unchanged.
+
+The [release 10 image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37745435348)
+failed with the same compiler error. The [module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/37745380863)
+stopped earlier in the host regression: its empty `linux/errno.h` stub hid
+error constants that glibc imports through that header. On Linux the harness
+now forwards this include to the system header; on macOS it uses host errno.
+
+The previous host shim used 32-bit masks and had no printf format attribute,
+so its passing cases did not catch the kernel type mismatch. The shim now
+uses unsigned-long BIT/GENMASK semantics and checks the log wrapper's printf
+arguments. With this strengthened harness, the unmodified release 10 helper
+fails compilation on the reported diagnostic; release 11 passes all 20 cases,
+also with ASan/UBSan. Linux GCC and actual ARM64 kernel/image builds still
+need the new CI results. A local host pass is not a kernel build result.
+
+Results from `c57dba8d11 + local format fix` can be kept as separately labelled
+bench evidence. For the exact-source retest, use release 11 and record its
+commit and image/module hashes. No corrected-source hardware result has yet
+been received.
 
 ## Implemented scope
 
@@ -83,10 +112,12 @@ header is imported. Existing Air/ZTE lineage and SDS questions remain in
 | --- | --- |
 | Driver whitespace / strict checkpatch | PASS, 0 errors/warnings/checks for the correction |
 | Host regression of actual production helper | PASS, 20 register-model cases; also passed with AddressSanitizer and UndefinedBehaviorSanitizer |
+| Compile replay of release 10 with strengthened harness | Expected FAIL with `-Werror=format`; current helper passes |
 | Replay against `61d286b50a` helper | Expected FAIL: zero initial control plus retained completion mask returns `-ETIMEDOUT` |
 | Original `61d286b50a` module build | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37684900484); does not validate changed source |
 | Original `61d286b50a` BE9300 image | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/37684899671); failed hardware Gate 0 |
-| Corrected-source module/image CI | Pending new exact-source runs |
+| Release 10 `c57dba8d11` module/image CI | FAIL: host Linux errno shim / driver printf type, respectively; see links above |
+| Release 11 module/image CI | Pending new exact-source runs |
 | Corrected-source Gate 0 | NOT RUN |
 | BPDU reception / egress isolation, Gate 1 | NOT RUN |
 | CIST transition matrix, Gate 2 | NOT RUN |

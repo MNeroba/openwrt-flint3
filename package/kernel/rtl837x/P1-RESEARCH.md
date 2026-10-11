@@ -1,6 +1,6 @@
 # RTL8372N P1 feasibility and implementation plan
 
-Updated: 2026-10-08. Applies to the P0 candidate in [PR #104](https://github.com/perceival/openwrt-flint3/pull/104), with the replacement requirements tracked in [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100).
+Updated: 2026-10-11. Applies to the P0 candidate in [PR #104](https://github.com/perceival/openwrt-flint3/pull/104), with the replacement requirements tracked in [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100).
 
 ## P1-A implementation follow-up
 
@@ -21,7 +21,10 @@ BE9300; this does not enable hardware bridge or general VLAN offload.
 The first P1-B run at `61d286b50a` passed setup readbacks but failed Gate 0
 on all-port fast-age timeouts. Its whole-word completion test is corrected to
 BUSY bit 17 with mode/restore verification; exact-source retesting remains
-required before the BPDU, CIST transition and dynamic-entry checks.
+required before the BPDU, CIST transition and dynamic-entry checks. Release
+10 had a confirmed printf type compilation error; release 11 corrects it and
+the Linux host errno shim, without changing the register sequence. New CI
+and hardware results are pending.
 
 ## 1. Conclusion and current boundary
 

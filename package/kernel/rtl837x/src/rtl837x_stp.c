@@ -139,7 +139,7 @@ restore_config:
 	if (!restore_ret && (restored_config & RTL837X_L2_TBL_FLUSH_CONFIG_MASK) !=
 	    (old_config & RTL837X_L2_TBL_FLUSH_CONFIG_MASK)) {
 		dev_err(priv->dev,
-			"L2 flush config restore mismatch on port %d: got %#010x, expected mode %#x\n",
+			"L2 flush config restore mismatch on port %d: got %#010x, expected mode %#lx\n",
 			port, restored_config, old_config & RTL837X_L2_TBL_FLUSH_CONFIG_MASK);
 		restore_ret = -EIO;
 	}

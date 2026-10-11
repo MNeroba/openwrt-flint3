@@ -6,6 +6,7 @@
  * simulated or qualified here. Run with l2-flush-regression.sh.
  */
 #include <errno.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -14,8 +15,10 @@
 #include <string.h>
 
 typedef uint32_t u32;
-#define BIT(n) (UINT32_C(1) << (n))
-#define GENMASK(h, l) ((UINT32_MAX << (l)) & (UINT32_MAX >> (31 - (h))))
+/* Match the kernel's unsigned-long mask types, including printf promotion. */
+#define BIT(n) (1UL << (n))
+#define GENMASK(h, l) ((~0UL << (l)) & \
+	(~0UL >> (sizeof(unsigned long) * CHAR_BIT - 1 - (h))))
 #include "../src/rtl837x_regmap.h"
 
 #define CHECK(expr) do { \
@@ -61,7 +64,8 @@ static void mutex_unlock(struct mutex *lock)
 	lock->held = false;
 }
 
-static void test_log(struct device *dev, const char *fmt, ...)
+static void __attribute__((format(printf, 2, 3)))
+test_log(struct device *dev, const char *fmt, ...)
 {
 	char output[512];
 	va_list args;
