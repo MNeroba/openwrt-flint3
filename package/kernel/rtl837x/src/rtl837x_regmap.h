@@ -93,6 +93,15 @@
 #define RTL837X_IPV6_UNKNOWN_MC_FLOOD 0x536c
 #define RTL837X_L2_BROADCAST_FLOOD 0x5370
 #define RTL837X_L2_FLOOD_MASK GENMASK(9, 0)
+#define RTL837X_L2_TBL_FLUSH_CTRL 0x53d4
+#define RTL837X_L2_TBL_FLUSH_BUSY BIT(17)
+#define RTL837X_L2_TBL_FLUSH_START BIT(16)
+#define RTL837X_L2_TBL_FLUSH_CONFIG 0x53dc
+/* Mode bits 1:0 and static-entry selection bit 2; preserve all other bits. */
+#define RTL837X_L2_TBL_FLUSH_CONFIG_MASK GENMASK(2, 0)
+#define RTL837X_L2_TBL_FLUSH_DYNAMIC_PORT_MODE 0x00000000
+#define RTL837X_STP_STATE 0x5310
+#define RTL837X_STP_PORT_STATE_MASK GENMASK(1, 0)
 
 #define RTL837X_SMI_MDIO_CTRL_REG                   21
 #define RTL837X_SMI_MDIO_BUSY                       BIT(2)
@@ -105,9 +114,17 @@
 #define RTL837X_TABLE_CTRL                          0x5cac
 #define RTL837X_TABLE_STATUS_METHOD                 0x5cb0
 #define RTL837X_TABLE_WRITE_DATA0                   0x5cb8
+#define RTL837X_L2_TABLE_WRITE_DATA1                0x5cbc
+#define RTL837X_L2_TABLE_WRITE_DATA2                0x5cc0
 #define RTL837X_TABLE_READ_DATA0                    0x5ccc
+#define RTL837X_L2_TABLE_READ_DATA1                 0x5cd0
+#define RTL837X_L2_TABLE_READ_DATA2                 0x5cd4
 #define RTL837X_TABLE_TARGET                        GENMASK(15, 8)
 #define RTL837X_TABLE_VLAN                          0x03
+#define RTL837X_L2_TABLE                            0x04
+#define RTL837X_L2_LOOKUP_STATUS                    RTL837X_TABLE_STATUS_METHOD
+#define RTL837X_L2_LOOKUP_METHOD_MASK               GENMASK(17, 14)
+#define RTL837X_L2_LOOKUP_HIT                       BIT(12)
 #define RTL837X_TABLE_WRITE                         BIT(1)
 #define RTL837X_TABLE_EXECUTE                       BIT(0)
 #define RTL837X_TABLE_ADDRESS                       GENMASK(31, 16)

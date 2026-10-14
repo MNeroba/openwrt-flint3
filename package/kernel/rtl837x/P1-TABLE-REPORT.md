@@ -1,5 +1,9 @@
 # RTL8372N P1-A VLAN table foundation
 
+This report describes the P1-A source revision. The later P1-B follow-up adds
+active CIST/fast-age callbacks and a VLAN 1 BPDU route candidate; see
+[P1-B-REPORT.md](P1-B-REPORT.md).
+
 Updated: 2026-10-07. Stacked on [P0 PR #104](https://github.com/perceival/openwrt-flint3/pull/104).
 Rebased parent source: `7e51247b3882567ce891481395b34e2a2c25f116`.
 The broader plan is [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100)
@@ -166,7 +170,9 @@ revision**, beginning with T0. The inherited #104 build result is not its T0.
   bench and the documented recovery path; no unreviewed write/debug interface
   is introduced to force those failures.
 
-Next P1 work still needs L2 status/method/capacity/delete semantics, BPDU CPU
-routing, CIST/fast-age and a database-aware bridge/VLAN design. The new table
-mutex is the lock future table users must share; it is not proof that those
-features are already supported.
+Next P1 work still needs general L2 status/method/capacity/delete semantics
+and a database-aware bridge/VLAN design. P1-B now uses a narrow static L2
+multicast route for the VLAN 1 BPDU group and connects CIST/fast-age DSA
+callbacks; those paths still need BE9300 verification. The shared table mutex
+is the lock future table users must share; it is not proof that general bridge,
+VLAN, FDB or MDB offload is supported.
