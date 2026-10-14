@@ -29,8 +29,9 @@ an error, without speculative mode restoration.
 Use the exact release 13 source revision and record the full image/module
 SHA-256, kernel version and topology. Release 12 did not compile because
 Linux 6.18 removed `no_llseek`; release 13 uses the available `noop_llseek`.
-Wait for the exact-source module and image CI to pass before installing.
-Perceival's release 12 bench run used the same one-line local fix and exercised
+The exact-source ARM64 module CI now passes with `W=1`, DEBUG_FS, modpost and
+module linking. The full BE9300 image CI is still running; wait for it to pass
+before installing. Perceival's release 12 bench run used the same one-line local fix and exercised
 the standalone controls; see the hardware results in [P1-B-REPORT.md](P1-B-REPORT.md).
 That report keeps its tested image identity distinct from an exact release 13 build.
 

@@ -8,7 +8,8 @@ build revision reported by CI and include it with every result.
 source `d0b0c16cd98c54cbe8c5d5dd8e0b89ebe737728f` plus a one-line local
 `noop_llseek` build fix. The exact release 12 module/image CI failed because
 Linux 6.18.39 no longer declares `no_llseek`; release 13 includes Perceival's
-fix and awaits exact-source CI. On the labelled release 12 plus local-fix image,
+fix. Its exact-source ARM64 module CI passes (`W=1`, DEBUG_FS, modpost and
+link); the full BE9300 image CI is still running. On the labelled release 12 plus local-fix image,
 33/33 P0 setup readbacks and cold/warm flushes passed; direct standalone ASIC
 CIST readbacks 0/1/2/3 passed with other-port/isolation/learning fields
 unchanged; the keyed BPDU entry matched before and after `flush 4`; and

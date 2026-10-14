@@ -41,8 +41,8 @@ ASIC CIST states and an exact keyed BPDU-entry read before/after flush. On the
 BE9300, Perceival reports CIST 0/1/2/3 readbacks, unchanged unrelated fields,
 static-entry preservation and CPU-facing BPDU ingress while the ASIC port is
 blocked/listening. The exact release 12 build failed because Linux 6.18 removed
-`no_llseek`; release 13 carries the `noop_llseek` correction and awaits focused
-CI. These standalone checks do not establish Linux bridge offload, external
+`no_llseek`; release 13 carries the `noop_llseek` correction and its exact-source
+ARM64 module CI passes, while the full BE9300 image CI is still running. These standalone checks do not establish Linux bridge offload, external
 BPDU egress behavior or dynamic FDB deletion. The full P0 traffic matrix and
 bridge Gate 1 evidence remain outstanding; [P1-B-BENCH.md](P1-B-BENCH.md)
 separates those gates from the now-observed direct ASIC behavior.

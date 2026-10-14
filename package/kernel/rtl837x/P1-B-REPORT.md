@@ -174,8 +174,11 @@ The [ARM64 module run](https://github.com/MNeroba/openwrt-flint3/actions/runs/38
 and [BE9300 image run](https://github.com/MNeroba/openwrt-flint3/actions/runs/38166239822)
 reproduce the same source error. Perceival confirmed that changing the file
 operation to `.llseek = noop_llseek` builds both the module and full image.
-Release 13 carries that exact source fix and increments the package release;
-its exact-source focused CI is the remaining build gate.
+Release 13 carries that exact source fix and increments the package release.
+Its exact-source [ARM64 module CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/38511958507)
+passes with `W=1`, real DEBUG_FS APIs, modpost and module linking. The exact
+[BE9300 image CI](https://github.com/MNeroba/openwrt-flint3/actions/runs/38512016012)
+is still running; do not treat the complete-image build as passed yet.
 
 ### 2026-10-14 standalone hardware retest
 
@@ -255,7 +258,9 @@ header is imported. Existing Air/ZTE lineage and SDS questions remain in
 | Labelled `c57dba8d11 + local format fix` narrow Gate 0 | PASS cold/warm; does not complete the full P0 matrix |
 | Release 12 ARM64 module CI | [FAIL](https://github.com/MNeroba/openwrt-flint3/actions/runs/38166231888): Linux 6.18.39 no longer declares `no_llseek` |
 | Release 12 BE9300 image CI | [FAIL](https://github.com/MNeroba/openwrt-flint3/actions/runs/38166239822): same `no_llseek` compile error |
-| Release 13 exact-source focused module/image CI | Pending after the `noop_llseek` correction |
+| Release 13 ARM64 module CI | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/38511958507): Linux 6.18.39, `W=1`, DEBUG_FS, modpost and module link |
+| Release 13 BE9300 image CI | IN PROGRESS ([run](https://github.com/MNeroba/openwrt-flint3/actions/runs/38512016012)); complete image not yet confirmed |
+| Release 13 PR profile | [PASS](https://github.com/MNeroba/openwrt-flint3/actions/runs/38511962435) |
 | Release 12 plus Perceival local `noop_llseek` build fix, standalone diagnostics | PASS for direct CIST 0/1/2/3 readbacks, all-port snapshot stability, static BPDU preservation across flush, and 29–30 CPU-facing ingress BPDUs per 30-second state phase; does not qualify bridge STP or egress |
 | Exact `5969b4b568` device run | NOT RUN; runtime driver source matches attached bench fix |
 | Bridge BPDU reception / egress isolation, Gate 1 | STP-enabled software-bridge behavior was reported PASS on the earlier labelled build; full sender-filtered ingress/external-observer evidence and Linux STP processing still requested. The new standalone ingress test is separate |

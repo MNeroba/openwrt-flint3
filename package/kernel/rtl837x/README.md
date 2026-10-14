@@ -38,8 +38,9 @@ readbacks, unchanged isolation/learning fields, exact static BPDU preservation
 across flush, and 29–30 CPU-facing sender BPDUs per 30-second ASIC-state phase.
 This does not prove Linux STP processing, external-port egress behavior, or
 dynamic entry deletion. The exact release 12 CI caught the removed Linux 6.18
-`no_llseek` API; release 13 carries the `noop_llseek` fix and awaits focused
-exact-source builds. See [P1-B-REPORT.md](P1-B-REPORT.md) for identities and
+`no_llseek` API; release 13 carries the `noop_llseek` fix and its exact-source
+ARM64 module build passes with `W=1` and DEBUG_FS, while the full BE9300 image
+build is still running. See [P1-B-REPORT.md](P1-B-REPORT.md) for identities and
 remaining gates.
 
 ## P1-A VLAN table follow-up
