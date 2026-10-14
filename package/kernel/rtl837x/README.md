@@ -23,18 +23,24 @@ passing module/image/profile CI; its exact commit is not hardware-tested.
 
 BPDU CPU/software-bridge delivery is observed; STP-enabled consumption and no
 injected egress are reported, with full sender-filtered capture counts still
-requested. STP-off forwarding is Linux's normal policy. ASIC CIST 0/3 and
-flush completion are partially tested through admin down/up; bridge-driven
-blocking/learning and dynamic-entry deletion are blocked by absent bridge
-offload, disabled learning and missing hardware FDB diagnostics. See the
-[corrected procedure](P1-B-TEST.md); the full P0 traffic/isolation regression
-and wider P1 gates remain open.
+requested. STP-off forwarding is Linux's normal policy. Standalone ASIC CIST
+0/1/2/3 readbacks and BPDU CPU-facing ingress while blocked/listening are now
+reported; this does not test data-path enforcement or bridge integration.
+Static BPDU entry preservation across the standalone flush is verified;
+dynamic-entry deletion remains unverified because learning is disabled and no
+hardware FDB diagnostic exists. See the [corrected procedure](P1-B-TEST.md);
+the full P0 traffic/isolation regression and wider P1 gates remain open.
 
 Release 12 adds optional standalone-port diagnostic controls and a known-BPDU
-entry lookup: see [P1-B-BENCH.md](P1-B-BENCH.md). Controls are disabled by
-default. They make ASIC 1/2 and static-entry preservation testable directly,
-without bridge offload or learning-limit changes. This new code still needs
-its own builds and device checks; previous release 11 results do not cover it.
+entry lookup: see [P1-B-BENCH.md](P1-B-BENCH.md). Perceival's BE9300 run on
+release 12 plus a local one-line build fix reports direct ASIC CIST 0/1/2/3
+readbacks, unchanged isolation/learning fields, exact static BPDU preservation
+across flush, and 29–30 CPU-facing sender BPDUs per 30-second ASIC-state phase.
+This does not prove Linux STP processing, external-port egress behavior, or
+dynamic entry deletion. The exact release 12 CI caught the removed Linux 6.18
+`no_llseek` API; release 13 carries the `noop_llseek` fix and awaits focused
+exact-source builds. See [P1-B-REPORT.md](P1-B-REPORT.md) for identities and
+remaining gates.
 
 ## P1-A VLAN table follow-up
 

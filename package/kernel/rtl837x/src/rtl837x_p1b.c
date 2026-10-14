@@ -193,7 +193,7 @@ static const struct file_operations rtl837x_p1b_control_fops = {
 	.owner = THIS_MODULE,
 	.open = simple_open,
 	.write = rtl837x_p1b_control_write,
-	.llseek = no_llseek,
+	.llseek = noop_llseek,
 };
 
 static int rtl837x_p1b_status_show(struct seq_file *seq, void *unused)

@@ -1,4 +1,4 @@
-# P1-B standalone ASIC diagnostics — release 12
+# P1-B standalone ASIC diagnostics — release 13
 
 These opt-in debugfs controls make the existing CIST and flush primitives
 reachable without claiming Linux bridge offload. They are bench diagnostics,
@@ -14,7 +14,7 @@ continues to run the driver but has no diagnostic files.
 | Unrelated port/isolation/learning fields | Whole CIST word and all nine isolation/learning-limit values | Snapshot, not a traffic test |
 | BPDU static entry | Known MAC/VID 1 keyed lookup, three raw words and exact expected-entry match | Does not decode RTL8_4 reason or prove which path delivered a packet |
 | Post-flush static preservation | Same keyed lookup before/after an explicit per-port flush | Does not prove deletion of a dynamic entry |
-| ASIC-blocked BPDU ingress | Capture the standalone user interface while overridden to blocking/listening | Needs a real sender; result not yet known |
+| ASIC-blocked BPDU ingress | Capture the standalone user interface while overridden to blocking/listening | Perceival reports 29–30 sender frames per 30-second phase; proves CPU-facing ingress only |
 | Dynamic deletion / hardware learning | Not implemented | Learning limits remain zero; no general ASIC FDB dump/seed operation |
 
 There are no arbitrary-register writes, learning-limit changes, L2 entry
@@ -26,10 +26,13 @@ an error, without speculative mode restoration.
 
 ## Build and identify
 
-Use the exact release 12 source revision and record the full image/module
-SHA-256, kernel version and topology. Release 11 CI and the labelled release
-10 format-fixed hardware results do not qualify this new interface. Build
-results are linked in the PR; the release 12 device checks start NOT RUN.
+Use the exact release 13 source revision and record the full image/module
+SHA-256, kernel version and topology. Release 12 did not compile because
+Linux 6.18 removed `no_llseek`; release 13 uses the available `noop_llseek`.
+Wait for the exact-source module and image CI to pass before installing.
+Perceival's release 12 bench run used the same one-line local fix and exercised
+the standalone controls; see the hardware results in [P1-B-REPORT.md](P1-B-REPORT.md).
+That report keeps its tested image identity distinct from an exact release 13 build.
 
 OpenWrt's `CONFIG_KERNEL_DEBUG_FS` defaults to enabled. Confirm the files exist
 on the installed candidate; mount debugfs if it is not already mounted:
@@ -50,6 +53,10 @@ When disabled, status reports `enabled=0 overrides=0` and the command syntax;
 it performs no hardware register or table access. If the directory is absent,
 check DEBUG_FS and the driver build; do not substitute raw MDIO commands.
 
+Use `echo` for writes to the debugfs `control` file. On the tested BusyBox
+image, `printf ... > control` performed the write but returned status 1, which
+made the `set -e` examples abort; `echo` returned success for the same command.
+
 ## Prepare one standalone test port
 
 Use serial or another management path that does not depend on the selected
@@ -63,7 +70,7 @@ For a spare lan4 that was originally up and in br-lan:
 ```sh
 ip link set dev lan4 nomaster
 ip link set dev lan4 up
-printf 'enable 1\n' > "$bench/control"
+echo 'enable 1' > "$bench/control"
 cat "$bench/status" > /tmp/p1b-before.txt
 ```
 
@@ -82,12 +89,12 @@ restore all overridden ports if a command fails or the shell is interrupted:
 ```sh
 (
   set -e
-  trap 'printf "enable 0\n" > "$bench/control"' EXIT HUP INT TERM
+  trap 'echo "enable 0" > "$bench/control"' EXIT HUP INT TERM
   for state in disabled blocking listening learning forwarding; do
-    printf 'stp 4 %s\n' "$state" > "$bench/control"
+    echo "stp 4 $state" > "$bench/control"
     cat "$bench/status" > "/tmp/p1b-state-$state.txt"
   done
-  printf 'stp 4 restore\n' > "$bench/control"
+  echo 'stp 4 restore' > "$bench/control"
   cat "$bench/status" > /tmp/p1b-restored.txt
 )
 ```
@@ -114,10 +121,10 @@ the diagnostic interface for this bounded check:
 ```sh
 (
   set -e
-  trap 'printf "enable 0\n" > "$bench/control"' EXIT HUP INT TERM
-  printf 'enable 1\n' > "$bench/control"
+  trap 'echo "enable 0" > "$bench/control"' EXIT HUP INT TERM
+  echo 'enable 1' > "$bench/control"
   cat "$bench/status" > /tmp/p1b-pre-flush.txt
-  printf 'flush 4\n' > "$bench/control"
+  echo 'flush 4' > "$bench/control"
   cat "$bench/status" > /tmp/p1b-post-flush.txt
 )
 ```
@@ -137,7 +144,7 @@ standalone test port. Start a full ingress pcap filtered by the sender MAC and
 `01:80:c2:00:00:00`. Enable diagnostics, record the baseline, then use:
 
 ```sh
-printf 'stp 4 blocking\n' > "$bench/control"
+echo 'stp 4 blocking' > "$bench/control"
 cat "$bench/status" > /tmp/p1b-blocked.txt
 ```
 

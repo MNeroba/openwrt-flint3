@@ -1,6 +1,6 @@
 # RTL8372N P1 feasibility and implementation plan
 
-Updated: 2026-10-11. Applies to the P0 candidate in [PR #104](https://github.com/perceival/openwrt-flint3/pull/104), with the replacement requirements tracked in [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100).
+Updated: 2026-10-14. Applies to the P0 candidate in [PR #104](https://github.com/perceival/openwrt-flint3/pull/104), with the replacement requirements tracked in [Issue #100](https://github.com/perceival/openwrt-flint3/issues/100).
 
 ## P1-A implementation follow-up
 
@@ -17,13 +17,16 @@ STP group on VLAN 1. Its assumptions, limits and hardware tests are recorded in
 [P1-B-REPORT.md](P1-B-REPORT.md) and [P1-B-TEST.md](P1-B-TEST.md). A
 labelled `c57dba8d11 + local format fix` run now passes narrow cold/warm
 Gate 0 and provides CPU/software-bridge BPDU evidence. STP-enabled consumption
-and no injected egress are reported; full sender-filtered counts remain
-requested. Decoded RTL8_4 reason and ASIC-blocked delivery remain unverified.
+and no injected egress are reported; full sender-filtered bridge counts remain
+requested. Standalone ASIC blocking/listening BPDU ingress to the CPU-facing
+interface is now observed; decoded RTL8_4 reason and external-port egress remain
+unverified.
 Release 11 (`5969b4b568`) has matching runtime driver source and passed focused
 module/image/profile CI, with no exact-commit device run yet.
 
-ASIC CIST disabled/forwarding and lan4 flush completion are observed through
-admin down/up. Bridge-driven blocking/learning/fast-age tests are blocked:
+Standalone debugfs tests now report ASIC CIST disabled/blocking/learning/forwarding
+readbacks and lan4 flush completion. Bridge-driven blocking/learning/fast-age
+tests remain blocked:
 there is no `port_bridge_join`, so Linux DSA rejects STP attributes for this
 non-offloaded bridge. A userspace-STP software state does not change that
 boundary. The original `bridge link set state` procedure was incorrect and
@@ -34,11 +37,15 @@ supply learning/flood/isolation, leave/fallback and CPU/tagging semantics;
 a no-op bridge join must not be used to bypass this boundary for tests.
 
 The release 12 follow-up adds a restricted standalone debugfs path for direct
-ASIC CIST states and an exact keyed BPDU-entry read before/after flush. This
-helps qualify the existing primitives before bridge lifecycle work, without
-a bridge-join stub or enabling hardware learning. New builds and hardware
-results remain pending; [P1-B-BENCH.md](P1-B-BENCH.md) separates these direct
-checks from bridge integration and the still-missing dynamic FDB fixture.
+ASIC CIST states and an exact keyed BPDU-entry read before/after flush. On the
+BE9300, Perceival reports CIST 0/1/2/3 readbacks, unchanged unrelated fields,
+static-entry preservation and CPU-facing BPDU ingress while the ASIC port is
+blocked/listening. The exact release 12 build failed because Linux 6.18 removed
+`no_llseek`; release 13 carries the `noop_llseek` correction and awaits focused
+CI. These standalone checks do not establish Linux bridge offload, external
+BPDU egress behavior or dynamic FDB deletion. The full P0 traffic matrix and
+bridge Gate 1 evidence remain outstanding; [P1-B-BENCH.md](P1-B-BENCH.md)
+separates those gates from the now-observed direct ASIC behavior.
 
 ## 1. Conclusion and current boundary
 

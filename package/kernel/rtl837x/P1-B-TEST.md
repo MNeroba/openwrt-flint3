@@ -4,31 +4,33 @@ This procedure is for the P1-B test candidate only. It does not qualify
 general VLAN/bridge offload or approve a physical loop test. Use the exact
 build revision reported by CI and include it with every result.
 
-**Status (2026-10-11, retest):** the narrow cold/warm Gate 0 now passes on
-`c57dba8d11 + local format fix`; both logs show all-port fast-age completion
-with retained masks and BUSY clear. Release 11 driver source contains that
-same fix and its module/image CI passed, but no device run is attributed to
-its exact commit. Gate 1 is reported passed for STP-enabled software-bridge
-consumption; the published pcap text is only an excerpt, so sender-filtered
-counts/full captures are still requested. Gates 2/3 through bridge STP state
-changes are **BLOCKED** by absent bridge offload. Admin down/up covers only
-disabled/forwarding and flush completion. See [P1-B-REPORT.md](P1-B-REPORT.md).
+**Status (2026-10-14):** Perceival reports release 12 hardware results from
+source `d0b0c16cd98c54cbe8c5d5dd8e0b89ebe737728f` plus a one-line local
+`noop_llseek` build fix. The exact release 12 module/image CI failed because
+Linux 6.18.39 no longer declares `no_llseek`; release 13 includes Perceival's
+fix and awaits exact-source CI. On the labelled release 12 plus local-fix image,
+33/33 P0 setup readbacks and cold/warm flushes passed; direct standalone ASIC
+CIST readbacks 0/1/2/3 passed with other-port/isolation/learning fields
+unchanged; the keyed BPDU entry matched before and after `flush 4`; and
+sender BPDUs reached the lan4 DSA interface in 30-second forwarding, blocking,
+listening and learning phases. These results do not prove Linux STP processing,
+external-port egress behavior, dynamic entry deletion, or the full P0 traffic
+matrix. Perceival reports successful cleanup/restoration. See the
+[hardware report](P1-B-REPORT.md) and [test comment](https://github.com/MNeroba/openwrt-flint3/pull/2#issuecomment-6158705157).
 
-## Release 12: newly available standalone diagnostic path
-
-Release 12 adds opt-in, root-only debugfs controls for a standalone user port,
-with current-DSA-state restoration and raw all-port snapshots. It also reads
-the existing static BPDU entry without adding/repairing it. This makes direct
-ASIC states 1/2 and exact static preservation observable while retaining the
-CPU-only forwarding/learning policy. See [P1-B-BENCH.md](P1-B-BENCH.md) for
-commands and cleanup. These new controls are NOT RUN on hardware; release 11
-builds and earlier corrected bench evidence do not validate them.
-
-Bridge-driven callbacks remain blocked until genuine bridge offload exists;
-standalone diagnostic results must be reported separately. General dynamic
-FDB deletion remains unverified because this interface does not enable
+The separate bridge Gate 1 capture still needs sender-filtered ingress and
+external-observer evidence with Linux STP processing counters/root state.
+Bridge-driven callbacks remain **BLOCKED** by absent bridge offload. General
+dynamic FDB deletion remains unverified because the interface does not enable
 learning, seed entries or dump the general hardware FDB.
 
+## Release 13 build candidate
+
+Release 13 changes the control file operation to Linux 6.18's `noop_llseek`
+and increments the package release. The release 12 device run used the same
+one-line local source fix, but retain its image identity as a labelled bench
+build until exact release 13 CI and image hashes are available. The standalone
+commands and cleanup are in [P1-B-BENCH.md](P1-B-BENCH.md).
 ## Safety and setup
 
 1. Use a spare Flint 3 / GL-BE9300, serial console or another recovery path,
@@ -148,11 +150,18 @@ regressions separately. **Fail/blocker:** absent or wrong-port ingress, valid
 BPDUs rejected due to tagging, injected BPDU egress with STP enabled, or a
 setup/readback mismatch. If available, capture decoded RTL8_4 reason and
 `offload_fwd_mark`; do not infer those from the static route or Linux pcaps.
-Blocked-port CPU delivery and full hardware STP remain separate open gates.
+Standalone blocked/listening CPU-facing ingress is now observed; Linux STP processing, external-port egress, bridge-state enforcement and full hardware STP remain separate open gates.
 
 ## Gate 2: administrative CIST check; bridge transitions deferred
 
 ### Available on this CPU-only candidate
+
+The standalone debugfs cycle has already exercised ASIC disabled, blocking,
+listening, learning and forwarding readbacks on lan4, with all other-port
+CIST fields, isolation masks and learning limits unchanged. Repeat it on an
+exact release 13 image using [P1-B-BENCH.md](P1-B-BENCH.md) after CI passes.
+It tests ASIC register state only; it does not change Linux bridge state or
+prove data-path blocking/learning behavior.
 
 On an unused test port with an independent management path, record a log
 snapshot, link state and bridge membership, then use administrative down/up:
@@ -194,11 +203,14 @@ is controlled for that future candidate.
 
 ## Gate 3: fast-age completion and static-entry recheck
 
-Administrative down/up from Gate 2 is the currently available flush trigger.
-Save each raw completion line and validate BUSY/config fields as in Gate 0.
-After link and software forwarding recover, repeat the STP-enabled Gate 1
-sender-filtered captures to check that the BPDU path survives the flush.
-This is a path-preservation check, not an exact hardware table snapshot.
+The standalone diagnostic `flush 4` path is available and its exact static
+BPDU lookup passed before/after flush on the labelled release 12 plus local
+build-fix image. Repeat on exact release 13 after CI passes; compare the
+complete BPDU words and `match=1`, and validate BUSY/config fields. Admin
+down/up remains the DSA callback path. After link and software forwarding
+recover, repeat the separate STP-enabled bridge Gate 1 sender-filtered captures.
+The direct lookup proves static-entry preservation for that flush, not dynamic
+entry deletion or bridge-path preservation.
 
 This image disables hardware learning through the P0 zero learning limits
 and has no FDB dump callback. Software `bridge fdb` entries are not ASIC
